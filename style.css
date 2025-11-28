@@ -1,0 +1,18 @@
+/* css/style.css */
+
+/* Custom styles để bổ trợ cho Tailwind */
+body {
+    background-color: #f1f5f9; /* slate-100 */
+}
+.sidebar-icon {
+    width: 1.75rem; /* Tương đương w-7 */
+    text-align: center;
+}
+/* Tùy chỉnh màu sắc cho phù hợp với theme */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem; /* text-xs */
+    font-weight: 600; /* font-semibold */
+}
