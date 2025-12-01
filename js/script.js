@@ -144,6 +144,73 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =================================================================
+    // [MỚI] LOGIC THÔNG BÁO HẾT HẠN
+    // =================================================================
+    function checkAndDisplayNotifications() {
+        const notificationList = document.getElementById('notification-list');
+        const notificationCount = document.getElementById('notification-count');
+        if (!notificationList || !notificationCount) return;
+
+        const now = new Date();
+        const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        
+        const readNotifications = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+
+        let notificationsToShow = [];
+        let pageType = '';
+
+        if (document.getElementById('assetTableBody')) {
+            pageType = 'asset';
+            notificationsToShow = assets.filter(asset => {
+                if (!asset.warranty_expiration_date) return false;
+                const expiryDate = new Date(asset.warranty_expiration_date);
+                return expiryDate >= now && expiryDate <= thirtyDaysFromNow;
+            })
+            .filter(asset => !readNotifications.includes(`asset_${asset.id}`))
+            .sort((a, b) => new Date(a.warranty_expiration_date) - new Date(b.warranty_expiration_date));
+
+        } else if (document.getElementById('licenseTableBody')) {
+            pageType = 'license';
+            notificationsToShow = licenses.filter(license => {
+                if (!license.expiration_date) return false;
+                const expiryDate = new Date(license.expiration_date);
+                return expiryDate >= now && expiryDate <= thirtyDaysFromNow;
+            })
+            .filter(license => !readNotifications.includes(`license_${license.id}`))
+            .sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
+        }
+
+        if (notificationsToShow.length > 0) {
+            notificationCount.textContent = notificationsToShow.length;
+            notificationCount.classList.remove('hidden');
+
+            notificationList.innerHTML = notificationsToShow.map(item => {
+                const expiryDate = new Date(pageType === 'asset' ? item.warranty_expiration_date : item.expiration_date);
+                const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+                const dayText = daysLeft > 1 ? `${daysLeft} ngày` : 'hôm nay';
+                const notificationId = `${pageType}_${item.id}`;
+                const iconClass = pageType === 'asset' ? 'fa-box-archive' : 'fa-key';
+                const message = pageType === 'asset' ? 'Sắp hết hạn bảo hành' : 'Sắp hết hạn bản quyền';
+
+                return `
+                    <li class="border-b last:border-b-0 group flex items-center justify-between p-3 hover:bg-slate-50">
+                        <a href="${pageType}s.html" class="flex-grow">
+                            <p class="font-semibold text-sm text-slate-800 flex items-center"><i class="fa-solid ${iconClass} mr-2 text-slate-400"></i> ${item.name || item.key_type}</p>
+                            <p class="text-xs text-red-500 pl-5">${message} (còn ${dayText})</p>
+                        </a>
+                        <button data-action="mark-notif-read" data-notif-id="${notificationId}" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full hover:bg-slate-200 transition-opacity" title="Đánh dấu đã đọc">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                    </li>
+                `;
+            }).join('');
+        } else {
+            notificationCount.classList.add('hidden');
+            notificationList.innerHTML = `<li class="p-4 text-center text-sm text-slate-400">Không có thông báo mới.</li>`;
+        }
+    }
+
+    // =================================================================
     // [MỚI] LOGIC PHÂN QUYỀN (RBAC)
     // =================================================================
     function applyRoleBasedUI() {
@@ -360,7 +427,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         return str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
     }
 
-    function openModal(id) { const el = document.getElementById(id); if (el) { el.classList.remove('hidden'); el.classList.add('flex'); } }
+    function openModal(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        }
+    }
+
+    function attemptCloseModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        safeCloseModal(modalId); // Tạm thời đóng trực tiếp, không kiểm tra dirty form theo yêu cầu
+    }
 
     function safeCloseModal(modalId) {
         const modal = document.getElementById(modalId);
@@ -944,6 +1023,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             handleLogout();
         }
 
+        // [KHÔI PHỤC] Xử lý click vào nút chuông thông báo
+        if (t.closest('#notification-button')) {
+            document.getElementById('notification-dropdown')?.classList.toggle('hidden');
+        } else if (!t.closest('#notification-dropdown')) {
+            document.getElementById('notification-dropdown')?.classList.add('hidden');
+        }
+
+        // [KHÔI PHỤC] Đóng modal khi click ra vùng nền bên ngoài
+        if (t.matches('.fixed.flex')) {
+            // Kiểm tra xem có modal con nào đang mở bên trên không
+            const openModals = document.querySelectorAll('.fixed.flex:not(.hidden)');
+            if (openModals.length > 0 && openModals[openModals.length - 1].id === t.id) {
+                 attemptCloseModal(t.id);
+            }
+        }
+
         // =================================================================
         // LOGIC CLICK VÀO HÀNG (ROW) ĐỂ XEM CHI TIẾT
         // =================================================================
@@ -1059,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // =================================================================
         // CÁC LOGIC KHÁC (Button, Close, Page...)
         // =================================================================
-        if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex'); if (modal) safeCloseModal(modal.id); return; }
+        if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex'); if (modal) attemptCloseModal(modal.id); return; }
 
         const pageBtn = t.closest('a[data-page]');
         if (pageBtn) { e.preventDefault(); const p = parseInt(pageBtn.dataset.page), tbl = pageBtn.dataset.table; if (tbl === 'assets') { assetCurrentPage = p; renderTableAssets(currentFilteredAssets); } else if (tbl === 'users') { userCurrentPage = p; renderTableUsers(currentFilteredUsers); } else if (tbl === 'licenses') { licenseCurrentPage = p; renderTableLicenses(currentFilteredLicenses); } return; }
@@ -1080,6 +1175,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (t.closest('#manageDeptsBtn')) { renderLists(); document.getElementById('departmentForm').reset(); openModal('departmentManagementModal'); return; }
         if (t.closest('#manageLicenseTypesBtn')) { renderLists(); document.getElementById('licenseTypeForm').reset(); document.getElementById('btnCancelLicenseTypeEdit').classList.add('hidden'); openModal('licenseTypeModal'); return; }
         if (t.closest('#btnCancelLicenseTypeEdit')) { document.getElementById('licenseTypeForm').reset(); document.getElementById('licenseTypeId').value = ''; t.closest('#btnCancelLicenseTypeEdit').classList.add('hidden'); return; }
+
+        if (t.closest('#clear-read-notifications-btn')) { showConfirmationModal("Bạn có muốn xem lại tất cả thông báo đã đọc không?", () => { localStorage.removeItem('readNotifications'); checkAndDisplayNotifications(); }); return; }
 
         if (t.closest('#addAssetBtn')) { document.getElementById('assetForm').reset(); document.getElementById('modal_assetId').value = ''; document.getElementById('modalTitle').textContent = 'Thêm tài sản mới'; initAllUserDropdowns(); openModal('assetModal'); return; }
         if (t.closest('#addLicenseBtn')) { document.getElementById('licenseForm').reset(); document.getElementById('modal_licenseId').value = ''; document.getElementById('licenseModalTitle').textContent = 'Thêm License mới'; initAllUserDropdowns(); openModal('licenseModal'); return; }
@@ -1103,6 +1200,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                  'delete-cat', 'edit-cat', 'delete-dept', 'edit-dept', 'delete-lic-type', 'edit-lic-type'
                 ].includes(action) && !isAdmin) {
                 return showInfoModal("Bạn không có quyền thực hiện hành động này.", "Truy cập bị từ chối");
+            }
+
+            // [KHÔI PHỤC] Xử lý đánh dấu đã đọc thông báo
+            if (action === 'mark-notif-read') {
+                const notifId = actionBtn.dataset.notifId;
+                if (notifId) {
+                    let readNotifications = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+                    if (!readNotifications.includes(notifId)) {
+                        readNotifications.push(notifId);
+                        localStorage.setItem('readNotifications', JSON.stringify(readNotifications));
+                        checkAndDisplayNotifications(); // Cập nhật lại UI thông báo
+                    }
+                }
+                e.stopPropagation(); // Ngăn không cho dropdown bị đóng lại
+                return;
             }
 
             if (action === 'delete-asset') showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await refreshApp(); } });
@@ -1425,6 +1537,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyRoleBasedUI(); // [PHÂN QUYỀN] Áp dụng các thay đổi giao diện dựa trên vai trò
         updateHeaderUserInfo(); // Cập nhật thông tin user trên header
         renderSettingsPage(); // [CÀI ĐẶT] Render dữ liệu cho trang cài đặt
+        checkAndDisplayNotifications(); // [KHÔI PHỤC] Kiểm tra và hiển thị thông báo
         updateDashboard();
     }
 
