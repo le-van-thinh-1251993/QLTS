@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cài đặt - IT Asset Management</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons via CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="font-sans">
+
+    <div class="relative min-h-screen md:flex">
+        <!-- Mobile menu backdrop -->
+        <div id="sidebar-backdrop" class="hidden md:hidden fixed inset-0 bg-black opacity-50 z-40"></div>
+
+        <!-- Sidebar -->
+        <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition duration-200 ease-in-out z-50 flex flex-col">
+            <div class="h-16 flex items-center justify-center border-b border-slate-700">
+                <i class="fa-solid fa-cubes-stacked mr-3 text-2xl text-blue-400"></i>
+                <h1 class="text-xl font-bold">IT-AMS</h1>
+            </div>
+            <nav class="flex-1 px-2 space-y-2">
+                <a href="assets.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-boxes-stacked sidebar-icon"></i>
+                    <span class="ml-4">Kho tài sản</span>
+                </a>
+                <a href="licenses.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-key sidebar-icon"></i><span class="ml-4">Quản lý License</span>
+                </a>
+                <a href="index.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-chart-simple sidebar-icon"></i><span class="ml-4">Dashboard</span>
+                </a>
+                <a href="users.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-users sidebar-icon"></i><span class="ml-4">Người dùng</span>
+                </a>
+                <a href="settings.html" class="nav-link flex items-center px-4 py-2.5 text-slate-100 bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-gear sidebar-icon"></i><span class="ml-4">Cài đặt</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col">
+            <!-- Header -->
+            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
+                <!-- Mobile menu button -->
+                <button id="hamburger-button" class="md:hidden text-slate-500 focus:outline-none">
+                    <i class="fa-solid fa-bars text-2xl"></i>
+                </button>
+                <div class="flex items-center ml-auto">
+                    <div class="relative">
+                        <button id="notification-button" class="text-slate-600 hover:text-blue-600">
+                            <i class="fa-regular fa-bell text-xl"></i>
+                            <span id="notification-count" class="hidden absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">0</span>
+                        </button>
+                        <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg z-20 border">
+                            <div class="p-3 font-semibold text-sm border-b">Thông báo</div>
+                            <ul id="notification-list" class="max-h-80 overflow-y-auto">
+                                <!-- Notifications will be rendered here -->
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="ml-4 md:ml-6 flex items-center relative group">
+                        <img src="https://i.pravatar.cc/40?u=admin" alt="User Avatar" class="w-10 h-10 rounded-full cursor-pointer">
+                        <div class="absolute top-full right-0 pt-2 w-48 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                            <div class="bg-white rounded-md shadow-lg py-1">
+                                <div class="px-4 py-2 text-sm text-slate-700 border-b">
+                                    <p class="font-semibold" id="header-user-name">Admin User</p>
+                                    <p class="text-xs text-slate-500 truncate" id="header-user-email">admin@example.com</p>
+                                </div>
+                                <a href="settings.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tài khoản</a>
+                                <a href="#" id="logout-button" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Đăng xuất</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <main class="flex-1 p-6 overflow-y-auto" id="content-area">
+                <div id="settingsContent" class="max-w-7xl mx-auto">
+                    <h2 class="text-3xl font-bold text-slate-800 mb-8">Cài đặt Tài khoản</h2>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- Left Column: Profile & Security -->
+                        <div class="lg:col-span-1 space-y-8">
+                            <!-- Profile Card -->
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <div class="flex items-center space-x-4 mb-6">
+                                    <img id="profile-avatar" src="https://i.pravatar.cc/40?u=admin" alt="User Avatar" class="w-16 h-16 rounded-full border-2 border-blue-500">
+                                    <div>
+                                        <h3 id="profile-name" class="text-xl font-bold text-slate-800">Loading...</h3>
+                                        <p id="profile-email" class="text-sm text-slate-500">loading@example.com</p>
+                                        <span id="profile-role" class="mt-1 inline-block px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-100 rounded-full">viewer</span>
+                                    </div>
+                                </div>
+                                <button id="editProfileBtn" class="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100">Chỉnh sửa Profile</button>
+                            </div>
+
+                            <!-- Security Card -->
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h4 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Bảo mật</h4>
+                                <form id="password-update-form" class="space-y-4">
+                                    <div>
+                                        <label for="old-password" class="block text-sm font-medium text-slate-600">Mật khẩu cũ</label>
+                                        <input type="password" id="old-password" class="mt-1 w-full border rounded-lg p-2" required>
+                                    </div>
+                                    <div>
+                                        <label for="new-password" class="block text-sm font-medium text-slate-600">Mật khẩu mới</label>
+                                        <input type="password" id="new-password" class="mt-1 w-full border rounded-lg p-2" required>
+                                    </div>
+                                    <div>
+                                        <label for="confirm-password" class="block text-sm font-medium text-slate-600">Xác nhận mật khẩu</label>
+                                        <input type="password" id="confirm-password" class="mt-1 w-full border rounded-lg p-2" required>
+                                    </div>
+                                    <button type="submit" class="w-full px-4 py-2 font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-900">Cập nhật mật khẩu</button>
+                                </form>
+                            </div>
+
+                            <!-- Appearance Card -->
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h4 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Giao diện</h4>
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-slate-700">Chế độ tối (Dark Mode)</span>
+                                    <label for="dark-mode-toggle" class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="dark-mode-toggle" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: My Assets -->
+                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-md">
+                            <h4 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Tài sản & License của tôi</h4>
+                            
+                            <!-- My Assets Table -->
+                            <div class="mb-8">
+                                <h5 class="font-semibold text-slate-700 mb-3">Thiết bị đang giữ</h5>
+                                <div class="overflow-x-auto border rounded-lg">
+                                    <table class="w-full text-sm text-left">
+                                        <thead class="bg-slate-50">
+                                            <tr>
+                                                <th class="p-3 font-semibold text-slate-600">Tên thiết bị</th>
+                                                <th class="p-3 font-semibold text-slate-600">Loại</th>
+                                                <th class="p-3 font-semibold text-slate-600">Trạng thái</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="my-assets-table" class="divide-y">
+                                            <!-- Data will be rendered here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- My Licenses Table -->
+                            <div>
+                                <h5 class="font-semibold text-slate-700 mb-3">License đang giữ</h5>
+                                <div class="overflow-x-auto border rounded-lg">
+                                    <table class="w-full text-sm text-left">
+                                        <thead class="bg-slate-50">
+                                            <tr>
+                                                <th class="p-3 font-semibold text-slate-600">Loại Key</th>
+                                                <th class="p-3 font-semibold text-slate-600">Gói</th>
+                                                <th class="p-3 font-semibold text-slate-600">Hạn sử dụng</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="my-licenses-table" class="divide-y">
+                                            <!-- Data will be rendered here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="editProfileModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2">Chỉnh sửa Profile</h3>
+            <form id="profile-update-form" class="space-y-4">
+                <div><label for="profile-update-name" class="block text-sm font-semibold mb-1">Họ và tên</label><input type="text" id="profile-update-name" class="w-full border rounded-lg p-2.5" required></div>
+                <div><label for="profile-update-avatar" class="block text-sm font-semibold mb-1">URL Ảnh đại diện</label><input type="text" id="profile-update-avatar" class="w-full border rounded-lg p-2.5"></div>
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t">
+                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg">Lưu thay đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom JS -->
+    <!-- Auth script phải được tải trước script chính -->
+    <script src="js/auth.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Custom JS -->
+    <!-- Auth script phải được tải trước script chính -->
+    <script src="js/auth.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>

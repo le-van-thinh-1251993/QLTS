@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Bản quyền - IT Asset Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<style>
+    .tooltip {
+        position: relative;
+        display: inline-block;
+    }
+
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: auto;
+        background-color: #2d3748; /* gray-800 */
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 5px 10px;
+        position: absolute;
+        z-index: 10;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.2s;
+        font-size: 12px;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+    /* Thêm class cho các nút icon vuông */
+    .icon-btn {
+        width: 2.25rem; /* 36px */
+        height: 2.25rem; /* 36px */
+    }
+</style>
+<body class="font-sans text-slate-800 bg-slate-100">
+
+    <div class="relative min-h-screen md:flex">
+        <!-- Mobile menu backdrop -->
+        <div id="sidebar-backdrop" class="hidden md:hidden fixed inset-0 bg-black opacity-50 z-40"></div>
+
+        <!-- Sidebar -->
+        <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition duration-200 ease-in-out z-50 flex flex-col">
+            <div class="h-16 flex items-center justify-center border-b border-slate-700">
+                <i class="fa-solid fa-cubes-stacked mr-3 text-2xl text-blue-400"></i>
+                <h1 class="text-xl font-bold">IT-AMS</h1>
+            </div>
+            <nav class="flex-1 px-2 space-y-2">
+                <a href="assets.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-boxes-stacked sidebar-icon"></i><span class="ml-4">Kho tài sản</span>
+                </a>
+                <a href="licenses.html" class="nav-link flex items-center px-4 py-2.5 text-slate-100 bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-key sidebar-icon"></i><span class="ml-4">Quản lý License</span>
+                </a>
+                <a href="index.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-chart-simple sidebar-icon"></i><span class="ml-4">Dashboard</span>
+                </a>
+                <a href="users.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-users sidebar-icon"></i><span class="ml-4">Người dùng</span>
+                </a>
+                <a href="settings.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-gear sidebar-icon"></i><span class="ml-4">Cài đặt</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="flex-1 flex flex-col">
+            <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
+                <!-- Mobile menu button -->
+                <button id="hamburger-button" class="md:hidden text-slate-500 focus:outline-none">
+                    <i class="fa-solid fa-bars text-2xl"></i>
+                </button>
+
+                <div class="hidden md:flex gap-4 w-2/3">
+                    <div class="relative w-96">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input id="searchInput" type="text" placeholder="Tìm kiếm license..." class="w-full h-10 pl-10 pr-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <select id="filterLicenseType" class="h-10 border border-slate-300 rounded-lg px-3 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Tất cả loại Key</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center">
+                    <div class="relative">
+                        <button id="notification-button" class="text-slate-600 hover:text-blue-600">
+                            <i class="fa-regular fa-bell text-xl"></i>
+                            <span id="notification-count" class="hidden absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">0</span>
+                        </button>
+                        <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg z-20 border">
+                            <div class="p-3 font-semibold text-sm border-b">Thông báo</div>
+                            <ul id="notification-list" class="max-h-80 overflow-y-auto">
+                                <!-- Notifications will be rendered here -->
+                            </ul>
+                            <div class="p-2 border-t text-center">
+                                <button id="clear-read-notifications-btn" class="text-xs text-blue-600 hover:underline">Xem lại các thông báo đã đọc</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ml-4 md:ml-6 flex items-center relative group">
+                        <img src="https://i.pravatar.cc/40?u=admin" alt="User Avatar" class="w-10 h-10 rounded-full cursor-pointer">
+                        <div class="absolute top-full right-0 pt-2 w-48 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                            <div class="bg-white rounded-md shadow-lg py-1">
+                                <div class="px-4 py-2 text-sm text-slate-700 border-b">
+                                    <p class="font-semibold" id="header-user-name">Admin User</p>
+                                    <p class="text-xs text-slate-500 truncate" id="header-user-email">admin@example.com</p>
+                                </div>
+                                <a href="settings.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tài khoản</a>
+                                <a href="#" id="logout-button" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Đăng xuất</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex-1 p-6 overflow-y-auto">
+                <div id="licenseContent">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-2xl font-bold text-slate-800">Quản lý License</h2>
+                            <span id="licenseTotalCount" class="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full hidden">0</span>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="tooltip">
+                                <button id="manageLicenseTypesBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                    <i class="fa-solid fa-tags"></i>
+                                </button>
+                                <span class="tooltiptext">Quản lý Loại Key</span>
+                            </div>
+                            <div class="tooltip">
+                                <button id="importLicenseBtn" class="icon-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                    <i class="fa-solid fa-file-import"></i>
+                                </button>
+                                <span class="tooltiptext">Import từ Excel</span>
+                            </div>
+                            <div class="tooltip">
+                                <button id="exportLicenseBtn" class="icon-btn bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                    <i class="fa-solid fa-file-export"></i>
+                                </button>
+                                <span class="tooltiptext">Export ra Excel</span>
+                            </div>
+                            <div class="tooltip">
+                                <button id="addLicenseBtn" class="icon-btn bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center justify-center shadow-lg transition-all">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                                <span class="tooltiptext">Thêm License mới</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow overflow-x-auto border border-slate-200">
+                        <div id="licensePagination" class="p-4 flex justify-between items-center border-b border-slate-200 bg-slate-50/50"></div>
+                        <table id="licenseTable" class="w-full">
+                            <thead class="bg-slate-50 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600 sortable-header cursor-pointer" data-sort="key_type">Loại Key</th>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600">Mã Key</th>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600 sortable-header cursor-pointer" data-sort="package_type">Gói</th>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600 sortable-header cursor-pointer" data-sort="exp_date">Hạn sử dụng</th>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600 sortable-header cursor-pointer" data-sort="user_name">Người dùng</th>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600 sortable-header cursor-pointer" data-sort="status">Trạng thái</th>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600">Ghi chú</th>
+                                    <th class="p-4 text-left text-sm font-semibold text-slate-600 w-32">Hành động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="licenseTableBody"></tbody>
+                        </table>
+                     </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="confirmationModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[60] flex justify-center items-center backdrop-blur-sm">
+        <div class="relative mx-auto p-6 border w-full max-w-sm shadow-lg rounded-lg bg-white">
+            <div class="text-center">
+                <h3 class="text-lg font-medium text-gray-900" id="confirmationModalTitle">Xác nhận</h3>
+                <div class="mt-2 px-2 py-2"><p class="text-sm text-gray-500" id="confirmationModalMessage">Bạn có chắc chắn?</p></div>
+                <div class="flex justify-center gap-3 mt-4">
+                    <button id="cancelDeleteBtn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md">Hủy</button>
+                    <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white rounded-md">Đồng ý</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="infoModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[60] flex justify-center items-center backdrop-blur-sm">
+        <div class="relative mx-auto p-6 border w-full max-w-sm shadow-lg rounded-lg bg-white text-center">
+            <h3 class="text-lg font-medium text-gray-900 mb-2" id="infoModalTitle">Thông báo</h3>
+            <p class="text-sm text-gray-600 mb-6" id="infoModalMessage"></p>
+            <button id="closeInfoModalBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg">Đã hiểu</button>
+        </div>
+    </div>
+
+    <div id="licenseModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 id="licenseModalTitle" class="text-xl font-bold mb-6 border-b pb-2">Thông tin License</h3>
+            
+            <form id="licenseForm" class="space-y-4">
+                <input type="hidden" id="modal_licenseId">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Loại Key</label>
+                        <select id="modal_licenseType" class="w-full border rounded-lg p-2.5 bg-white" required>
+                             </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Loại gói</label>
+                        <input type="text" id="modal_packageType" class="w-full border rounded-lg p-2.5" placeholder="Business, Pro...">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Mã Key / Serial</label>
+                    <textarea id="modal_licenseKey" rows="2" class="w-full border rounded-lg p-2.5 font-mono text-sm" placeholder="XXXX-XXXX-XXXX-XXXX"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Ngày hết hạn</label>
+                    <input type="date" id="modal_expirationDate" class="w-full border rounded-lg p-2.5">
+                </div>
+                
+                <div>
+                     <label class="block text-sm font-semibold mb-1">Trạng thái</label>
+                     <select id="modal_licenseStatus" class="w-full border rounded-lg p-2.5 bg-white">
+                        <option value="Stock">Trong kho</option>
+                        <option value="Active">Đang dùng</option>
+                        <option value="Expired">Hết hạn</option>
+                     </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Người sử dụng</label>
+                    <select id="modal_licenseUser" class="w-full"></select> 
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Ghi chú</label>
+                    <input type="text" id="modal_licenseNotes" class="w-full border rounded-lg p-2.5">
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t">
+                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="checkOutLicenseModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-2 text-blue-600">Cấp phát License</h3>
+            <p id="assignLicenseName" class="text-sm text-slate-500 mb-6">Tên license ở đây</p>
+            <div class="mb-6">
+                <select id="assignLicenseUserSelect" class="w-full"></select>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg">Hủy</button>
+                <button id="btnConfirmAssignLicense" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="licenseTypeModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2">Quản lý Loại Key</h3>
+            
+            <form id="licenseTypeForm" class="flex gap-2 mb-4">
+                <input type="hidden" id="licenseTypeId">
+                <input type="text" id="licenseTypeName" placeholder="Tên loại key (VD: Windows)" class="flex-grow border rounded-lg p-2.5" required>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Lưu</button>
+                <button type="button" id="btnCancelLicenseTypeEdit" class="px-4 py-2 bg-slate-200 rounded-lg hover:bg-slate-300 hidden">Hủy</button>
+            </form>
+
+            <div id="licenseTypeListContainer" class="max-h-64 overflow-y-auto border rounded-lg">
+                </div>
+
+            <div class="flex justify-end mt-6 pt-4 border-t">
+                <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg">Đóng</button>
+            </div>
+        </div>
+    </div>
+    <div id="importLicenseModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[70] flex justify-center items-center backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 relative flex flex-col max-h-[90vh]">
+        <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+        <h3 class="text-xl font-bold mb-4 border-b pb-2">Import License từ Excel</h3>
+        
+        <div class="mb-4">
+            <input type="file" id="licenseExcelFileInput" accept=".xlsx, .xls, .csv" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+            <p class="text-xs text-slate-500 mt-1">Hỗ trợ file .xlsx, .csv. Cột yêu cầu: "Loại key", "Mã key", "Ngày hết hạn", "Người sử dụng".</p>
+        </div>
+
+        <div class="flex-1 overflow-auto border rounded-lg mb-4">
+            <table class="w-full text-sm text-left text-slate-500">
+                <thead class="text-xs text-slate-700 uppercase bg-slate-50 sticky top-0">
+                    <tr>
+                        <th class="px-4 py-3">Loại Key</th>
+                        <th class="px-4 py-3">Mã Key</th>
+                        <th class="px-4 py-3">Gói</th>
+                        <th class="px-4 py-3">Hạn dùng</th>
+                        <th class="px-4 py-3">Người dùng (Tìm thấy)</th>
+                        <th class="px-4 py-3">Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody id="licenseImportPreviewTableBody"></tbody>
+            </table>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t">
+            <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg">Hủy</button>
+            <button id="btnSaveImportedLicenses" class="px-5 py-2 bg-blue-600 text-white rounded-lg opacity-50 cursor-not-allowed" disabled>Lưu vào Database</button>
+        </div>
+    </div>
+</div>
+        <div id="transferLicenseModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-2 text-indigo-600">Chuyển đổi License</h3>
+            <p id="transferLicenseName" class="text-sm text-slate-500 mb-4">License: ...</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Người đang dùng</label>
+                    <input type="text" id="transferLicenseCurrentUser" class="w-full border rounded-lg p-2 bg-slate-100 text-slate-500" disabled>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Chuyển sang cho</label>
+                    <select id="transferLicenseNewUserSelect" class="w-full"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Ghi chú chuyển đổi</label>
+                    <textarea id="transferLicenseNotes" rows="2" class="w-full border rounded-lg p-2"></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg">Hủy</button>
+                <button id="btnConfirmTransferLicense" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Xác nhận chuyển</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="licenseHistoryModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[60] flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl p-6 relative flex flex-col max-h-[85vh]">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-4 border-b pb-2">Lịch sử hoạt động License</h3>
+            <p id="historyLicenseTitle" class="text-sm text-slate-500 mb-4 font-mono"></p>
+            
+            <div class="flex-1 overflow-auto border rounded-lg">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-slate-50 text-slate-700 font-semibold sticky top-0">
+                        <tr>
+                            <th class="p-3 w-32">Thời gian</th>
+                            <th class="p-3 w-32">Hành động</th>
+                            <th class="p-3">Chi tiết</th>
+                        </tr>
+                    </thead>
+                    <tbody id="licenseHistoryTableBody" class="divide-y divide-slate-100">
+                        </tbody>
+                </table>
+            </div>
+            
+            <div class="flex justify-end mt-4 pt-2 border-t">
+                <button type="button" class="close-modal px-5 py-2 bg-slate-100 text-slate-600 rounded-lg">Đóng</button>
+            </div>
+        </div>
+    </div>
+    <!-- Auth script phải được tải trước script chính -->
+    <script src="js/auth.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>
