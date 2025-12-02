@@ -16,3 +16,48 @@ body {
     font-size: 0.75rem; /* text-xs */
     font-weight: 600; /* font-semibold */
 }
+
+/* [DARK MODE OVERRIDE] Ép màu chữ trong bảng sang màu trắng ngà */
+.dark tbody td,
+.dark tbody td p,
+.dark tbody td span {
+    color: #E5E7EB !important; /* gray-200 */
+}
+
+/* [DARK MODE OVERRIDE] Đổi màu nền khi hover vào hàng trong bảng */
+.dark tr.hover\:bg-slate-50:hover {
+    background-color: #1e293b !important; /* slate-800 */
+}
+
+/* ================================================================== */
+/* [DARK MODE] TÙY CHỈNH CHO THƯ VIỆN CHOICES.JS                      */
+/* ================================================================== */
+
+/* Container chính của dropdown */
+.dark .choices {
+    background-color: #334155 !important; /* slate-700 */
+    border-color: #475569 !important;     /* slate-600 */
+}
+
+/* Chữ được chọn (hiển thị trong ô input) */
+.dark .choices__inner,
+.dark .choices__input {
+    background-color: #334155 !important; /* slate-700 */
+    color: #E5E7EB !important;           /* gray-200 */
+}
+
+/* Danh sách các lựa chọn (khi xổ xuống) */
+.dark .choices__list--dropdown {
+    background-color: #1e293b !important; /* slate-800 */
+    border-color: #475569 !important;     /* slate-600 */
+}
+
+/* Từng mục trong danh sách lựa chọn */
+.dark .choices__item--choice {
+    color: #E5E7EB !important; /* gray-200 */
+}
+
+/* Mục được hover hoặc focus */
+.dark .choices__item--choice.is-highlighted {
+    background-color: #334155 !important; /* slate-700 */
+}

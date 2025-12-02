@@ -80,18 +80,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     let chartUserLicense = null;
     let chartActivity = null;
     let chartLicenseExpiration = null;
-
+ 
     // --- UI Instances ---
     let assignUserChoicesInstance = null, userChoicesInstance = null;
     let licenseUserChoicesInstance = null, licenseAssignUserChoicesInstance = null;
     let transferUserChoicesInstance = null;
 
     const STATUS_MAP = {
-        Active: { text: 'Đang dùng', classes: 'bg-green-100 text-green-700 border border-green-200' },
-        Stock: { text: 'Trong kho', classes: 'bg-sky-100 text-sky-700 border border-sky-200' },
-        Repair: { text: 'Sửa chữa', classes: 'bg-yellow-100 text-yellow-700 border border-yellow-200' },
-        Broken: { text: 'Hỏng', classes: 'bg-red-100 text-red-700 border border-red-200' },
-        Expired: { text: 'Hết hạn', classes: 'bg-gray-100 text-gray-500 border border-gray-200' }
+        Active: { text: 'Đang dùng', classes: 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700' },
+        Stock: { text: 'Trong kho', classes: 'bg-sky-100 text-sky-700 border border-sky-200 dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700' },
+        Repair: { text: 'Sửa chữa', classes: 'bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300 dark:border-yellow-700' },
+        Broken: { text: 'Hỏng', classes: 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-700' },
+        Expired: { text: 'Hết hạn', classes: 'bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' }
     };
 
     // =================================================================
@@ -193,12 +193,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const message = pageType === 'asset' ? 'Sắp hết hạn bảo hành' : 'Sắp hết hạn bản quyền';
 
                 return `
-                    <li class="border-b last:border-b-0 group flex items-center justify-between p-3 hover:bg-slate-50">
+                    <li class="border-b dark:border-slate-700 last:border-b-0 group flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700">
                         <a href="${pageType}s.html" class="flex-grow">
-                            <p class="font-semibold text-sm text-slate-800 flex items-center"><i class="fa-solid ${iconClass} mr-2 text-slate-400"></i> ${item.name || item.key_type}</p>
+                            <p class="font-semibold text-sm text-slate-800 dark:text-gray-200 flex items-center"><i class="fa-solid ${iconClass} mr-2 text-slate-400"></i> ${item.name || item.key_type}</p>
                             <p class="text-xs text-red-500 pl-5">${message} (còn ${dayText})</p>
                         </a>
-                        <button data-action="mark-notif-read" data-notif-id="${notificationId}" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full hover:bg-slate-200 transition-opacity" title="Đánh dấu đã đọc">
+                        <button data-action="mark-notif-read" data-notif-id="${notificationId}" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-opacity" title="Đánh dấu đã đọc">
                             <i class="fa-solid fa-check"></i>
                         </button>
                     </li>
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }).join('');
         } else {
             notificationCount.classList.add('hidden');
-            notificationList.innerHTML = `<li class="p-4 text-center text-sm text-slate-400">Không có thông báo mới.</li>`;
+            notificationList.innerHTML = `<li class="p-4 text-center text-sm text-slate-400 dark:text-gray-500">Không có thông báo mới.</li>`;
         }
     }
 
@@ -828,7 +828,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return `<tr class="border-b hover:bg-slate-50 user-row cursor-pointer" data-id="${u.id}">
                 <td class="p-4 flex items-center gap-3"><img src="${u.avatar}" class="w-9 h-9 rounded-full"><div><p class="font-bold text-slate-700">${u.name}</p><p class="text-xs text-slate-500">${u.email}</p></div></td>
                 <td class="p-4 text-slate-600">${u.department}</td>
-                <td class="p-4 text-sm text-slate-500"><span class="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-bold">${holdingInfo}</span></td>
+                <td class="p-4 text-sm text-slate-500"><span class="bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded text-xs font-bold">${holdingInfo}</span></td>
                 <td class="p-4 font-bold text-sm ${u.status === 'Đang hoạt động' ? 'text-green-600' : 'text-slate-400'}">${u.status}</td>
                 <td class="p-4 flex gap-2">
                     ${adminActions}
@@ -840,9 +840,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderLists() {
         const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
-        const cl = document.getElementById('categoryListContainer'); if (cl) cl.innerHTML = '<ul class="divide-y divide-slate-100">' + categories.map(c => `<li class="p-3 flex justify-between items-center hover:bg-slate-50"><span class="font-medium text-slate-700">${c.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-cat" data-id="${c.id}" data-name="${c.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-cat" data-id="${c.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
-        const dl = document.getElementById('departmentListContainer'); if (dl) dl.innerHTML = '<ul class="divide-y divide-slate-100">' + departments.map(d => `<li class="p-3 border-b flex justify-between items-center hover:bg-slate-50"><span>${d.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-dept" data-id="${d.id}" data-name="${d.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-dept" data-id="${d.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
-        const ltl = document.getElementById('licenseTypeListContainer'); if (ltl) ltl.innerHTML = '<ul class="divide-y divide-slate-100">' + licenseTypes.map(t => `<li class="p-3 flex justify-between hover:bg-slate-50"><span class="font-medium text-slate-700">${t.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-lic-type" data-id="${t.id}" data-name="${t.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-lic-type" data-id="${t.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
+        const cl = document.getElementById('categoryListContainer'); if (cl) cl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + categories.map(c => `<li class="p-3 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-700"><span class="font-medium text-slate-700 dark:text-gray-200">${c.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-cat" data-id="${c.id}" data-name="${c.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-cat" data-id="${c.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
+        const dl = document.getElementById('departmentListContainer'); if (dl) dl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + departments.map(d => `<li class="p-3 border-b flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-700"><span class="dark:text-gray-200">${d.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-dept" data-id="${d.id}" data-name="${d.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-dept" data-id="${d.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
+        const ltl = document.getElementById('licenseTypeListContainer'); if (ltl) ltl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + licenseTypes.map(t => `<li class="p-3 flex justify-between hover:bg-slate-50 dark:hover:bg-slate-700"><span class="font-medium text-slate-700 dark:text-gray-200">${t.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-lic-type" data-id="${t.id}" data-name="${t.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-lic-type" data-id="${t.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
     }
 
     function handleUserFileSelect(e) {
