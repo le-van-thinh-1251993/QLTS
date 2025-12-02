@@ -191,11 +191,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const notificationId = `${pageType}_${item.id}`;
                 const iconClass = pageType === 'asset' ? 'fa-box-archive' : 'fa-key';
                 const message = pageType === 'asset' ? 'Sắp hết hạn bảo hành' : 'Sắp hết hạn bản quyền';
+                // [MỚI] Tạo chuỗi hiển thị cho thông báo license
+                const titleText = pageType === 'license' ? `${item.key_type} - ${item.user || 'Chưa cấp'}` : (item.name || item.key_type);
 
                 return `
                     <li class="border-b dark:border-slate-700 last:border-b-0 group flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700">
                         <a href="${pageType}s.html" class="flex-grow">
                             <p class="font-semibold text-sm text-slate-800 dark:text-gray-200 flex items-center"><i class="fa-solid ${iconClass} mr-2 text-slate-400"></i> ${item.name || item.key_type}</p>
+                            <p class="font-semibold text-sm text-slate-800 dark:text-gray-200 flex items-center"><i class="fa-solid ${iconClass} mr-2 text-slate-400"></i> ${titleText}</p>
                             <p class="text-xs text-red-500 pl-5">${message} (còn ${dayText})</p>
                         </a>
                         <button data-action="mark-notif-read" data-notif-id="${notificationId}" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-opacity" title="Đánh dấu đã đọc">
