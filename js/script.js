@@ -955,7 +955,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // [MỚI] Populate dropdown cho "Loại gói"
         const filterPackageType = document.getElementById('filterPackageType');
         if (filterPackageType) {
-            const uniquePackages = [...new Set(licenses.map(l => l.package_type).filter(Boolean))];
+            const uniquePackages = [...new Set(licenses.map(l => l.package_type ? l.package_type.trim() : '').filter(Boolean))];
             const cur = filterPackageType.value;
             filterPackageType.innerHTML = '<option value="">Tất cả loại gói</option>' + uniquePackages.map(p => `<option value="${p}">${p}</option>`).join('');
             filterPackageType.value = cur;
