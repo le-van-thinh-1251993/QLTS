@@ -1553,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('userTableBody')) applyUserFilters();
         applyRoleBasedUI(); // [PHÂN QUYỀN] Áp dụng các thay đổi giao diện dựa trên vai trò
         updateHeaderUserInfo(); // Cập nhật thông tin user trên header
-        renderSettingsPage(); // [CÀI ĐẶT] Render dữ liệu cho trang cài đặt
+        if (document.getElementById('settingsContent')) renderSettingsPage(); // [SỬA LỖI] Gọi hàm render cho trang Cài đặt ở cuối để đảm bảo có đủ dữ liệu
         checkAndDisplayNotifications(); // [KHÔI PHỤC] Kiểm tra và hiển thị thông báo
         updateDashboard();
     }
