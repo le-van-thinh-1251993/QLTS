@@ -951,20 +951,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         const filterLicType = document.getElementById('filterLicenseType');
         if (filterLicType) { const cur = filterLicType.value; filterLicType.innerHTML = '<option value="">Tất cả loại Key</option>' + licenseTypes.map(t => `<option value="${t.name}">${t.name}</option>`).join(''); filterLicType.value = cur; }
         ['department', 'filterDepartment'].forEach(id => { const el = document.getElementById(id); if (el) { const cur = el.value; el.innerHTML = (id === 'filterDepartment' ? '<option value="">Tất cả phòng ban</option>' : '<option value="">-- Chọn phòng ban --</option>') + departments.map(d => `<option value="${d.id}">${d.name}</option>`).join(''); el.value = cur; } });
+
+        // [MỚI] Populate dropdown cho "Loại gói"
+        const filterPackageType = document.getElementById('filterPackageType');
+        if (filterPackageType) {
+            const uniquePackages = [...new Set(licenses.map(l => l.package_type).filter(Boolean))];
+            const cur = filterPackageType.value;
+            filterPackageType.innerHTML = '<option value="">Tất cả loại gói</option>' + uniquePackages.map(p => `<option value="${p}">${p}</option>`).join('');
+            filterPackageType.value = cur;
+        }
     }
 
     function applyAssetFilters() {
         const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
         currentFilteredAssets = assets.filter(a => a.name.toLowerCase().includes(term) || (a.user || '').toLowerCase().includes(term))
             .sort((a, b) => (a[assetSort.column] || '').localeCompare(b[assetSort.column] || '') * (assetSort.direction === 'asc' ? 1 : -1));
-        
         renderTableAssets(currentFilteredAssets);
     }
 
     function applyLicenseFilters() {
         const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
         const typeFilter = document.getElementById('filterLicenseType')?.value || '';
-        currentFilteredLicenses = licenses.filter(l => (l.key_type.toLowerCase().includes(term) || (l.user || '').toLowerCase().includes(term)) && (typeFilter === '' || l.key_type === typeFilter))
+        const packageFilter = document.getElementById('filterPackageType')?.value || ''; // [MỚI] Lấy giá trị từ bộ lọc gói
+        currentFilteredLicenses = licenses.filter(l => 
+            (l.key_type.toLowerCase().includes(term) || (l.user || '').toLowerCase().includes(term)) && 
+            (typeFilter === '' || l.key_type === typeFilter) &&
+            (packageFilter === '' || l.package_type === packageFilter) // [MỚI] Thêm điều kiện lọc gói
+        )
             .sort((a, b) => (a[licenseSort.column] || '').localeCompare(b[licenseSort.column] || '') * (licenseSort.direction === 'asc' ? 1 : -1));
         
         renderTableLicenses(currentFilteredLicenses);
@@ -1007,6 +1020,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('searchUserInput')?.addEventListener('input', applyUserFilters);
     document.getElementById('filterDepartment')?.addEventListener('change', applyUserFilters);
     document.getElementById('filterLicenseType')?.addEventListener('change', applyLicenseFilters);
+    document.getElementById('filterPackageType')?.addEventListener('change', applyLicenseFilters); // [MỚI] Thêm event listener
     document.getElementById('userExcelFileInput')?.addEventListener('change', handleUserFileSelect);
     document.getElementById('excelFileInput')?.addEventListener('change', handleAssetFileSelect);
 
