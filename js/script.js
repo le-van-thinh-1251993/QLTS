@@ -105,7 +105,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             supabaseClient.from('users').select('*, department:departments(name)'),
             supabaseClient.from('assets').select('*, category:categories(name), user:users(name)'),
             supabaseClient.from('licenses').select('*, user:users(name)'),
-            supabaseClient.from('asset_history').select('*, asset:assets(name)').order('created_at', { ascending: false }),
+            // SỬA LỖI: Sắp xếp theo 'id' để đảm bảo thứ tự đúng ngay cả khi created_at bị null
+            supabaseClient.from('asset_history').select('*, asset:assets(name)').order('id', { ascending: false }),
             supabaseClient.from('license_types').select('*')
         ]);
 
@@ -113,10 +114,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (catRes.data) categories = catRes.data;
         if (licTypeRes.data) licenseTypes = licTypeRes.data;
         if (userRes.data) users = userRes.data.map(u => ({ ...u, department: u.department?.name || '-' }));
-        if (assetRes.data) assets = assetRes.data.map(a => ({ ...a, category: a.category?.name || '-', user: a.user?.name || null }));
+        if (assetRes.data) assets = assetRes.data.map(a => ({ ...a, category: a.category?.name || '-', user: a.user?.name || null, warranty_expiration_date: a.warranty_expiration_date || null }));
         if (licenseRes.data) licenses = licenseRes.data.map(l => ({ ...l, user: l.user?.name || null }));
         if (historyRes.data) assetHistory = historyRes.data.map(l => ({
-            id: l.id, created_at: l.created_at, time: new Date(l.created_at).toLocaleString('vi-VN'),
+            id: l.id, 
+            created_at: l.created_at, 
+            // CẢI TIẾN: Nếu created_at là null (dữ liệu cũ), hiển thị chuỗi rỗng thay vì "Lịch sử cũ"
+            time: l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : '',
             assetId: l.asset_id, assetName: l.asset?.name || 'N/A',
             action: l.action, desc: l.description
         }));
@@ -125,18 +129,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function addLog(targetId, type, action, desc) {
         try {
             if (type === 'ASSET') {
-                await supabaseClient.from('asset_history').insert({
+                // SỬA LỖI: Thêm created_at ở phía client để đảm bảo luôn có ngày giờ
+                const { error } = await supabaseClient.from('asset_history').insert({
                     asset_id: targetId,
                     action: action,
-                    description: desc
+                    description: desc,
+                    created_at: new Date().toISOString()
                 });
+                if (error) throw error;
             } else if (type === 'LICENSE') {
-                // Tạm thời dùng asset_history cho license (cần tạo bảng license_history sau)
-                await supabaseClient.from('asset_history').insert({
+                // SỬA LỖI: Thêm created_at ở phía client
+                const { error } = await supabaseClient.from('asset_history').insert({
                     asset_id: targetId, // Tạm dùng asset_id
                     action: action,
-                    description: `[LICENSE] ${desc}`
+                    description: `[LICENSE] ${desc}`,
+                    created_at: new Date().toISOString()
                 });
+                if (error) throw error;
             }
         } catch (err) {
             console.error('Lỗi ghi log:', err);
@@ -1237,14 +1246,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (action === 'delete-asset') showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await refreshApp(); } });
             else if (action === 'edit-asset') { const item = assets.find(a => a.id === id); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
             else if (action === 'checkout-asset') { tempId = id; document.getElementById('assignAssetName').textContent = assets.find(a => a.id === id)?.name; initAllUserDropdowns(); openModal('checkOutModal'); }
-            else if (action === 'checkin-asset') showConfirmationModal(`Thu hồi tài sản?`, async () => { await supabaseClient.from('assets').update({ status: 'Stock', user_id: null }).eq('id', id); await addLog(id, 'ASSET', 'Thu hồi', `Từ người dùng`); await refreshApp(); });
+            else if (action === 'checkin-asset') {
+                const assetToCheckIn = assets.find(a => a.id === id);
+                const fromUser = assetToCheckIn?.user || 'Không rõ';
+                showConfirmationModal(`Thu hồi tài sản từ ${fromUser}?`, async () => {
+                    await supabaseClient.from('assets').update({ status: 'Stock', user_id: null }).eq('id', id);
+                    // SỬA LỖI: Thêm tên người dùng vào log để lịch sử chi tiết hơn
+                    await addLog(id, 'ASSET', 'Thu hồi', `Từ người dùng: ${fromUser}`);
+                    await refreshApp();
+                });
+            }
             else if (action === 'transfer') { tempId = id; document.getElementById('transferAssetName').textContent = assets.find(a => a.id === id)?.name; document.getElementById('transferCurrentUser').value = assets.find(a => a.id === id)?.user || 'Chưa có'; initAllUserDropdowns(); openModal('transferModal'); }
-            else if (action === 'history-asset') { const item = assets.find(a => a.id === id); document.getElementById('historyTargetName').textContent = `Tài sản: ${item?.name}`; const logs = assetHistory.filter(l => l.assetId === id); document.getElementById('historyTableBody').innerHTML = logs.length ? logs.map(l => `<tr class="border-b"><td class="p-2">${l.time}</td><td class="p-2 font-bold">${l.action}</td><td class="p-2">${l.desc}</td></tr>`).join('') : '<tr><td colspan="3" class="p-4 text-center">Trống</td></tr>'; openModal('historyModal'); }
-
+            else if (action === 'history-asset') {
+                const item = assets.find(a => a.id === id);
+                document.getElementById('historyModalTitle').textContent = `Lịch sử tài sản: ${item?.name}`;
+                const logs = assetHistory.filter(l => l.assetId === id);
+                document.getElementById('historyTableBody').innerHTML = logs.length
+                    ? logs.map(l => `<tr class="border-b hover:bg-slate-50"><td class="p-3">${l.time}</td><td class="p-3">${l.assetName}</td><td class="p-3 font-bold">${l.action}</td><td class="p-3">${l.desc}</td></tr>`).join('')
+                    : '<tr><td colspan="4" class="p-4 text-center">Không có lịch sử</td></tr>';
+                openModal('historyModal');
+            }
             else if (action === 'delete-license') showConfirmationModal("Xóa License?", async () => { const { error } = await supabaseClient.from('licenses').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await refreshApp(); } });
             else if (action === 'edit-license') { const item = licenses.find(l => l.id === id); if (item) { document.getElementById('modal_licenseId').value = item.id;['modal_licenseKey', 'modal_packageType', 'modal_expirationDate', 'modal_licenseStatus', 'modal_licenseNotes'].forEach(k => { let val = item[k.replace('modal_', '').replace('expirationDate', 'expiration_date').replace('licenseKey', 'license_key').replace('packageType', 'package_type').replace('licenseStatus', 'status').replace('licenseNotes', 'notes')]; document.getElementById(k).value = val || ''; }); updateDropdowns(); document.getElementById('modal_licenseType').value = item.key_type; document.getElementById('licenseModalTitle').textContent = 'Sửa License'; initAllUserDropdowns(item.user); openModal('licenseModal'); } }
             else if (action === 'checkout-license') { tempId = id; document.getElementById('assignLicenseName').textContent = licenses.find(l => l.id === id)?.key_type; initAllUserDropdowns(); openModal('checkOutLicenseModal'); }
-            else if (action === 'checkin-license') showConfirmationModal(`Thu hồi License?`, async () => { await supabaseClient.from('licenses').update({ status: 'Stock', user_id: null }).eq('id', id); await addLog(id, 'LICENSE', 'Thu hồi', `Từ người dùng`); await refreshApp(); });
+            else if (action === 'checkin-license') {
+                const licenseToCheckIn = licenses.find(l => l.id === id);
+                const fromUser = licenseToCheckIn?.user || 'Không rõ';
+                showConfirmationModal(`Thu hồi license từ ${fromUser}?`, async () => {
+                    await supabaseClient.from('licenses').update({ status: 'Stock', user_id: null }).eq('id', id);
+                    await addLog(id, 'LICENSE', 'Thu hồi', `Từ người dùng: ${fromUser}`);
+                    await refreshApp();
+                });
+            }
 
             else if (action === 'delete-user') { if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal("Xóa nhân viên?", async () => { await supabaseClient.from('users').delete().eq('id', id); await refreshApp(); }); }
             else if (action === 'edit-user') { const u = users.find(x => x.id === id); if (u) { document.getElementById('userId').value = u.id; document.getElementById('name').value = u.name; document.getElementById('email').value = u.email; document.getElementById('status').value = u.status; updateDropdowns(); document.getElementById('department').value = departments.find(d => d.name === u.department)?.id || ''; openModal('addUserModal'); } }
