@@ -119,6 +119,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (historyRes.data) assetHistory = historyRes.data.map(l => ({
             id: l.id, 
             created_at: l.created_at, 
+            // SỬA LỖI: Nếu created_at là null (dữ liệu cũ), hiển thị một chuỗi khác thân thiện hơn
+            time: l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : 'Lịch sử cũ',
             // CẢI TIẾN: Nếu created_at là null (dữ liệu cũ), hiển thị chuỗi rỗng thay vì "Lịch sử cũ"
             time: l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : '',
             assetId: l.asset_id, assetName: l.asset?.name || 'N/A',
