@@ -1562,17 +1562,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             const p = parseInt(pageBtn.dataset.page), tbl = pageBtn.dataset.table;
 
-            // Khi chuyển trang, reset bộ lọc theo người dùng để không bị lưu cache
+            // Khi chuyển trang, GIỮ NGUYÊN filter, chỉ thay đổi trang hiện tại
             if (tbl === 'assets') {
-                resetAssetFilters();
                 assetCurrentPage = p;
                 applyAssetFilters();
             } else if (tbl === 'licenses') {
-                resetLicenseFilters();
                 licenseCurrentPage = p;
                 applyLicenseFilters();
             } else if (tbl === 'users') {
-                resetUserFilters();
                 userCurrentPage = p;
                 applyUserFilters();
             }
@@ -2081,12 +2078,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnConfirmAssignLicense')?.addEventListener('click', async () => { const u = users.find(u => u.name === licenseAssignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); await supabaseClient.from('licenses').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); addLog(tempId, 'LICENSE', 'Cấp phát', u.name); safeCloseModal('checkOutLicenseModal'); await refreshApp(); });
     document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const { error } = await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); } });
 
-    async function refreshApp() {
+    async function refreshApp(resetFilters = false) {
         await fetchAllData();
         updateDropdowns();
-        if (document.getElementById('assetTableBody')) { resetAssetFilters(); applyAssetFilters(); renderMaintenanceList(); renderStockCheckList(); }
-        if (document.getElementById('licenseTableBody')) { resetLicenseFilters(); applyLicenseFilters(); }
-        if (document.getElementById('userTableBody')) { resetUserFilters(); applyUserFilters(); }
+        if (document.getElementById('assetTableBody')) { 
+            if (resetFilters) resetAssetFilters(); 
+            applyAssetFilters(); 
+            renderMaintenanceList(); 
+            renderStockCheckList(); 
+        }
+        if (document.getElementById('licenseTableBody')) { 
+            if (resetFilters) resetLicenseFilters(); 
+            applyLicenseFilters(); 
+        }
+        if (document.getElementById('userTableBody')) { 
+            if (resetFilters) resetUserFilters(); 
+            applyUserFilters(); 
+        }
         applyRoleBasedUI(); // [PHÂN QUYỀN] Áp dụng các thay đổi giao diện dựa trên vai trò
         updateHeaderUserInfo(); // Cập nhật thông tin user trên header
         if (document.getElementById('settingsContent')) renderSettingsPage(); // [SỬA LỖI] Gọi hàm render cho trang Cài đặt ở cuối để đảm bảo có đủ dữ liệu
@@ -2129,5 +2137,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sb = document.getElementById('sidebar-backdrop'); if (sb) sb.classList.add('hidden');
     } catch (err) { console.error('Error during startup modal/overlay cleanup', err); }
 
-    refreshApp();
+    // Load trang lần đầu - reset filter để đảm bảo trạng thái sạch
+    refreshApp(true);
 });
