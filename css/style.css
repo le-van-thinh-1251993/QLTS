@@ -140,6 +140,24 @@ select option {
 }
 
 /* Ensure filter-control aligns items and spaces controls nicely */
+
+/* Keep Choices dropdowns from stretching modals */
+.choices {
+    width: 100%;
+    position: relative;
+}
+
+.choices__list--dropdown {
+    position: absolute;
+    z-index: 60;
+    max-height: 220px;
+    overflow: auto;
+    width: 100%;
+}
+
+.choices__list--dropdown .choices__item {
+    white-space: normal;
+}
 .filter-control {
     display: flex;
     align-items: center;

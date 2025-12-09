@@ -54,6 +54,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Data Stores ---
     let assets = [], licenses = [], assetHistory = [], categories = [], users = [], departments = [], licenseTypes = [];
+    let maintenanceTasks = [], maintenanceEvents = [], stockChecks = [], stockCheckItems = [], alertSettings = [];
+    let historyExportBuffer = [];
     let tempImportedUsers = [], tempImportedAssets = [];
 
     // --- State & Config ---
@@ -85,6 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let assignUserChoicesInstance = null, userChoicesInstance = null;
     let licenseUserChoicesInstance = null, licenseAssignUserChoicesInstance = null;
     let transferUserChoicesInstance = null;
+    let maintenanceAssetChoices = null;
     let filterAssetUserChoicesInstance = null, filterLicenseUserChoicesInstance = null;
 
     const STATUS_MAP = {
@@ -102,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function fetchAllData() {
         // Run queries in parallel but check errors for each result. If Supabase is unavailable or returns an error
         // we log it and fall back to localStorage where possible so the UI still shows data.
-        const [deptRes, catRes, userRes, assetRes, licenseRes, historyRes, licTypeRes] = await Promise.all([
+        const [deptRes, catRes, userRes, assetRes, licenseRes, historyRes, licTypeRes, maintenanceTaskRes, maintenanceEventRes, stockCheckRes, stockCheckItemRes, alertSettingRes] = await Promise.all([
             supabaseClient.from('departments').select('*'),
             supabaseClient.from('categories').select('*'),
             supabaseClient.from('users').select('*, department:departments(name)'),
@@ -110,10 +113,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             supabaseClient.from('licenses').select('*, user:users(name)'),
             // ensure order so created_at nulls don't break chronology
             supabaseClient.from('asset_history').select('*, asset:assets(name)').order('id', { ascending: false }),
-            supabaseClient.from('license_types').select('*')
+            supabaseClient.from('license_types').select('*'),
+            supabaseClient.from('maintenance_tasks').select('*'),
+            supabaseClient.from('maintenance_events').select('*'),
+            supabaseClient.from('stock_checks').select('*'),
+            supabaseClient.from('stock_check_items').select('*'),
+            supabaseClient.from('alert_settings').select('*')
         ]).catch(err => {
             console.error('fetchAllData: Promise.all failed', err);
-            return [ { error: err }, {}, {}, { error: err }, { error: err }, {}, {} ];
+            return [ { error: err }, {}, {}, { error: err }, { error: err }, {}, {}, {}, {}, {}, {}, {} ];
         });
 
         // Helper to handle response errors
@@ -131,15 +139,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (handleResp(catRes, 'categories') && catRes.data) categories = catRes.data;
         if (handleResp(licTypeRes, 'license_types') && licTypeRes.data) licenseTypes = licTypeRes.data;
         if (handleResp(userRes, 'users') && userRes.data) users = userRes.data.map(u => ({ ...u, department: u.department?.name || '-' }));
+        if (handleResp(maintenanceTaskRes, 'maintenance_tasks') && maintenanceTaskRes.data) maintenanceTasks = maintenanceTaskRes.data;
+        if (handleResp(maintenanceEventRes, 'maintenance_events') && maintenanceEventRes.data) maintenanceEvents = maintenanceEventRes.data;
+        if (handleResp(stockCheckRes, 'stock_checks') && stockCheckRes.data) stockChecks = stockCheckRes.data;
+        if (handleResp(stockCheckItemRes, 'stock_check_items') && stockCheckItemRes.data) stockCheckItems = stockCheckItemRes.data;
+        if (handleResp(alertSettingRes, 'alert_settings') && alertSettingRes.data) alertSettings = alertSettingRes.data;
 
         // assets and licenses: if Supabase fails, try load from localStorage fallback
         if (handleResp(assetRes, 'assets') && assetRes.data) {
-            assets = assetRes.data.map(a => ({ ...a, category: a.category?.name || '-', user: a.user?.name || null, warranty_expiration_date: a.warranty_expiration_date || null }));
+            assets = assetRes.data.map(a => ({
+                ...a,
+                category: a.category?.name || '-',
+                user: a.user?.name || null,
+                warranty_expiration_date: a.warranty_expiration_date || null,
+                purchase_date: a.purchase_date || null,
+                cost: a.cost || null,
+                salvage_value: a.salvage_value || null,
+                useful_life_months: a.useful_life_months || null,
+                depreciation_method: a.depreciation_method || 'straight_line'
+            }));
         } else {
             try {
                 const stored = localStorage.getItem('it_assets_final');
                 if (stored) {
-                    assets = JSON.parse(stored);
+                    assets = JSON.parse(stored).map(a => ({
+                        ...a,
+                        purchase_date: a.purchase_date || null,
+                        cost: a.cost || null,
+                        salvage_value: a.salvage_value || null,
+                        useful_life_months: a.useful_life_months || null,
+                        depreciation_method: a.depreciation_method || 'straight_line'
+                    }));
                     console.warn('fetchAllData: loaded assets from localStorage fallback (it_assets_final)');
                 }
             } catch (e) { console.warn('fetchAllData: failed to parse localStorage assets', e); }
@@ -368,6 +398,87 @@ document.addEventListener('DOMContentLoaded', async () => {
         return null;
     }
 
+    // Hiển thị ngày ở định dạng dd/mm/yyyy
+    function formatDateDisplay(isoDate) {
+        if (!isoDate) return '-';
+        const d = new Date(isoDate);
+        return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('vi-VN');
+    }
+
+    function renderMaintenanceList() {
+        const tbody = document.getElementById('maintenanceTableBody');
+        if (!tbody) return;
+        const rows = (maintenanceTasks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map(task => {
+            const assetName = assets.find(a => a.id === task.asset_id)?.name || 'N/A';
+            const statusClass = {
+                open: 'bg-amber-100 text-amber-700',
+                in_progress: 'bg-sky-100 text-sky-700',
+                done: 'bg-green-100 text-green-700',
+                overdue: 'bg-red-100 text-red-700'
+            }[task.status] || 'bg-slate-100 text-slate-600';
+            return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                    <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${task.title || '-'}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-200">${assetName}</td>
+                    <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(task.due_date)}</td>
+                    <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${task.status || '-'}</span></td>
+                    <td class="p-3 text-slate-600 dark:text-slate-300">${task.note || '-'}</td>
+                    <td class="p-3 text-right"><button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-maint" data-id="${task.id}">Xóa</button></td>
+                </tr>`;
+        });
+        tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="p-4 text-center text-slate-500">Chưa có lịch bảo trì</td></tr>';
+    }
+
+    function renderStockCheckList() {
+        const tbody = document.getElementById('stockCheckTableBody');
+        if (!tbody) return;
+        const rows = (stockChecks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map(item => {
+            const statusClass = {
+                open: 'bg-cyan-100 text-cyan-700',
+                closed: 'bg-green-100 text-green-700'
+            }[item.status] || 'bg-slate-100 text-slate-600';
+            return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                    <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${item.note || '-'}</td>
+                    <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(item.started_at)}</td>
+                    <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${item.status || '-'}</span></td>
+                    <td class="p-3 text-slate-600 dark:text-slate-300">${item.note ? item.note : '-'}</td>
+                    <td class="p-3 text-right"><button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-stock" data-id="${item.id}">Xóa</button></td>
+                </tr>`;
+        });
+        tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="p-4 text-center text-slate-500">Chưa có đợt kiểm kê</td></tr>';
+    }
+
+    // Ghi log hoạt động; ưu tiên Supabase, nếu lỗi thì chỉ log console để không chặn flow
+    async function addLog(entityId, entityType, action, desc) {
+        try {
+            const payload = {
+                asset_id: entityId,
+                action: `[${entityType}] ${action}`,
+                description: desc || '',
+                created_at: new Date().toISOString()
+            };
+            await supabaseClient.from('asset_history').insert(payload);
+        } catch (err) {
+            console.warn('addLog failed', err, { entityId, entityType, action });
+        }
+    }
+
+    // Xuất CSV nhanh (không phụ thuộc XLSX)
+    function exportToCSV(rows, filename) {
+        if (!rows || rows.length === 0) return showInfoModal('Không có dữ liệu để xuất');
+        const headers = Object.keys(rows[0]);
+        const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => {
+            const val = r[h] == null ? '' : r[h].toString().replace(/"/g, '""');
+            return `"${val}"`;
+        }).join(','))).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename || 'export.csv'; a.click();
+        URL.revokeObjectURL(url);
+    }
+
     // 3. Hàm hiển thị (ĐÃ CẬP NHẬT TỰ TÌM TÊN CỘT & HIỂN THỊ)
     function renderLicenseImportPreview(data) {
         const tbody = document.getElementById('licenseImportPreviewTableBody');
@@ -529,6 +640,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         openModal('drillDownModal');
     }
 
+    const currencyVN = (val) => {
+        if (val === null || val === undefined || isNaN(val)) return '-';
+        return Number(val).toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
+    };
+
+    const safeDate = (val) => {
+        if (!val) return null;
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+    };
+
     function updateDashboard() {
         if (!document.getElementById('dashboardContent')) return;
 
@@ -536,6 +658,63 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('assetsInUse')) document.getElementById('assetsInUse').textContent = assets.filter(a => a.status === 'Active').length;
         if (document.getElementById('assetsInStock')) document.getElementById('assetsInStock').textContent = assets.filter(a => a.status === 'Stock').length;
         if (document.getElementById('assetsInRepair')) document.getElementById('assetsInRepair').textContent = assets.filter(a => ['Repair', 'Broken'].includes(a.status)).length;
+
+        const backlogTasks = maintenanceTasks.filter(t => (t.status || '').toLowerCase() !== 'done');
+        const nextDue = backlogTasks
+            .map(t => safeDate(t.next_due_date || t.due_date || t.scheduled_for))
+            .filter(Boolean)
+            .sort((a, b) => a - b)[0];
+        const monthlyDep = assets.reduce((sum, a) => {
+            const cost = Number(a.cost) || 0;
+            const salvage = Number(a.salvage_value) || 0;
+            const life = Number(a.useful_life_months) || 0;
+            if (cost > 0 && life > 0) {
+                return sum + Math.max(0, cost - salvage) / life;
+            }
+            return sum;
+        }, 0);
+        const openStock = stockChecks.filter(c => (c.status || '').toLowerCase() !== 'closed').length;
+
+        const alertCfg = alertSettings[0] || {};
+        const warrantyThreshold = alertCfg.warranty_threshold_days || 30;
+        const licenseThreshold = alertCfg.license_threshold_days || 30;
+        const maintenanceThreshold = alertCfg.maintenance_threshold_days || 7;
+        const nowAlerts = new Date();
+        const calcDaysLeft = (d) => Math.ceil((d - nowAlerts) / (1000 * 60 * 60 * 24));
+        const assetWarrantyAlerts = assets.filter(a => {
+            const d = safeDate(a.warranty_expiration_date);
+            if (!d) return false;
+            const daysLeft = calcDaysLeft(d);
+            return daysLeft >= 0 && daysLeft <= warrantyThreshold;
+        }).length;
+        const licenseExpiryAlerts = licenses.filter(l => {
+            const d = safeDate(l.expiration_date);
+            if (!d) return false;
+            const daysLeft = calcDaysLeft(d);
+            return daysLeft >= 0 && daysLeft <= licenseThreshold;
+        }).length;
+        const maintenanceAlerts = backlogTasks.filter(t => {
+            const d = safeDate(t.next_due_date || t.due_date || t.scheduled_for);
+            if (!d) return false;
+            const daysLeft = calcDaysLeft(d);
+            return daysLeft >= 0 && daysLeft <= maintenanceThreshold;
+        }).length;
+        const totalAlerts = assetWarrantyAlerts + licenseExpiryAlerts + maintenanceAlerts;
+
+        const nextMaintenanceEl = document.getElementById('nextMaintenance');
+        if (nextMaintenanceEl) nextMaintenanceEl.textContent = nextDue ? nextDue.toLocaleDateString('vi-VN') : 'Không lịch';
+
+        const maintenanceBacklogEl = document.getElementById('maintenanceBacklog');
+        if (maintenanceBacklogEl) maintenanceBacklogEl.textContent = backlogTasks.length;
+
+        const stockCheckEl = document.getElementById('openStockChecks');
+        if (stockCheckEl) stockCheckEl.textContent = openStock;
+
+        const monthlyDepEl = document.getElementById('monthlyDep');
+        if (monthlyDepEl) monthlyDepEl.textContent = currencyVN(monthlyDep || 0);
+
+        const alertCountEl = document.getElementById('alertCount');
+        if (alertCountEl) alertCountEl.textContent = totalAlerts;
 
         const drawChart = (id, instance, type, labels, data, colors, label = 'Dữ liệu', onClickCallback = null) => {
             const ctx = document.getElementById(id);
@@ -659,7 +838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- 1. TÍNH COLSPAN (Để ô phân trang trải dài hết bảng) ---
         let colCount = 10;
-        if (tableType === 'assets') colCount = 9;
+        if (tableType === 'assets') colCount = 10;
         if (tableType === 'licenses') colCount = 8;
         if (tableType === 'users') colCount = 5;
 
@@ -727,7 +906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('assetTotalCount').classList.remove('hidden');
         const start = (assetCurrentPage - 1) * ITEMS_PER_PAGE;
         const pageData = data.slice(start, start + ITEMS_PER_PAGE);
-        if (pageData.length === 0) { tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-slate-400">Không có dữ liệu.</td></tr>`; renderPagination('assetPagination', 1, 0, ITEMS_PER_PAGE, 'assets'); return; }
+        if (pageData.length === 0) { tbody.innerHTML = `<tr><td colspan="10" class="p-8 text-center text-slate-400">Không có dữ liệu.</td></tr>`; renderPagination('assetPagination', 1, 0, ITEMS_PER_PAGE, 'assets'); return; }
         tbody.innerHTML = pageData.map(item => {
             const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
             const isAdmin = currentUserProfile.role === 'admin';
@@ -747,6 +926,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="p-4 font-semibold text-slate-700">${item.name}</td>
                 <td class="p-4 text-xs text-slate-500 font-mono whitespace-pre-wrap">${item.config || ''}</td>
                 <td class="p-4">${item.category}</td><td class="p-4 text-sm">${item.location || '-'}</td>
+                <td class="p-4 text-sm">${formatDateDisplay(item.purchase_date)}</td>
                 <td class="p-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${status.classes}">${status.text}</span></td>
                 <td class="p-4 text-sm font-medium text-blue-600">${item.user || '-'}</td>
                 <td class="p-4 text-sm italic text-slate-400">-</td>
@@ -892,6 +1072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 config: row['Cấu hình'] || '',
                 category: row['Loại'] || 'Khác',
                 location: row['Vị trí'] || '',
+                purchase_date: parseDateToISO(row['Ngày nhập'] || row['Ngày nhập kho'] || row['Purchase Date'] || row['Import Date'] || ''),
                 status: normalizeAssetStatus(row['Trạng thái'] || row['Status']),
                 user: row['Người dùng'] || '',
                 notes: row['Ghi chú'] || ''
@@ -910,7 +1091,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderAssetImportPreview() {
         const tbody = document.getElementById('importPreviewTableBody'); if (!tbody) return;
         if (tempImportedAssets.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-400">Không có dữ liệu hợp lệ.</td></tr>'; return; }
-        tbody.innerHTML = tempImportedAssets.map((a, idx) => `<tr class="border-b hover:bg-slate-50"><td class="p-3 text-center"><input type="checkbox" class="import-check-asset" data-idx="${idx}"></td><td class="p-3 font-medium">${a.name}</td><td class="p-3 text-sm truncate max-w-[150px]">${a.config || '-'}</td><td class="p-3 text-sm">${a.category || '-'}</td><td class="p-3 text-sm">${a.location || '-'}</td><td class="p-3 text-sm">${a.status || '-'}</td><td class="p-3 text-sm font-bold text-blue-600">${a.user || '-'}</td><td class="p-3 text-xs truncate max-w-[100px]">${a.notes || ''}</td></tr>`).join('');
+        tbody.innerHTML = tempImportedAssets.map((a, idx) => `<tr class="border-b hover:bg-slate-50"><td class="p-3 text-center"><input type="checkbox" class="import-check-asset" data-idx="${idx}"></td><td class="p-3 font-medium">${a.name}</td><td class="p-3 text-sm truncate max-w-[150px]">${a.config || '-'}</td><td class="p-3 text-sm">${a.category || '-'}</td><td class="p-3 text-sm">${a.location || '-'}</td><td class="p-3 text-sm">${formatDateDisplay(a.purchase_date)}</td><td class="p-3 text-sm">${a.status || '-'}</td><td class="p-3 text-sm font-bold text-blue-600">${a.user || '-'}</td><td class="p-3 text-xs truncate max-w-[100px]">${a.notes || ''}</td></tr>`).join('');
     }
 
     async function processUserImport() {
@@ -935,7 +1116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const userObj = users.find(u => normalizeString(u.name) === normalizeString(a.user));
             const userId = userObj?.id || null;
             const status = userId ? 'Active' : a.status;
-            const payload = { name: a.name, config: a.config, location: a.location, status: status, notes: a.notes, category_id: catObj?.id || null, user_id: userId };
+            const payload = { name: a.name, config: a.config, location: a.location, purchase_date: a.purchase_date || null, status: status, notes: a.notes, category_id: catObj?.id || null, user_id: userId };
             const { error } = await supabaseClient.from('assets').insert(payload); if (!error) successCount++;
         }
         btn.textContent = 'Xác nhận Import'; btn.disabled = false;
@@ -1013,6 +1194,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        const maintenanceAssetSelect = document.getElementById('maintenance_asset');
+        if (maintenanceAssetSelect) {
+            const cur = maintenanceAssetSelect.value;
+            maintenanceAssetSelect.innerHTML = '<option value="">-- Chọn thiết bị --</option>' + assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+            maintenanceAssetSelect.value = cur;
+            try {
+                maintenanceAssetChoices?.destroy();
+            } catch (e) {}
+            try {
+                maintenanceAssetChoices = new Choices(maintenanceAssetSelect, { searchPlaceholderValue: 'Tìm thiết bị...', shouldSort: false, removeItemButton: false, allowHTML: true });
+            } catch (e) {}
+        }
+
         // Populate license filters: user and status
         const filterLicenseUser = document.getElementById('filterLicenseUser');
         if (filterLicenseUser) {
@@ -1054,7 +1248,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 return true;
             })
-            .sort((a, b) => ('' + (a[assetSort.column] || '')).localeCompare('' + (b[assetSort.column] || '')) * (assetSort.direction === 'asc' ? 1 : -1));
+            .sort((a, b) => {
+                if (assetSort.column === 'purchase_date') {
+                    const da = a.purchase_date ? new Date(a.purchase_date).getTime() : 0;
+                    const db = b.purchase_date ? new Date(b.purchase_date).getTime() : 0;
+                    return (da - db) * (assetSort.direction === 'asc' ? 1 : -1);
+                }
+                return ('' + (a[assetSort.column] || '')).localeCompare('' + (b[assetSort.column] || '')) * (assetSort.direction === 'asc' ? 1 : -1);
+            });
 
         console.debug('applyAssetFilters: filteredCount=', currentFilteredAssets.length);
         renderTableAssets(currentFilteredAssets);
@@ -1090,14 +1291,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderTableUsers(currentFilteredUsers);
     }
 
+    function resetAssetFilters() {
+        ['searchInput', 'filterAssetStatus', 'filterAssetLocation', 'filterAssetCategory'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const fau = document.getElementById('filterAssetUser');
+        if (filterAssetUserChoicesInstance) {
+            try { filterAssetUserChoicesInstance.removeActiveItems(); filterAssetUserChoicesInstance.clearInput(); } catch (err) {}
+        }
+        if (fau) fau.value = '';
+    }
+
+    function resetLicenseFilters() {
+        ['searchInput', 'filterLicenseType', 'filterPackageType', 'filterLicenseStatus'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const flu = document.getElementById('filterLicenseUser');
+        if (filterLicenseUserChoicesInstance) {
+            try { filterLicenseUserChoicesInstance.removeActiveItems(); filterLicenseUserChoicesInstance.clearInput(); } catch (err) {}
+        }
+        if (flu) flu.value = '';
+    }
+
+    function resetUserFilters() {
+        const su = document.getElementById('searchUserInput');
+        const fd = document.getElementById('filterDepartment');
+        if (su) su.value = '';
+        if (fd) fd.value = '';
+    }
+
     async function handleFormSubmit(e, table, payloadBuilder, modalId, postAction) {
         if (e.target.tagName !== 'FORM') return;
         e.preventDefault();
         const payload = payloadBuilder();
         const id = payload.id; delete payload.id;
+        const isUpdate = !!id;
         let error;
-        if (id) { const res = await supabaseClient.from(table).update(payload).eq('id', id); error = res.error; }
-        else { const res = await supabaseClient.from(table).insert(payload).select(); error = res.error; if (!error && postAction) postAction(res.data[0]); }
+        let resData = null;
+        if (isUpdate) {
+            const res = await supabaseClient.from(table).update(payload).eq('id', id).select();
+            error = res.error; resData = res.data?.[0] || { id, ...payload };
+        } else {
+            const res = await supabaseClient.from(table).insert(payload).select();
+            error = res.error; resData = res.data?.[0];
+        }
+        if (!error && postAction) postAction(resData, isUpdate);
         if (error) showInfoModal("Lỗi: " + error.message); else { await refreshApp(); showInfoModal("Lưu thành công!", "Thông báo"); }
     }
 
@@ -1147,6 +1387,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('filterLicenseStatus')) document.getElementById('filterLicenseStatus').value = '';
         if (document.getElementById('filterLicenseUser')) document.getElementById('filterLicenseUser').value = '';
         applyLicenseFilters();
+    });
+
+    // Export lịch sử (asset / license)
+    document.getElementById('historyExportBtn')?.addEventListener('click', () => {
+        if (!historyExportBuffer || historyExportBuffer.length === 0) return showInfoModal('Không có dữ liệu lịch sử để xuất');
+        const rows = historyExportBuffer.map(l => ({
+            'Thời gian': l.time || l.created_at || '',
+            'Tên': l.assetName || l.asset || '',
+            'Hành động': l.action || '',
+            'Chi tiết': l.desc || l.description || ''
+        }));
+        exportToCSV(rows, 'history.csv');
+    });
+
+    document.getElementById('historyLicenseExportBtn')?.addEventListener('click', () => {
+        if (!historyExportBuffer || historyExportBuffer.length === 0) return showInfoModal('Không có dữ liệu lịch sử để xuất');
+        const rows = historyExportBuffer.map(l => ({
+            'Thời gian': l.time || l.created_at || '',
+            'Hành động': l.action || '',
+            'Chi tiết': l.desc || l.description || ''
+        }));
+        exportToCSV(rows, 'history_license.csv');
     });
 
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = Array.from(document.querySelectorAll('.fixed.flex:not(.hidden)')); if (m.length > 0) safeCloseModal(m[m.length - 1].id); } });
@@ -1296,7 +1558,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex'); if (modal) attemptCloseModal(modal.id); return; }
 
         const pageBtn = t.closest('a[data-page]');
-        if (pageBtn) { e.preventDefault(); const p = parseInt(pageBtn.dataset.page), tbl = pageBtn.dataset.table; if (tbl === 'assets') { assetCurrentPage = p; renderTableAssets(currentFilteredAssets); } else if (tbl === 'users') { userCurrentPage = p; renderTableUsers(currentFilteredUsers); } else if (tbl === 'licenses') { licenseCurrentPage = p; renderTableLicenses(currentFilteredLicenses); } return; }
+        if (pageBtn) {
+            e.preventDefault();
+            const p = parseInt(pageBtn.dataset.page), tbl = pageBtn.dataset.table;
+
+            // Khi chuyển trang, reset bộ lọc theo người dùng để không bị lưu cache
+            if (tbl === 'assets') {
+                resetAssetFilters();
+                assetCurrentPage = p;
+                applyAssetFilters();
+            } else if (tbl === 'licenses') {
+                resetLicenseFilters();
+                licenseCurrentPage = p;
+                applyLicenseFilters();
+            } else if (tbl === 'users') {
+                resetUserFilters();
+                userCurrentPage = p;
+                applyUserFilters();
+            }
+            return;
+        }
 
         const sortHeader = t.closest('.sortable-header');
         if (sortHeader) { const col = sortHeader.dataset.sort, tbl = sortHeader.closest('table').id; let sObj = tbl === 'assetTable' ? assetSort : (tbl === 'userTable' ? userSort : licenseSort); if (sObj.column === col) sObj.direction = sObj.direction === 'asc' ? 'desc' : 'asc'; else { sObj.column = col; sObj.direction = 'asc'; } if (tbl === 'assetTable') applyAssetFilters(); else if (tbl === 'userTable') applyUserFilters(); else applyLicenseFilters(); return; }
@@ -1318,10 +1599,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (t.closest('#clear-read-notifications-btn')) { showConfirmationModal("Bạn có muốn xem lại tất cả thông báo đã đọc không?", () => { localStorage.removeItem('readNotifications'); checkAndDisplayNotifications(); }); return; }
 
         if (t.closest('#addAssetBtn')) { document.getElementById('assetForm').reset(); document.getElementById('modal_assetId').value = ''; document.getElementById('modalTitle').textContent = 'Thêm tài sản mới'; initAllUserDropdowns(); openModal('assetModal'); return; }
+        if (t.closest('#openMaintenanceModalBtn')) { document.getElementById('maintenanceForm')?.reset(); updateDropdowns(); openModal('maintenanceModal'); return; }
+        if (t.closest('#openStockCheckModalBtn')) { document.getElementById('stockCheckForm')?.reset(); openModal('stockCheckModal'); return; }
         if (t.closest('#addLicenseBtn')) { document.getElementById('licenseForm').reset(); document.getElementById('modal_licenseId').value = ''; document.getElementById('licenseModalTitle').textContent = 'Thêm License mới'; initAllUserDropdowns(); openModal('licenseModal'); return; }
         if (t.closest('#addUserBtn')) { safeCloseModal('addUserModal'); updateDropdowns(); openModal('addUserModal'); return; }
 
-        if (t.closest('#exportExcelBtn')) { const data = currentFilteredAssets.map(a => ({ "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Người dùng": a.user, "Trạng thái": a.status, "Ghi chú": a.notes })); exportToExcel(data, 'Assets.xlsx'); return; }
+        if (t.closest('#exportExcelBtn')) { const data = currentFilteredAssets.map(a => ({ "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Ngày nhập": formatDateDisplay(a.purchase_date), "Người dùng": a.user, "Trạng thái": a.status, "Ghi chú": a.notes })); exportToExcel(data, 'Assets.xlsx'); return; }
         if (t.closest('#exportLicenseBtn')) { const data = currentFilteredLicenses.map(l => ({ "Loại Key": l.key_type, "Mã Key": l.license_key, "Gói": l.package_type, "Hạn SD": l.expiration_date, "Người dùng": l.user, "Trạng thái": l.status, "Ghi chú": l.notes })); exportToExcel(data, 'Licenses.xlsx'); return; }
         if (t.closest('#exportUsersBtn')) { const data = currentFilteredUsers.map(u => ({ "Tên": u.name, "Email": u.email, "Phòng ban": u.department, "Trạng thái": u.status })); exportToExcel(data, 'Users.xlsx'); return; }
 
@@ -1356,8 +1639,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            if (action === 'delete-asset') showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await refreshApp(); } });
-            else if (action === 'edit-asset') { const item = assets.find(a => a.id === id); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
+            if (action === 'delete-asset') showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'ASSET', 'Xóa', 'Xóa tài sản'); await refreshApp(); } });
+            else if (action === 'edit-asset') { const item = assets.find(a => a.id === id); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); document.getElementById('modal_assetPurchaseDate').value = item.purchase_date ? item.purchase_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetCost').value = item.cost || 0; document.getElementById('modal_assetSalvage').value = item.salvage_value || 0; document.getElementById('modal_assetLife').value = item.useful_life_months || ''; document.getElementById('modal_assetDepMethod').value = item.depreciation_method || 'straight_line'; updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
             else if (action === 'checkout-asset') { tempId = id; document.getElementById('assignAssetName').textContent = assets.find(a => a.id === id)?.name; initAllUserDropdowns(); openModal('checkOutModal'); }
             else if (action === 'checkin-asset') {
                 const assetToCheckIn = assets.find(a => a.id === id);
@@ -1374,12 +1657,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const item = assets.find(a => a.id === id);
                 document.getElementById('historyModalTitle').textContent = `Lịch sử tài sản: ${item?.name}`;
                 const logs = assetHistory.filter(l => l.assetId === id);
+                historyExportBuffer = logs;
                 document.getElementById('historyTableBody').innerHTML = logs.length
                     ? logs.map(l => `<tr class="border-b hover:bg-slate-50"><td class="p-3">${l.time}</td><td class="p-3">${l.assetName}</td><td class="p-3 font-bold">${l.action}</td><td class="p-3">${l.desc}</td></tr>`).join('')
                     : '<tr><td colspan="4" class="p-4 text-center">Không có lịch sử</td></tr>';
                 openModal('historyModal');
             }
-            else if (action === 'delete-license') showConfirmationModal("Xóa License?", async () => { const { error } = await supabaseClient.from('licenses').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await refreshApp(); } });
+            else if (action === 'delete-license') showConfirmationModal("Xóa License?", async () => { const { error } = await supabaseClient.from('licenses').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'LICENSE', 'Xóa', 'Xóa license'); await refreshApp(); } });
             else if (action === 'edit-license') { const item = licenses.find(l => l.id === id); if (item) { document.getElementById('modal_licenseId').value = item.id;['modal_licenseKey', 'modal_packageType', 'modal_expirationDate', 'modal_licenseStatus', 'modal_licenseNotes'].forEach(k => { let val = item[k.replace('modal_', '').replace('expirationDate', 'expiration_date').replace('licenseKey', 'license_key').replace('packageType', 'package_type').replace('licenseStatus', 'status').replace('licenseNotes', 'notes')]; document.getElementById(k).value = val || ''; }); updateDropdowns(); document.getElementById('modal_licenseType').value = item.key_type; document.getElementById('licenseModalTitle').textContent = 'Sửa License'; initAllUserDropdowns(item.user); openModal('licenseModal'); } }
             else if (action === 'checkout-license') { tempId = id; document.getElementById('assignLicenseName').textContent = licenses.find(l => l.id === id)?.key_type; initAllUserDropdowns(); openModal('checkOutLicenseModal'); }
             else if (action === 'checkin-license') {
@@ -1392,7 +1676,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            else if (action === 'delete-user') { if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal("Xóa nhân viên?", async () => { await supabaseClient.from('users').delete().eq('id', id); await refreshApp(); }); }
+            else if (action === 'delete-user') { if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal("Xóa nhân viên?", async () => { await supabaseClient.from('users').delete().eq('id', id); await addLog(id, 'USER', 'Xóa', 'Xóa nhân viên'); await refreshApp(); }); }
             else if (action === 'edit-user') { const u = users.find(x => x.id === id); if (u) { document.getElementById('userId').value = u.id; document.getElementById('name').value = u.name; document.getElementById('email').value = u.email; document.getElementById('status').value = u.status; updateDropdowns(); document.getElementById('department').value = departments.find(d => d.name === u.department)?.id || ''; openModal('addUserModal'); } }
 
             else if (action === 'delete-cat') showConfirmationModal("Xóa danh mục?", async () => { await supabaseClient.from('categories').delete().eq('id', id); await refreshApp(); renderLists(); });
@@ -1401,6 +1685,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             else if (action === 'edit-dept') { document.getElementById('deptName').value = actionBtn.dataset.name; document.getElementById('deptId').value = id; document.getElementById('cancelDeptEdit').classList.remove('hidden'); }
             else if (action === 'delete-lic-type') showConfirmationModal("Xóa loại key?", async () => { await supabaseClient.from('license_types').delete().eq('id', id); await refreshApp(); renderLists(); });
             else if (action === 'edit-lic-type') { document.getElementById('licenseTypeName').value = actionBtn.dataset.name; document.getElementById('licenseTypeId').value = id; document.getElementById('btnCancelLicenseTypeEdit').classList.remove('hidden'); }
+            else if (action === 'delete-maint') {
+                showConfirmationModal("Xóa lịch bảo trì này?", async () => {
+                    const { error } = await supabaseClient.from('maintenance_tasks').delete().eq('id', id);
+                    if (error) return handleSupabaseError(error, 'xóa lịch bảo trì');
+                    await refreshApp();
+                });
+            }
+            else if (action === 'delete-stock') {
+                showConfirmationModal("Xóa đợt kiểm kê này?", async () => {
+                    const { error } = await supabaseClient.from('stock_checks').delete().eq('id', id);
+                    if (error) return handleSupabaseError(error, 'xóa đợt kiểm kê');
+                    await refreshApp();
+                });
+            }
         }
     });
     // =================================================================
@@ -1546,7 +1844,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!data || data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400">Chưa có lịch sử.</td></tr>';
+                historyExportBuffer = [];
             } else {
+                historyExportBuffer = data.map(log => ({
+                    time: new Date(log.created_at).toLocaleString('vi-VN'),
+                    assetName: license.key_type,
+                    action: log.action,
+                    desc: log.description
+                }));
                 tbody.innerHTML = data.map(log => `
                 <tr class="hover:bg-slate-50">
                     <td class="p-3 text-slate-500 text-xs">${new Date(log.created_at).toLocaleString('vi-VN')}</td>
@@ -1599,6 +1904,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             licensesTbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400 italic">Bạn chưa giữ license nào.</td></tr>';
         }
+
+        const cfg = alertSettings[0] || {};
+        const warrantyInput = document.getElementById('alert-warranty-days');
+        const licenseInput = document.getElementById('alert-license-days');
+        const maintenanceInput = document.getElementById('alert-maintenance-days');
+        const emailsInput = document.getElementById('alert-emails');
+        if (warrantyInput) warrantyInput.value = cfg.warranty_threshold_days || 30;
+        if (licenseInput) licenseInput.value = cfg.license_threshold_days || 30;
+        if (maintenanceInput) maintenanceInput.value = cfg.maintenance_threshold_days || 7;
+        if (emailsInput) emailsInput.value = (cfg.emails || []).join(', ');
     }
 
     // Edit Profile Logic
@@ -1671,21 +1986,96 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Apply initial dark mode on load
     applyDarkMode(localStorage.getItem('darkMode') === 'true');
 
+    document.getElementById('alert-settings-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            id: alertSettings[0]?.id,
+            warranty_threshold_days: parseInt(document.getElementById('alert-warranty-days').value, 10) || 30,
+            license_threshold_days: parseInt(document.getElementById('alert-license-days').value, 10) || 30,
+            maintenance_threshold_days: parseInt(document.getElementById('alert-maintenance-days').value, 10) || 7,
+            emails: (document.getElementById('alert-emails').value || '')
+                .split(',')
+                .map(e => e.trim())
+                .filter(Boolean)
+        };
+        const { error } = await supabaseClient.from('alert_settings').upsert(payload, { onConflict: 'id' });
+        if (error) return handleSupabaseError(error, 'lưu cấu hình cảnh báo');
+        showInfoModal('Đã lưu cấu hình cảnh báo.');
+        await refreshApp();
+    });
+
     document.getElementById('assetForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'assets', () => ({
-        id: document.getElementById('modal_assetId').value, name: document.getElementById('modal_assetName').value, config: document.getElementById('modal_assetConfig').value, location: document.getElementById('modal_assetLocation').value, status: document.getElementById('modal_assetStatus').value, notes: document.getElementById('modal_assetNotes').value, category_id: parseInt(document.getElementById('modal_assetCategory').value), user_id: users.find(u => u.name === userChoicesInstance?.getValue(true))?.id || null
-    }), 'assetModal', (data) => addLog(data.id, 'ASSET', 'Thêm mới', 'Nhập kho')));
+        id: document.getElementById('modal_assetId').value,
+        name: document.getElementById('modal_assetName').value,
+        config: document.getElementById('modal_assetConfig').value,
+        location: document.getElementById('modal_assetLocation').value,
+        purchase_date: document.getElementById('modal_assetPurchaseDate').value || null,
+        cost: parseFloat(document.getElementById('modal_assetCost').value) || 0,
+        salvage_value: parseFloat(document.getElementById('modal_assetSalvage').value) || 0,
+        useful_life_months: parseInt(document.getElementById('modal_assetLife').value, 10) || null,
+        depreciation_method: document.getElementById('modal_assetDepMethod').value || 'straight_line',
+        status: document.getElementById('modal_assetStatus').value,
+        notes: document.getElementById('modal_assetNotes').value,
+        category_id: parseInt(document.getElementById('modal_assetCategory').value),
+        user_id: users.find(u => u.name === userChoicesInstance?.getValue(true))?.id || null
+    }), 'assetModal', (data, isUpdate) => addLog(data.id, 'ASSET', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa tài sản' : 'Nhập kho')));
 
     document.getElementById('licenseForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'licenses', () => ({
         id: document.getElementById('modal_licenseId').value, key_type: document.getElementById('modal_licenseType').value, license_key: document.getElementById('modal_licenseKey').value, package_type: document.getElementById('modal_packageType').value, expiration_date: document.getElementById('modal_expirationDate').value || null, status: document.getElementById('modal_licenseStatus').value, notes: document.getElementById('modal_licenseNotes').value, user_id: users.find(u => u.name === licenseUserChoicesInstance?.getValue(true))?.id || null
-    }), 'licenseModal', (data) => addLog(data.id, 'LICENSE', 'Thêm mới', 'Nhập kho')));
+    }), 'licenseModal', (data, isUpdate) => addLog(data.id, 'LICENSE', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa license' : 'Nhập kho')));
 
     document.getElementById('userForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'users', () => ({
         id: document.getElementById('userId').value, name: document.getElementById('name').value, email: document.getElementById('email').value, department_id: document.getElementById('department').value || null, status: document.getElementById('status').value, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
-    }), 'addUserModal'));
+    }), 'addUserModal', (data, isUpdate) => addLog(data.id, 'USER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.email)));
 
     document.getElementById('categoryForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'categories', () => ({ id: document.getElementById('categoryOldName').value, name: document.getElementById('categoryName').value }), 'categoryModal', renderLists));
     document.getElementById('departmentForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'departments', () => ({ id: document.getElementById('deptId').value, name: document.getElementById('deptName').value }), 'departmentManagementModal', renderLists));
     document.getElementById('licenseTypeForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'license_types', () => ({ id: document.getElementById('licenseTypeId').value, name: document.getElementById('licenseTypeName').value }), 'licenseTypeModal', renderLists));
+
+    document.getElementById('maintenanceForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const titleVal = document.getElementById('maintenance_title').value;
+        if (!titleVal) return showInfoModal('Nhập tiêu đề lịch bảo trì');
+        const payload = {
+            asset_id: parseInt(document.getElementById('maintenance_asset').value, 10) || null,
+            title: titleVal,
+            due_date: document.getElementById('maintenance_due').value || null,
+            status: 'open',
+            created_by: currentUserProfile?.id || null
+        };
+        // Ghi chú tổng hợp: ưu tiên + mô tả
+        const priorityVal = document.getElementById('maintenance_priority').value || 'normal';
+        const descVal = document.getElementById('maintenance_desc').value;
+        const parts = [priorityVal && `Ưu tiên: ${priorityVal}`, descVal];
+        const noteText = parts.filter(Boolean).join(' | ');
+        if (noteText) payload.note = noteText;
+        const { error } = await supabaseClient.from('maintenance_tasks').insert(payload);
+        if (error) return handleSupabaseError(error, 'tạo lịch bảo trì');
+        if (payload.asset_id) await addLog(payload.asset_id, 'MAINT', 'Tạo lịch', titleVal || 'Lịch bảo trì');
+        showInfoModal('Đã lưu lịch bảo trì');
+        safeCloseModal('maintenanceModal');
+        await refreshApp();
+    });
+
+    document.getElementById('stockCheckForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            status: 'open',
+            created_by: currentUserProfile?.id || null
+        };
+        const nameVal = document.getElementById('stockcheck_name').value;
+        const dateVal = document.getElementById('stockcheck_date').value;
+        const extraNote = document.getElementById('stockcheck_notes').value;
+        // map date -> started_at, name/notes -> note to match existing columns
+        if (dateVal) payload.started_at = dateVal;
+        const mergedNote = [nameVal && `Tên đợt: ${nameVal}`, extraNote].filter(Boolean).join(' | ');
+        if (mergedNote) payload.note = mergedNote;
+        const { error } = await supabaseClient.from('stock_checks').insert(payload);
+        if (error) return handleSupabaseError(error, 'tạo đợt kiểm kê');
+        showInfoModal('Đã tạo đợt kiểm kê');
+        safeCloseModal('stockCheckModal');
+        await refreshApp();
+    });
 
     document.getElementById('btnConfirmAssign')?.addEventListener('click', async () => { const u = users.find(u => u.name === assignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); addLog(tempId, 'ASSET', 'Cấp phát', u.name); safeCloseModal('checkOutModal'); await refreshApp(); });
     document.getElementById('btnConfirmAssignLicense')?.addEventListener('click', async () => { const u = users.find(u => u.name === licenseAssignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); await supabaseClient.from('licenses').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); addLog(tempId, 'LICENSE', 'Cấp phát', u.name); safeCloseModal('checkOutLicenseModal'); await refreshApp(); });
@@ -1694,9 +2084,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function refreshApp() {
         await fetchAllData();
         updateDropdowns();
-        if (document.getElementById('assetTableBody')) applyAssetFilters();
-        if (document.getElementById('licenseTableBody')) applyLicenseFilters();
-        if (document.getElementById('userTableBody')) applyUserFilters();
+        if (document.getElementById('assetTableBody')) { resetAssetFilters(); applyAssetFilters(); renderMaintenanceList(); renderStockCheckList(); }
+        if (document.getElementById('licenseTableBody')) { resetLicenseFilters(); applyLicenseFilters(); }
+        if (document.getElementById('userTableBody')) { resetUserFilters(); applyUserFilters(); }
         applyRoleBasedUI(); // [PHÂN QUYỀN] Áp dụng các thay đổi giao diện dựa trên vai trò
         updateHeaderUserInfo(); // Cập nhật thông tin user trên header
         if (document.getElementById('settingsContent')) renderSettingsPage(); // [SỬA LỖI] Gọi hàm render cho trang Cài đặt ở cuối để đảm bảo có đủ dữ liệu

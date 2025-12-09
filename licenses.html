@@ -143,60 +143,61 @@
 
             <main class="flex-1 p-6 overflow-y-auto">
                 <div id="licenseContent">
-                    <div class="flex justify-between items-start mb-6">
+                    <div class="flex flex-col gap-3 mb-6">
                         <div class="flex items-center gap-3 dark:text-gray-200">
                             <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-200">Quản lý License</h2>
                             <span id="licenseTotalCount" class="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full hidden">0</span>
                         </div>
-                        <div class="flex gap-3">
-                            <div class="tooltip">
-                                <button id="manageLicenseTypesBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
-                                    <i class="fa-solid fa-tags"></i>
-                                </button>
-                                <span class="tooltiptext">Quản lý Loại Key</span>
+                        <div class="flex flex-wrap items-center justify-between gap-3 bg-white/80 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                            <div class="filters-row">
+                                <div class="filter-control">
+                                    <label class="text-sm">Loại Key:</label>
+                                    <select id="filterLicenseType" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                                </div>
+                                <div class="filter-control">
+                                    <label class="text-sm">Loại gói:</label>
+                                    <select id="filterPackageType" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                                </div>
+                                <div class="filter-control">
+                                    <label class="text-sm">Trạng thái:</label>
+                                    <select id="filterLicenseStatus" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                                </div>
+                                <div class="filter-control">
+                                    <label class="text-sm">Người dùng:</label>
+                                    <div class="relative">
+                                        <select id="filterLicenseUser" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                                    </div>
+                                </div>
+                                <div class="filter-control">
+                                    <button id="clearLicenseFilters" class="px-3 py-1 bg-slate-100 rounded border text-sm">Xóa lọc</button>
+                                </div>
                             </div>
-                            <div class="tooltip">
-                                <button id="importLicenseBtn" class="icon-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
-                                    <i class="fa-solid fa-file-import"></i>
-                                </button>
-                                <span class="tooltiptext">Import từ Excel</span>
+                            <div class="flex gap-3">
+                                <div class="tooltip">
+                                    <button id="manageLicenseTypesBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                        <i class="fa-solid fa-tags"></i>
+                                    </button>
+                                    <span class="tooltiptext">Quản lý Loại Key</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button id="importLicenseBtn" class="icon-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                        <i class="fa-solid fa-file-import"></i>
+                                    </button>
+                                    <span class="tooltiptext">Import từ Excel</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button id="exportLicenseBtn" class="icon-btn bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                        <i class="fa-solid fa-file-export"></i>
+                                    </button>
+                                    <span class="tooltiptext">Export ra Excel</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button id="addLicenseBtn" class="icon-btn bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center justify-center shadow-lg transition-all">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                    <span class="tooltiptext">Thêm License mới</span>
+                                </div>
                             </div>
-                            <div class="tooltip">
-                                <button id="exportLicenseBtn" class="icon-btn bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
-                                    <i class="fa-solid fa-file-export"></i>
-                                </button>
-                                <span class="tooltiptext">Export ra Excel</span>
-                            </div>
-                            <div class="tooltip">
-                                <button id="addLicenseBtn" class="icon-btn bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center justify-center shadow-lg transition-all">
-                                    <i class="fa-solid fa-plus"></i>
-                                </button>
-                                <span class="tooltiptext">Thêm License mới</span>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Filters (moved below header so they behave like assets page) -->
-                    <div class="mb-4 filters-row">
-                        <div class="filter-control">
-                            <label class="text-sm">Loại Key:</label>
-                            <select id="filterLicenseType" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
-                        </div>
-                        <div class="filter-control">
-                            <label class="text-sm">Loại gói:</label>
-                            <select id="filterPackageType" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
-                        </div>
-                        <div class="filter-control">
-                            <label class="text-sm">Trạng thái:</label>
-                            <select id="filterLicenseStatus" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
-                        </div>
-                        <div class="filter-control">
-                            <label class="text-sm">Người dùng:</label>
-                            <div class="relative">
-                                <select id="filterLicenseUser" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
-                            </div>
-                        </div>
-                        <div class="filter-control">
-                            <button id="clearLicenseFilters" class="px-3 py-1 bg-slate-100 rounded border text-sm">Xóa lọc</button>
                         </div>
                     </div>
                     <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden border border-slate-200 dark:border-slate-700">

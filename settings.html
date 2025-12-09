@@ -151,6 +151,29 @@
                                     </label>
                                 </div>
                             </div>
+
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
+                                <h4 class="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b pb-2">Cảnh báo nâng cao</h4>
+                                <form id="alert-settings-form" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-warranty-days">Bảo hành còn lại (ngày)</label>
+                                        <input id="alert-warranty-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="30">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-license-days">License sắp hết hạn (ngày)</label>
+                                        <input id="alert-license-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="30">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-maintenance-days">Bảo trì sắp tới (ngày)</label>
+                                        <input id="alert-maintenance-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="7">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-emails">Email nhận cảnh báo (phân tách dấu phẩy)</label>
+                                        <textarea id="alert-emails" rows="2" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="it@example.com, ops@example.com"></textarea>
+                                    </div>
+                                    <button type="submit" class="w-full px-4 py-2 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Lưu cấu hình</button>
+                                </form>
+                            </div>
                         </div>
 
                         <!-- Right Column: My Assets -->
