@@ -67,3 +67,82 @@ select option {
     background-color: #1e293b; /* slate-800 */
     color: #E5E7EB;           /* gray-200 */
 }
+
+/* ================================================================== */
+/* Filter row helpers: keep filter controls compact and responsive     */
+/* ================================================================== */
+.filters-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.filters-row .filter-control { display: flex; align-items: center; gap: 0.5rem; }
+.filters-row .filter-control label { white-space: nowrap; font-size: 0.875rem; color: #475569; }
+.filters-row .filter-control input[type="text"], .filters-row .filter-control select {
+    max-width: 14rem; /* keep controls narrow */
+    min-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.filters-row .filter-control input[type="text"]::-ms-clear { display:none; }
+.filters-row .filter-control .datalist-input { width: 14rem; }
+
+/* Make sure filter controls expand on very wide screens but still wrap */
+@media (min-width: 1280px) {
+    .filters-row .filter-control input[type="text"], .filters-row .filter-control select { max-width: 18rem; }
+}
+
+/* Truncate long values inside the asset table user column */
+#assetTable td:nth-child(6), #licenseTable td:nth-child(5) {
+    max-width: 12rem; /* limit width */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Header-specific filters: allow shrinking inside the header flex container */
+.header-filters { flex: 1 1 auto; min-width: 0; }
+.header-filters .relative { min-width: 0; }
+.header-filters .relative .w-full { min-width: 0; }
+.filters-row .filter-control { min-width: 0; }
+.filters-row .filter-control select, .filters-row .filter-control input { min-width: 0; }
+
+/* Choices.js dropdown height limit so user lists stay short and scrollable */
+.choices__list--dropdown {
+    max-height: 180px !important;
+    overflow-y: auto !important;
+}
+.choices__list--dropdown .choices__item--choice {
+    white-space: nowrap;
+    text-overflow: clip;
+    overflow: visible;
+}
+
+/* Allow dropdown to expand horizontally to fit longest item but not exceed viewport */
+.choices__list--dropdown {
+    width: auto !important;
+    min-width: 100% !important; /* at least input width */
+    max-width: 92vw !important; /* avoid overflowing the viewport */
+}
+
+/* Make dropdown items use their full width when possible */
+.choices__list--dropdown .choices__item--choice .choices__inner {
+    white-space: nowrap;
+}
+
+/* Ensure the dropdown floats above other page items */
+.choices__list--dropdown {
+    position: absolute !important;
+    z-index: 99999 !important;
+}
+
+/* Make filter containers not clip the absolute-positioned dropdown */
+.filters-row,
+.filter-control {
+    overflow: visible !important;
+}
+
+/* Ensure filter-control aligns items and spaces controls nicely */
+.filter-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+

@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             msgEl.innerHTML = message;
             openModal('infoModal');
         } else {
-            alert(`${title}: ${message}`);
+            alert(`${title}: ${message.replace(/<[^>]*>?/gm, '')}`);
         }
     }
 
@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let assignUserChoicesInstance = null, userChoicesInstance = null;
     let licenseUserChoicesInstance = null, licenseAssignUserChoicesInstance = null;
     let transferUserChoicesInstance = null;
+    let filterAssetUserChoicesInstance = null, filterLicenseUserChoicesInstance = null;
 
     const STATUS_MAP = {
         Active: { text: 'Đang dùng', classes: 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700' },
@@ -99,59 +100,95 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =================================================================
 
     async function fetchAllData() {
+        // Run queries in parallel but check errors for each result. If Supabase is unavailable or returns an error
+        // we log it and fall back to localStorage where possible so the UI still shows data.
         const [deptRes, catRes, userRes, assetRes, licenseRes, historyRes, licTypeRes] = await Promise.all([
             supabaseClient.from('departments').select('*'),
             supabaseClient.from('categories').select('*'),
             supabaseClient.from('users').select('*, department:departments(name)'),
             supabaseClient.from('assets').select('*, category:categories(name), user:users(name)'),
             supabaseClient.from('licenses').select('*, user:users(name)'),
-            // SỬA LỖI: Sắp xếp theo 'id' để đảm bảo thứ tự đúng ngay cả khi created_at bị null
+            // ensure order so created_at nulls don't break chronology
             supabaseClient.from('asset_history').select('*, asset:assets(name)').order('id', { ascending: false }),
             supabaseClient.from('license_types').select('*')
-        ]);
+        ]).catch(err => {
+            console.error('fetchAllData: Promise.all failed', err);
+            return [ { error: err }, {}, {}, { error: err }, { error: err }, {}, {} ];
+        });
 
-        if (deptRes.data) departments = deptRes.data;
-        if (catRes.data) categories = catRes.data;
-        if (licTypeRes.data) licenseTypes = licTypeRes.data;
-        if (userRes.data) users = userRes.data.map(u => ({ ...u, department: u.department?.name || '-' }));
-        if (assetRes.data) assets = assetRes.data.map(a => ({ ...a, category: a.category?.name || '-', user: a.user?.name || null, warranty_expiration_date: a.warranty_expiration_date || null }));
-        if (licenseRes.data) licenses = licenseRes.data.map(l => ({ ...l, user: l.user?.name || null }));
-        if (historyRes.data) assetHistory = historyRes.data.map(l => ({
-            id: l.id, 
-            created_at: l.created_at, 
-            // SỬA LỖI: Nếu created_at là null (dữ liệu cũ), hiển thị một chuỗi khác thân thiện hơn
-            time: l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : 'Lịch sử cũ',
-            // CẢI TIẾN: Nếu created_at là null (dữ liệu cũ), hiển thị chuỗi rỗng thay vì "Lịch sử cũ"
+        // Helper to handle response errors
+        const handleResp = (resp, name) => {
+            if (!resp) return false;
+            if (resp.error) {
+                console.error(`Supabase error on ${name}:`, resp.error);
+                try { handleSupabaseError(resp.error, `fetch ${name}`); } catch (e) { console.warn('handleSupabaseError failed', e); }
+                return false;
+            }
+            return true;
+        };
+
+        if (handleResp(deptRes, 'departments') && deptRes.data) departments = deptRes.data;
+        if (handleResp(catRes, 'categories') && catRes.data) categories = catRes.data;
+        if (handleResp(licTypeRes, 'license_types') && licTypeRes.data) licenseTypes = licTypeRes.data;
+        if (handleResp(userRes, 'users') && userRes.data) users = userRes.data.map(u => ({ ...u, department: u.department?.name || '-' }));
+
+        // assets and licenses: if Supabase fails, try load from localStorage fallback
+        if (handleResp(assetRes, 'assets') && assetRes.data) {
+            assets = assetRes.data.map(a => ({ ...a, category: a.category?.name || '-', user: a.user?.name || null, warranty_expiration_date: a.warranty_expiration_date || null }));
+        } else {
+            try {
+                const stored = localStorage.getItem('it_assets_final');
+                if (stored) {
+                    assets = JSON.parse(stored);
+                    console.warn('fetchAllData: loaded assets from localStorage fallback (it_assets_final)');
+                }
+            } catch (e) { console.warn('fetchAllData: failed to parse localStorage assets', e); }
+        }
+
+        if (handleResp(licenseRes, 'licenses') && licenseRes.data) {
+            licenses = licenseRes.data.map(l => ({ ...l, user: l.user?.name || null }));
+        } else {
+            try {
+                const stored = localStorage.getItem('it_licenses_final');
+                if (stored) {
+                    licenses = JSON.parse(stored);
+                    console.warn('fetchAllData: loaded licenses from localStorage fallback (it_licenses_final)');
+                }
+            } catch (e) { console.warn('fetchAllData: failed to parse localStorage licenses', e); }
+        }
+
+        if (handleResp(historyRes, 'asset_history') && historyRes.data) assetHistory = historyRes.data.map(l => ({
+            id: l.id,
+            created_at: l.created_at,
             time: l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : '',
-            assetId: l.asset_id, assetName: l.asset?.name || 'N/A',
-            action: l.action, desc: l.description
+            assetId: l.asset_id,
+            assetName: l.asset?.name || 'N/A',
+            action: l.action,
+            desc: l.description
         }));
     }
 
-    async function addLog(targetId, type, action, desc) {
-        try {
-            if (type === 'ASSET') {
-                // SỬA LỖI: Thêm created_at ở phía client để đảm bảo luôn có ngày giờ
-                const { error } = await supabaseClient.from('asset_history').insert({
-                    asset_id: targetId,
-                    action: action,
-                    description: desc,
-                    created_at: new Date().toISOString()
-                });
-                if (error) throw error;
-            } else if (type === 'LICENSE') {
-                // SỬA LỖI: Thêm created_at ở phía client
-                const { error } = await supabaseClient.from('asset_history').insert({
-                    asset_id: targetId, // Tạm dùng asset_id
-                    action: action,
-                    description: `[LICENSE] ${desc}`,
-                    created_at: new Date().toISOString()
-                });
-                if (error) throw error;
-            }
-        } catch (err) {
-            console.error('Lỗi ghi log:', err);
-        }
+    function safeCloseModal(id) {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.setAttribute('aria-hidden', 'true');
+        try { modal.style.pointerEvents = 'none'; } catch (e) {}
+    }
+
+    function attemptCloseModal(id) {
+        // Placeholder for dirty-checks; currently just closes safely
+        safeCloseModal(id);
+    }
+
+    function showConfirmationModal(message, callback, title = 'Xác nhận') {
+        const titleEl = document.getElementById('confirmationModalTitle');
+        const msgEl = document.getElementById('confirmationModalMessage');
+        if (titleEl) titleEl.textContent = title;
+        if (msgEl) msgEl.textContent = message;
+        confirmCallback = callback || null;
+        openModal('confirmationModal');
     }
 
     // =================================================================
@@ -441,62 +478,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         return str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
     }
 
-    function openModal(id) {
-        const el = document.getElementById(id);
-        if (el) {
-            el.classList.remove('hidden');
-            el.classList.add('flex');
+    // Helper: try common fields to find a created/added date on a record
+    function getCreatedDate(record) {
+        if (!record) return null;
+        const candidates = ['created_at','createdAt','added_at','addedAt','imported_at','importedAt','assignedDate','assigned_date','date_added'];
+        for (const key of candidates) {
+            if (record[key]) {
+                const d = new Date(record[key]);
+                if (!isNaN(d.getTime())) return d;
+            }
         }
+        return null;
     }
 
-    function attemptCloseModal(modalId) {
-        const modal = document.getElementById(modalId);
+    function openModal(id) {
+        const modal = document.getElementById(id);
         if (!modal) return;
-        safeCloseModal(modalId); // Tạm thời đóng trực tiếp, không kiểm tra dirty form theo yêu cầu
-    }
-
-    function safeCloseModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (!modal || modal.classList.contains('hidden')) return;
-        modal.classList.add('hidden'); modal.classList.remove('flex');
-
-        ['assetForm', 'userForm', 'licenseForm', 'categoryForm', 'departmentForm', 'licenseTypeForm'].forEach(id => { const f = document.getElementById(id); if (f) f.reset(); });
-
-        if (document.getElementById('categoryOldName')) document.getElementById('categoryOldName').value = '';
-        if (document.getElementById('licenseTypeId')) document.getElementById('licenseTypeId').value = '';
-        if (document.getElementById('transferNotes')) document.getElementById('transferNotes').value = '';
-
-        document.getElementById('btnCancelCategoryEdit')?.classList.add('hidden');
-        document.getElementById('cancelDeptEdit')?.classList.add('hidden');
-        document.getElementById('btnCancelLicenseTypeEdit')?.classList.add('hidden');
-
-        const userImportBody = document.getElementById('userImportPreviewTableBody'); if (userImportBody) userImportBody.innerHTML = '';
-        const assetImportBody = document.getElementById('importPreviewTableBody'); if (assetImportBody) assetImportBody.innerHTML = '';
-
-        tempImportedUsers = []; tempImportedAssets = [];
-        const userFile = document.getElementById('userExcelFileInput'); if (userFile) userFile.value = '';
-        const assetFile = document.getElementById('excelFileInput'); if (assetFile) assetFile.value = '';
-    }
-
-    function showInfoModal(message, title = "Thông báo") {
-        const titleEl = document.getElementById('infoModalTitle');
-        const msgEl = document.getElementById('infoModalMessage');
-        if (titleEl && msgEl) { titleEl.textContent = title; msgEl.innerHTML = message; openModal('infoModal'); } else alert(`${title}: ${message.replace(/<[^>]*>?/gm, '')}`);
-    }
-
-    function showConfirmationModal(message, onConfirm) {
-        const msgEl = document.getElementById('confirmationModalMessage');
-        if (msgEl) { msgEl.textContent = message; confirmCallback = onConfirm; openModal('confirmationModal'); } else { if (confirm(message)) onConfirm(); }
-    }
-
-    function handleSupabaseError(error, context) { console.error(`Lỗi ${context}:`, error); showInfoModal(`Chi tiết: ${error.message}`, `Lỗi khi ${context}`); }
-
-    function exportToExcel(data, fileName) {
-        if (!data || !data.length) return showInfoModal("Không có dữ liệu để xuất!", "Cảnh báo");
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-        XLSX.writeFile(workbook, fileName);
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        modal.setAttribute('aria-hidden', 'false');
+        try { modal.style.pointerEvents = 'auto'; } catch (e) {}
+        const focusable = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable) focusable.focus();
     }
 
     // =================================================================
@@ -942,7 +945,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function initChoices(elementId, instanceVar, data, selectedValue = null) {
         const el = document.getElementById(elementId); if (!el) return null;
         if (instanceVar) { try { instanceVar.destroy(); } catch (e) { } }
-        const newInstance = new Choices(el, { removeItemButton: true, placeholder: true, placeholderValue: 'Chọn...', searchPlaceholderValue: 'Tìm kiếm...', shouldSort: false });
+        const newInstance = new Choices(el, { removeItemButton: true, maxItemCount: 1, placeholder: true, placeholderValue: 'Chọn...', searchPlaceholderValue: 'Tìm kiếm...', shouldSort: false });
         const choices = data.map(u => ({ value: u.name, label: u.name }));
         newInstance.setChoices(choices, 'value', 'label', true);
         if (selectedValue) newInstance.setChoiceByValue(selectedValue);
@@ -974,26 +977,108 @@ document.addEventListener('DOMContentLoaded', async () => {
             filterPackageType.innerHTML = '<option value="">Tất cả loại gói</option>' + uniquePackages.map(p => `<option value="${p}">${p}</option>`).join('');
             filterPackageType.value = cur;
         }
+
+        // Populate asset filters: status, location, category, user
+        const filterAssetStatus = document.getElementById('filterAssetStatus');
+        if (filterAssetStatus) {
+            const statuses = [...new Set(assets.map(a => a.status || '').filter(Boolean))];
+            const cur = filterAssetStatus.value;
+            filterAssetStatus.innerHTML = '<option value="">Tất cả trạng thái</option>' + statuses.map(s => `<option value="${s}">${(STATUS_MAP[s] && STATUS_MAP[s].text) || s}</option>`).join('');
+            filterAssetStatus.value = cur;
+        }
+        const filterAssetLocation = document.getElementById('filterAssetLocation');
+        if (filterAssetLocation) {
+            const locs = [...new Set(assets.map(a => (a.location || '').toString().trim()).filter(Boolean))];
+            const cur = filterAssetLocation.value;
+            filterAssetLocation.innerHTML = '<option value="">Tất cả vị trí</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
+            filterAssetLocation.value = cur;
+        }
+        const filterAssetCategory = document.getElementById('filterAssetCategory');
+        if (filterAssetCategory) {
+            const cur = filterAssetCategory.value;
+            filterAssetCategory.innerHTML = '<option value="">Tất cả loại</option>' + categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            filterAssetCategory.value = cur;
+        }
+        const filterAssetUser = document.getElementById('filterAssetUser');
+        if (filterAssetUser) {
+            // Try to initialize Choices for a compact, scrollable dropdown
+            try {
+                filterAssetUserChoicesInstance = initChoices('filterAssetUser', filterAssetUserChoicesInstance, users);
+            } catch (e) {
+                // Fallback: populate plain <option> list from users encountered in assets
+                const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(assets.map(a => a.user || '').filter(Boolean))];
+                const cur = filterAssetUser.value;
+                filterAssetUser.innerHTML = '<option value="">Tất cả người dùng</option>' + usersList.map(u => `<option value="${u}">${u}</option>`).join('');
+                filterAssetUser.value = cur;
+            }
+        }
+
+        // Populate license filters: user and status
+        const filterLicenseUser = document.getElementById('filterLicenseUser');
+        if (filterLicenseUser) {
+            try {
+                filterLicenseUserChoicesInstance = initChoices('filterLicenseUser', filterLicenseUserChoicesInstance, users);
+            } catch (e) {
+                const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(licenses.map(l => l.user || '').filter(Boolean))];
+                const cur = filterLicenseUser.value;
+                filterLicenseUser.innerHTML = '<option value="">Tất cả người dùng</option>' + usersList.map(u => `<option value="${u}">${u}</option>`).join('');
+                filterLicenseUser.value = cur;
+            }
+        }
+        const filterLicenseStatus = document.getElementById('filterLicenseStatus');
+        if (filterLicenseStatus) {
+            const statuses = [...new Set(licenses.map(l => l.status || '').filter(Boolean))];
+            const cur = filterLicenseStatus.value;
+            filterLicenseStatus.innerHTML = '<option value="">Tất cả trạng thái</option>' + statuses.map(s => `<option value="${s}">${(STATUS_MAP[s] && STATUS_MAP[s].text) || s}</option>`).join('');
+            filterLicenseStatus.value = cur;
+        }
     }
 
     function applyAssetFilters() {
         const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
-        currentFilteredAssets = assets.filter(a => a.name.toLowerCase().includes(term) || (a.user || '').toLowerCase().includes(term))
-            .sort((a, b) => (a[assetSort.column] || '').localeCompare(b[assetSort.column] || '') * (assetSort.direction === 'asc' ? 1 : -1));
+        const statusFilter = document.getElementById('filterAssetStatus')?.value || '';
+        const locationFilter = document.getElementById('filterAssetLocation')?.value || '';
+        const categoryFilter = document.getElementById('filterAssetCategory')?.value || '';
+        const userInput = (document.getElementById('filterAssetUser')?.value || '').toLowerCase().trim();
+
+        console.debug('applyAssetFilters: term=', term, 'status=', statusFilter, 'location=', locationFilter, 'category=', categoryFilter, 'user=', userInput, 'assetsCount=', assets.length);
+
+        currentFilteredAssets = assets
+            .filter(a => (a.name || '').toLowerCase().includes(term) || ((a.user || '').toLowerCase().includes(term)))
+            .filter(a => {
+                if (statusFilter && String(a.status || '') !== String(statusFilter)) return false;
+                if (locationFilter && String((a.location || '').trim()) !== String(locationFilter)) return false;
+                if (categoryFilter && String((a.category || a.category_name || '')).trim() !== String(categoryFilter).trim()) return false;
+                if (userInput) {
+                    if (!((a.user || '').toLowerCase().includes(userInput))) return false;
+                }
+                return true;
+            })
+            .sort((a, b) => ('' + (a[assetSort.column] || '')).localeCompare('' + (b[assetSort.column] || '')) * (assetSort.direction === 'asc' ? 1 : -1));
+
+        console.debug('applyAssetFilters: filteredCount=', currentFilteredAssets.length);
         renderTableAssets(currentFilteredAssets);
     }
 
     function applyLicenseFilters() {
         const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
         const typeFilter = document.getElementById('filterLicenseType')?.value || '';
-        const packageFilter = document.getElementById('filterPackageType')?.value || ''; // [MỚI] Lấy giá trị từ bộ lọc gói
-        currentFilteredLicenses = licenses.filter(l => 
-            (l.key_type.toLowerCase().includes(term) || (l.user || '').toLowerCase().includes(term)) && 
-            (typeFilter === '' || l.key_type === typeFilter) &&
-            (packageFilter === '' || l.package_type === packageFilter) // [MỚI] Thêm điều kiện lọc gói
-        )
-            .sort((a, b) => (a[licenseSort.column] || '').localeCompare(b[licenseSort.column] || '') * (licenseSort.direction === 'asc' ? 1 : -1));
-        
+        const packageFilter = document.getElementById('filterPackageType')?.value || '';
+        const statusFilter = document.getElementById('filterLicenseStatus')?.value || '';
+        const userInput = (document.getElementById('filterLicenseUser')?.value || '').toLowerCase().trim();
+
+        currentFilteredLicenses = licenses
+            .filter(l => (l.key_type || '').toLowerCase().includes(term) || ((l.user || '').toLowerCase().includes(term)))
+            .filter(l => (typeFilter === '' || l.key_type === typeFilter) && (packageFilter === '' || l.package_type === packageFilter))
+            .filter(l => {
+                if (statusFilter && String((l.status || '')).trim() !== String(statusFilter).trim()) return false;
+                if (userInput) {
+                    if (!((l.user || '').toLowerCase().includes(userInput))) return false;
+                }
+                return true;
+            })
+            .sort((a, b) => ('' + (a[licenseSort.column] || '')).localeCompare('' + (b[licenseSort.column] || '')) * (licenseSort.direction === 'asc' ? 1 : -1));
+
         renderTableLicenses(currentFilteredLicenses);
     }
 
@@ -1037,6 +1122,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('filterPackageType')?.addEventListener('change', applyLicenseFilters); // [MỚI] Thêm event listener
     document.getElementById('userExcelFileInput')?.addEventListener('change', handleUserFileSelect);
     document.getElementById('excelFileInput')?.addEventListener('change', handleAssetFileSelect);
+    // Date filter listeners (assets)
+    // Asset filter listeners
+    document.getElementById('filterAssetStatus')?.addEventListener('change', applyAssetFilters);
+    document.getElementById('filterAssetLocation')?.addEventListener('change', applyAssetFilters);
+    document.getElementById('filterAssetCategory')?.addEventListener('change', applyAssetFilters);
+    // trigger filtering when user types in the datalist-input or when they change the value
+    document.getElementById('filterAssetUser')?.addEventListener('input', applyAssetFilters);
+    document.getElementById('filterAssetUser')?.addEventListener('change', applyAssetFilters);
+    // NOTE: Clear button removed — rely on Choices' removeItemButton / input clear behavior
+    document.getElementById('clearAssetFilters')?.addEventListener('click', () => {
+        if (document.getElementById('filterAssetStatus')) document.getElementById('filterAssetStatus').value = '';
+        if (document.getElementById('filterAssetLocation')) document.getElementById('filterAssetLocation').value = '';
+        if (document.getElementById('filterAssetCategory')) document.getElementById('filterAssetCategory').value = '';
+        if (document.getElementById('filterAssetUser')) document.getElementById('filterAssetUser').value = '';
+        applyAssetFilters();
+    });
+    // Date filter listeners (licenses)
+    // License filter listeners
+    document.getElementById('filterLicenseStatus')?.addEventListener('change', applyLicenseFilters);
+    document.getElementById('filterLicenseUser')?.addEventListener('input', applyLicenseFilters);
+    document.getElementById('filterLicenseUser')?.addEventListener('change', applyLicenseFilters);
+    document.getElementById('clearLicenseFilters')?.addEventListener('click', () => {
+        if (document.getElementById('filterLicenseStatus')) document.getElementById('filterLicenseStatus').value = '';
+        if (document.getElementById('filterLicenseUser')) document.getElementById('filterLicenseUser').value = '';
+        applyLicenseFilters();
+    });
 
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = Array.from(document.querySelectorAll('.fixed.flex:not(.hidden)')); if (m.length > 0) safeCloseModal(m[m.length - 1].id); } });
 
@@ -1592,6 +1703,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         checkAndDisplayNotifications(); // [KHÔI PHỤC] Kiểm tra và hiển thị thông báo
         updateDashboard();
     }
+
+    // Auto-hide any accidentally-visible full-screen modals or overlays that block clicks
+    try {
+        // 1) Hide any explicit modal elements with both classes 'fixed' and 'inset-0' that are visible
+        const openModals = Array.from(document.querySelectorAll('.fixed.inset-0')).filter(m => !m.classList.contains('hidden'));
+        if (openModals.length) {
+            console.warn('Auto-hiding visible modals that may block interaction:', openModals.map(m => m.id || m.className));
+            openModals.forEach(m => { m.classList.add('hidden'); m.classList.remove('flex'); m.setAttribute('aria-hidden', 'true'); });
+        }
+
+        // 2) Broad detection: find any element that covers the viewport and is visible/fixed and likely to intercept clicks
+        const candidates = Array.from(document.querySelectorAll('body *')).filter(el => {
+            try {
+                const cs = window.getComputedStyle(el);
+                if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
+                const rect = el.getBoundingClientRect();
+                // Consider elements that cover most of viewport and are fixed/absolute
+                const covers = rect.width >= window.innerWidth - 2 && rect.height >= window.innerHeight - 2 && (cs.position === 'fixed' || cs.position === 'absolute');
+                const highZ = parseInt(cs.zIndex) >= 50 || (cs.zIndex !== 'auto' && cs.zIndex !== '' && !isNaN(parseInt(cs.zIndex)));
+                return covers && highZ;
+            } catch (e) { return false; }
+        });
+
+        if (candidates.length) {
+            console.warn('Found blocking overlay candidates; hiding them:', candidates.map(c => ({ id: c.id, classes: c.className }))); 
+            candidates.forEach(c => {
+                // disable pointer events and hide visually but avoid removing from layout drastically
+                try { c.dataset._prePointer = c.style.pointerEvents || ''; c.style.pointerEvents = 'none'; } catch (e) {}
+                try { c.dataset._preVisibility = c.style.visibility || ''; c.style.visibility = 'hidden'; } catch (e) {}
+            });
+        }
+
+        // 3) Ensure mobile sidebar backdrop is hidden
+        const sb = document.getElementById('sidebar-backdrop'); if (sb) sb.classList.add('hidden');
+    } catch (err) { console.error('Error during startup modal/overlay cleanup', err); }
 
     refreshApp();
 });

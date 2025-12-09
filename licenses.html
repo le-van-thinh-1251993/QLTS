@@ -104,18 +104,10 @@
                     <i class="fa-solid fa-bars text-2xl"></i>
                 </button>
 
-                <div class="hidden md:flex gap-4 w-2/3">
-                    <div class="relative w-96">
+                    <div class="relative hidden md:block w-96">
                         <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                         <input id="searchInput" type="text" placeholder="Tìm kiếm license..." class="w-full h-10 pl-10 pr-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400">
                     </div>
-                    <select id="filterLicenseType" class="h-10 border border-slate-300 rounded-lg px-3 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
-                        <option value="">Tất cả loại Key</option>
-                    </select>
-                    <select id="filterPackageType" class="h-10 border border-slate-300 rounded-lg px-3 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
-                        <option value="">Tất cả loại gói</option>
-                    </select>
-                </div>
                 
                 <div class="flex items-center">
                     <div class="relative">
@@ -181,6 +173,30 @@
                                 </button>
                                 <span class="tooltiptext">Thêm License mới</span>
                             </div>
+                        </div>
+                    </div>
+                    <!-- Filters (moved below header so they behave like assets page) -->
+                    <div class="mb-4 filters-row">
+                        <div class="filter-control">
+                            <label class="text-sm">Loại Key:</label>
+                            <select id="filterLicenseType" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                        </div>
+                        <div class="filter-control">
+                            <label class="text-sm">Loại gói:</label>
+                            <select id="filterPackageType" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                        </div>
+                        <div class="filter-control">
+                            <label class="text-sm">Trạng thái:</label>
+                            <select id="filterLicenseStatus" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                        </div>
+                        <div class="filter-control">
+                            <label class="text-sm">Người dùng:</label>
+                            <div class="relative">
+                                <select id="filterLicenseUser" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                            </div>
+                        </div>
+                        <div class="filter-control">
+                            <button id="clearLicenseFilters" class="px-3 py-1 bg-slate-100 rounded border text-sm">Xóa lọc</button>
                         </div>
                     </div>
                     <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden border border-slate-200 dark:border-slate-700">

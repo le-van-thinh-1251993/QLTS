@@ -175,7 +175,32 @@
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden border border-slate-200 dark:border-slate-700">
+                        <!-- Filter row: trạng thái, vị trí, loại, người dùng -->
+                        <div class="mb-4 filters-row">
+                            <div class="filter-control">
+                                <label class="text-sm">Trạng thái:</label>
+                                <select id="filterAssetStatus" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                            </div>
+                            <div class="filter-control">
+                                <label class="text-sm">Vị trí:</label>
+                                <select id="filterAssetLocation" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                            </div>
+                            <div class="filter-control">
+                                <label class="text-sm">Loại:</label>
+                                <select id="filterAssetCategory" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                            </div>
+                            <div class="filter-control">
+                                <label class="text-sm">Người dùng:</label>
+                                <div class="relative">
+                                    <select id="filterAssetUser" class="border rounded px-2 py-1 dark:bg-slate-700 dark:border-slate-600"></select>
+                                </div>
+                            </div>
+                            <div class="filter-control">
+                                <button id="clearAssetFilters" class="px-3 py-1 bg-slate-100 rounded border text-sm">Xóa lọc</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 rounded-lg shadow overflow-hidden border border-slate-200 dark:border-slate-700">
                         <div class="overflow-x-auto">
                             <table id="assetTable" class="w-full text-left border-collapse">
                                 <thead class="bg-slate-50 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600 text-xs uppercase text-slate-500 font-bold sticky top-0 z-10">

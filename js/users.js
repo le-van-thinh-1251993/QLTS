@@ -310,11 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleModal(dirtyCheckModal, false);
         modalToClose = null;
     };
-
-    // --- Xử lý modal xác nhận "Dirty Check" ---
-    const btnConfirmClose = document.getElementById('btnConfirmClose');
-    const btnCancelClose = document.getElementById('btnCancelClose');
-    const dirtyCheckModal = document.getElementById('dirtyCheckConfirmModal');
     // 6. SỰ KIỆN (EVENTS)
     if(searchInput) searchInput.addEventListener('input', filterUsers);
     if(filterDept) filterDept.addEventListener('change', filterUsers);

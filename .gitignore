@@ -1,0 +1,7 @@
+# Ignore local config that contains API keys
+config.js
+
+# Node / Python artifacts (if any)
+node_modules/
+__pycache__/
+*.pyc
