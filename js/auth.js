@@ -10,7 +10,15 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     alert('Lỗi cấu hình: Thiếu thông tin kết nối Supabase. Vui lòng kiểm tra file config.js');
 }
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Supabase client với cấu hình session riêng để tránh đụng các app khác cùng domain
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        storageKey: 'qlts-auth-v1',
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+    }
+});
 let currentUserProfile = null; // Biến toàn cục để lưu thông tin user và role
 
 /**
