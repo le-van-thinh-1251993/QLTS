@@ -38,10 +38,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const msgEl = document.getElementById('infoModalMessage');
         if (titleEl && msgEl) {
             titleEl.textContent = title;
-            msgEl.innerHTML = message;
+            msgEl.textContent = message; // Changed from innerHTML to textContent to prevent XSS
             openModal('infoModal');
         } else {
-            alert(`${title}: ${message.replace(/<[^>]*>?/gm, '')}`);
+            // [FIX] Chỉ alert nếu không phải đang unload trang (đơn giản hóa: check visibility)
+            if (document.visibilityState === 'visible') {
+                 alert(`${title}: ${message.replace(/<[^>]*>?/gm, '')}`);
+            } else {
+                 console.warn('Supressed alert due to background/unload:', title, message);
+            }
         }
     }
 
@@ -49,6 +54,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error(`Lỗi ${context}:`, error);
         // Kiểm tra kỹ biến error để tránh lỗi 'message of undefined'
         const msg = (error && error.message) ? error.message : JSON.stringify(error);
+
+        // [FIX] Bỏ qua lỗi mạng khi chuyển trang (Failed to fetch)
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Aborted')) {
+            console.warn('Supressed network error (likely due to navigation):', msg);
+            return;
+        }
+
         showInfoModal(`Chi tiết: ${msg}`, `Lỗi khi ${context}`);
     }
 

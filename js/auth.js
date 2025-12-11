@@ -1,14 +1,16 @@
 // Load Supabase config from external `config.js` if provided (window.__APP_CONFIG__)
 // If not provided, fall back to embedded values (old behavior).
 const _cfg = window.__APP_CONFIG__ || {};
-const SUPABASE_URL = _cfg.SUPABASE_URL || 'https://gamfrcokkpygwjcwnxuf.supabase.co';
-const SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhbWZyY29ra3B5Z3dqY3dueHVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxMzkzMjMsImV4cCI6MjA3OTcxNTMyM30.5hWKHgnY8xmcWCAgfwzJpOPz17-xojYGXB_KnW90R9Y';
+// REMOVED HARDCODED KEYS FOR SECURITY
+const SUPABASE_URL = _cfg.SUPABASE_URL;
+const SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error('CRITICAL: Supabase config missing. Please create config.js based on config.example.js');
+    alert('Lỗi cấu hình: Thiếu thông tin kết nối Supabase. Vui lòng kiểm tra file config.js');
+}
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-if (!_cfg.SUPABASE_URL || !_cfg.SUPABASE_ANON_KEY) {
-    console.warn('Warning: Supabase config not found in window.__APP_CONFIG__. Using fallback embedded keys.\nConsider creating a local `config.js` (see config.example.js) and adding it to .gitignore.');
-}
 let currentUserProfile = null; // Biến toàn cục để lưu thông tin user và role
 
 /**
