@@ -1258,7 +1258,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const statusFilter = document.getElementById('filterAssetStatus')?.value || '';
         const locationFilter = document.getElementById('filterAssetLocation')?.value || '';
         const categoryFilter = document.getElementById('filterAssetCategory')?.value || '';
-        const userInput = (document.getElementById('filterAssetUser')?.value || '').toLowerCase().trim();
+        // Get user filter value from Choices instance if available, otherwise from element value
+        let userInput = '';
+        if (filterAssetUserChoicesInstance) {
+            try {
+                const selectedValue = filterAssetUserChoicesInstance.getValue(true);
+                if (selectedValue && selectedValue.length > 0) {
+                    userInput = selectedValue[0].toLowerCase().trim();
+                }
+            } catch (e) {
+                // Fallback to element value if Choices instance fails
+                userInput = (document.getElementById('filterAssetUser')?.value || '').toLowerCase().trim();
+            }
+        } else {
+            userInput = (document.getElementById('filterAssetUser')?.value || '').toLowerCase().trim();
+        }
 
         console.debug('applyAssetFilters: term=', term, 'status=', statusFilter, 'location=', locationFilter, 'category=', categoryFilter, 'user=', userInput, 'assetsCount=', assets.length);
 
