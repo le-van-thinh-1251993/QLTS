@@ -34,17 +34,28 @@ body {
 /* ================================================================== */
 
 /* Container chính của dropdown */
+.choices {
+    border: 1px solid #cbd5e1 !important; /* slate-300 - border rõ ràng cho light mode */
+    border-radius: 0.375rem !important; /* rounded */
+}
+
 .dark .choices {
     background-color: #334155 !important; /* slate-700 */
-    border-color: #475569 !important;     /* slate-600 */
+    border: 1px solid #475569 !important; /* slate-600 - border rõ ràng cho dark mode */
+    border-radius: 0.375rem !important; /* rounded */
 }
 
 /* Chữ được chọn (hiển thị trong ô input) - padding được điều chỉnh ở cuối file */
+.choices__inner {
+    border: none !important; /* Bỏ border của inner vì đã có border ở .choices */
+    background-color: #ffffff !important; /* white cho light mode */
+}
 
 .dark .choices__inner,
 .dark .choices__input {
     background-color: #334155 !important; /* slate-700 */
     color: #E5E7EB !important;           /* gray-200 */
+    border: none !important; /* Bỏ border của inner vì đã có border ở .choices */
 }
 
 /* Danh sách các lựa chọn (khi xổ xuống) */
@@ -155,6 +166,22 @@ select option {
 .choices {
     width: 100%;
     position: relative;
+    /* Border đã được thêm ở trên */
+}
+
+/* Focus state cho Choices.js - giống với select */
+.choices:focus,
+.choices.is-focused {
+    outline: 2px solid #3b82f6 !important; /* blue-500 */
+    outline-offset: 2px !important;
+    border-color: #3b82f6 !important;
+}
+
+.dark .choices:focus,
+.dark .choices.is-focused {
+    outline: 2px solid #3b82f6 !important;
+    outline-offset: 2px !important;
+    border-color: #3b82f6 !important;
 }
 
 /* Đảm bảo mũi tên dropdown của Choices.js không đè lên text */
