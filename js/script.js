@@ -38,7 +38,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const msgEl = document.getElementById('infoModalMessage');
         if (titleEl && msgEl) {
             titleEl.textContent = title;
-            msgEl.textContent = message; // Changed from innerHTML to textContent to prevent XSS
+            // Kiểm tra nếu message chứa HTML tags thì dùng innerHTML, nếu không thì dùng textContent
+            if (typeof message === 'string' && /<[^>]+>/.test(message)) {
+                msgEl.innerHTML = message;
+            } else {
+                msgEl.textContent = message;
+            }
             openModal('infoModal');
         } else {
             // [FIX] Chỉ alert nếu không phải đang unload trang (đơn giản hóa: check visibility)
@@ -1138,10 +1143,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     function initChoices(elementId, instanceVar, data, selectedValue = null) {
         const el = document.getElementById(elementId); if (!el) return null;
         if (instanceVar) { try { instanceVar.destroy(); } catch (e) { } }
-        const newInstance = new Choices(el, { removeItemButton: true, maxItemCount: 1, placeholder: true, placeholderValue: 'Chọn...', searchPlaceholderValue: 'Tìm kiếm...', shouldSort: false });
+        const newInstance = new Choices(el, {
+            removeItemButton: true,
+            maxItemCount: 1,
+            placeholder: true,
+            placeholderValue: 'Chọn...',
+            searchPlaceholderValue: 'Tìm kiếm...',
+            shouldSort: false,
+            shouldOpen: false, // Ngăn dropdown tự động mở
+            searchEnabled: true,
+            itemSelectText: '',
+            position: 'bottom' // Đặt vị trí dropdown
+        });
         const choices = data.map(u => ({ value: u.name, label: u.name }));
         newInstance.setChoices(choices, 'value', 'label', true);
         if (selectedValue) newInstance.setChoiceByValue(selectedValue);
+        // Đóng dropdown ngay sau khi khởi tạo để đảm bảo không tự động mở
+        setTimeout(() => {
+            try {
+                if (newInstance && newInstance.dropdown) {
+                    newInstance.hideDropdown();
+                }
+            } catch (e) {}
+        }, 0);
         return newInstance;
     }
 
@@ -1225,7 +1249,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // If Choices instance doesn't exist, get value from the element directly
                     currentSelectedValue = filterAssetUser.value || null;
                 }
-                filterAssetUserChoicesInstance = initChoices('filterAssetUser', filterAssetUserChoicesInstance, users, currentSelectedValue);
+                const el = filterAssetUser;
+                if (filterAssetUserChoicesInstance) { try { filterAssetUserChoicesInstance.destroy(); } catch (e) { } }
+                filterAssetUserChoicesInstance = new Choices(el, { 
+                    removeItemButton: true, 
+                    maxItemCount: 1, 
+                    placeholder: true, 
+                    placeholderValue: 'Chọn...', 
+                    searchPlaceholderValue: 'Tìm kiếm...', 
+                    shouldSort: false,
+                    shouldOpen: false, // Ngăn dropdown tự động mở
+                    searchEnabled: true,
+                    itemSelectText: ''
+                });
+                const choices = users.map(u => ({ value: u.name, label: u.name }));
+                filterAssetUserChoicesInstance.setChoices(choices, 'value', 'label', true);
+                if (currentSelectedValue) filterAssetUserChoicesInstance.setChoiceByValue(currentSelectedValue);
             } catch (e) {
                 // Fallback: populate plain <option> list from users encountered in assets
                 const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(assets.map(a => a.user || '').filter(Boolean))];
@@ -1244,7 +1283,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 maintenanceAssetChoices?.destroy();
             } catch (e) {}
             try {
-                maintenanceAssetChoices = new Choices(maintenanceAssetSelect, { searchPlaceholderValue: 'Tìm thiết bị...', shouldSort: false, removeItemButton: false, allowHTML: true });
+                maintenanceAssetChoices = new Choices(maintenanceAssetSelect, { 
+                    searchPlaceholderValue: 'Tìm thiết bị...', 
+                    shouldSort: false, 
+                    removeItemButton: false, 
+                    allowHTML: true,
+                    shouldOpen: false, // Ngăn dropdown tự động mở
+                    itemSelectText: '',
+                    position: 'bottom' // Đặt vị trí dropdown
+                });
+                // Đóng dropdown ngay sau khi khởi tạo
+                setTimeout(() => {
+                    try {
+                        if (maintenanceAssetChoices && maintenanceAssetChoices.dropdown) {
+                            maintenanceAssetChoices.hideDropdown();
+                        }
+                    } catch (e) {}
+                }, 0);
             } catch (e) {}
         }
 
@@ -1252,7 +1307,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         const filterLicenseUser = document.getElementById('filterLicenseUser');
         if (filterLicenseUser) {
             try {
-                filterLicenseUserChoicesInstance = initChoices('filterLicenseUser', filterLicenseUserChoicesInstance, users);
+                // Preserve the current selected value before reinitializing
+                let currentSelectedValue = null;
+                if (filterLicenseUserChoicesInstance) {
+                    try {
+                        const selectedValue = filterLicenseUserChoicesInstance.getValue(true);
+                        if (selectedValue && selectedValue.length > 0) {
+                            currentSelectedValue = selectedValue[0];
+                        }
+                    } catch (e) {}
+                } else {
+                    currentSelectedValue = filterLicenseUser.value || null;
+                }
+                const el = filterLicenseUser;
+                if (filterLicenseUserChoicesInstance) { try { filterLicenseUserChoicesInstance.destroy(); } catch (e) { } }
+                filterLicenseUserChoicesInstance = new Choices(el, { 
+                    removeItemButton: true, 
+                    maxItemCount: 1, 
+                    placeholder: true, 
+                    placeholderValue: 'Chọn...', 
+                    searchPlaceholderValue: 'Tìm kiếm...', 
+                    shouldSort: false,
+                    shouldOpen: false, // Ngăn dropdown tự động mở
+                    searchEnabled: true,
+                    itemSelectText: '',
+                    position: 'bottom' // Đặt vị trí dropdown
+                });
+                const choices = users.map(u => ({ value: u.name, label: u.name }));
+                filterLicenseUserChoicesInstance.setChoices(choices, 'value', 'label', true);
+                if (currentSelectedValue) filterLicenseUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                // Đóng dropdown ngay sau khi khởi tạo để đảm bảo không tự động mở
+                setTimeout(() => {
+                    try {
+                        if (filterLicenseUserChoicesInstance && filterLicenseUserChoicesInstance.dropdown) {
+                            filterLicenseUserChoicesInstance.hideDropdown();
+                        }
+                    } catch (e) {}
+                }, 0);
             } catch (e) {
                 const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(licenses.map(l => l.user || '').filter(Boolean))];
                 const cur = filterLicenseUser.value;
@@ -1587,18 +1678,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (user) {
                 const uAssets = assets.filter(a => a.user_id === id);
                 const uLicenses = licenses.filter(l => l.user_id === id);
+                
+                // Lấy tên phòng ban từ department object hoặc string
+                const deptName = typeof user.department === 'object' ? (user.department?.name || 'N/A') : (user.department || 'N/A');
 
                 let content = `<div class="text-left space-y-4">
-                    <p><strong>Email:</strong> ${user.email}</p>
-                    <p><strong>Phòng ban:</strong> ${user.department}</p>
-                    <p><strong>Trạng thái:</strong> <span class="font-bold ${user.status === 'Đang hoạt động' ? 'text-green-600' : 'text-slate-400'}">${user.status}</span></p>
+                    <p><strong>Email:</strong> ${user.email || 'N/A'}</p>
+                    <p><strong>Phòng ban:</strong> ${deptName}</p>
+                    <p><strong>Trạng thái:</strong> <span class="font-bold ${user.status === 'Đang hoạt động' ? 'text-green-600' : 'text-slate-400'}">${user.status || 'N/A'}</span></p>
                     
                     <div><h4 class="font-bold text-blue-600 mb-1 border-t pt-3">Tài sản đang giữ (${uAssets.length}):</h4>`;
-                if (uAssets.length > 0) { content += '<ul class="list-disc pl-5 text-sm text-slate-700">'; uAssets.forEach(a => content += `<li><b>${a.name}</b></li>`); content += '</ul>'; } 
+                if (uAssets.length > 0) { 
+                    content += '<ul class="list-disc pl-5 text-sm text-slate-700 dark:text-gray-300">'; 
+                    uAssets.forEach(a => content += `<li><b>${a.name || 'N/A'}</b></li>`); 
+                    content += '</ul>'; 
+                } 
                 else { content += '<p class="text-sm text-gray-400 italic">Không có tài sản</p>'; }
                 
                 content += `</div><div><h4 class="font-bold text-green-600 mb-1 border-t pt-3">License đang giữ (${uLicenses.length}):</h4>`;
-                if (uLicenses.length > 0) { content += '<ul class="list-disc pl-5 text-sm text-slate-700">'; uLicenses.forEach(l => content += `<li><b>${l.key_type}</b> <span class="text-gray-500 font-mono text-xs">(${l.package_type || 'N/A'})</span></li>`); content += '</ul>'; } 
+                if (uLicenses.length > 0) { 
+                    content += '<ul class="list-disc pl-5 text-sm text-slate-700 dark:text-gray-300">'; 
+                    uLicenses.forEach(l => content += `<li><b>${l.key_type || 'N/A'}</b> <span class="text-gray-500 font-mono text-xs">(${l.package_type || 'N/A'})</span></li>`); 
+                    content += '</ul>'; 
+                } 
                 else { content += '<p class="text-sm text-gray-400 italic">Không có license</p>'; }
                 
                 content += '</div></div>';
@@ -2200,6 +2302,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         checkAndDisplayNotifications(); // [KHÔI PHỤC] Kiểm tra và hiển thị thông báo
         updateDashboard();
     }
+
+    // Đóng tất cả dropdown Choices khi click bên ngoài
+    document.addEventListener('click', (e) => {
+        // Kiểm tra nếu click không phải vào Choices element
+        if (!e.target.closest('.choices')) {
+            // Đóng tất cả dropdown đang mở
+            [filterAssetUserChoicesInstance, filterLicenseUserChoicesInstance].forEach(instance => {
+                if (instance && instance.dropdown && instance.dropdown.isActive) {
+                    try {
+                        instance.hideDropdown();
+                    } catch (err) {}
+                }
+            });
+        }
+    });
 
     // Auto-hide any accidentally-visible full-screen modals or overlays that block clicks
     try {

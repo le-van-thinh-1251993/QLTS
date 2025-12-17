@@ -268,9 +268,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const showInfoModal = (message, title = "Thông báo") => {
-        document.getElementById('infoModalTitle').textContent = title;
-        document.getElementById('infoModalMessage').textContent = message;
-        toggleModal(infoModal, true);
+        const titleEl = document.getElementById('infoModalTitle');
+        const msgEl = document.getElementById('infoModalMessage');
+        if (titleEl && msgEl) {
+            titleEl.textContent = title;
+            // Kiểm tra nếu message chứa HTML tags thì dùng innerHTML, nếu không thì dùng textContent
+            if (typeof message === 'string' && /<[^>]+>/.test(message)) {
+                msgEl.innerHTML = message;
+            } else {
+                msgEl.textContent = message;
+            }
+            toggleModal(infoModal, true);
+        }
     };
 
     if (confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', () => {
@@ -430,7 +439,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (action === 'delete') {
                     reloadAssets();
-                    const userAssetsCount = assets.filter(asset => asset.user === user.name && asset.status === 'Active').length;
+                    const userAssetsCount = assets.filter(asset => {
+                        const matchesUser = (asset.user_id === user.id) || (asset.user === user.name);
+                        const matchesStatus = asset.status === 'Active' || asset.status === 'Đang dùng';
+                        return matchesUser && matchesStatus;
+                    }).length;
 
                     if (userAssetsCount > 0) {
                         showInfoModal(`Không thể xóa người dùng "${user.name}" vì họ đang giữ ${userAssetsCount} tài sản.`);
@@ -451,17 +464,24 @@ document.addEventListener('DOMContentLoaded', () => {
             // Hành động mặc định khi click vào hàng (hoặc nút 'view'): Mở modal chi tiết
             document.getElementById('assetModalUserName').textContent = user.name;
             reloadAssets();
-            const userAssets = assets.filter(asset => asset.user === user.name && asset.status === 'Active');
+            // Sửa lỗi: Lọc tài sản theo user_id hoặc user name, và kiểm tra status đúng
+            const userAssets = assets.filter(asset => {
+                // Kiểm tra theo user_id nếu có, nếu không thì kiểm tra theo user name
+                const matchesUser = (asset.user_id === user.id) || (asset.user === user.name);
+                // Kiểm tra status: 'Active' hoặc 'Đang dùng' (tùy theo cách lưu trong database)
+                const matchesStatus = asset.status === 'Active' || asset.status === 'Đang dùng';
+                return matchesUser && matchesStatus;
+            });
             assetTableBody.innerHTML = '';
             if (userAssets.length) {
                 userAssets.forEach(d => {
                     assetTableBody.innerHTML += `
                         <tr class="border-b">
                             <td class="p-3">${d.name}</td>
-                            <td class="p-3 font-mono text-sm">${d.serial}</td>
-                            <td class="p-3">${d.category}</td>
-                            <td class="p-3">${d.assignedDate || 'N/A'}</td>
-                            <td class="p-3"><button data-action="recall-asset" data-serial="${d.serial}" data-user-id="${user.id}" class="px-3 py-1 text-xs font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600">Thu hồi</button></td>
+                            <td class="p-3 font-mono text-sm">${d.serial || d.id || 'N/A'}</td>
+                            <td class="p-3">${d.category || d.category_id || 'N/A'}</td>
+                            <td class="p-3">${d.assignedDate || d.assigned_date || d.updated_at ? new Date(d.assignedDate || d.assigned_date || d.updated_at).toLocaleDateString('vi-VN') : 'N/A'}</td>
+                            <td class="p-3"><button data-action="recall-asset" data-asset-id="${d.id || d.serial}" data-serial="${d.serial || d.id || ''}" data-user-id="${user.id}" class="px-3 py-1 text-xs font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600">Thu hồi</button></td>
                         </tr>
                     `;
                 });
@@ -491,7 +511,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Re-render the asset detail modal
                 const user = users.find(u => u.id === userId);
-                const userAssets = assets.filter(asset => asset.user === user.name && asset.status === 'Active');
+                const userAssets = assets.filter(asset => {
+                    const matchesUser = (asset.user_id === user.id) || (asset.user === user.name);
+                    const matchesStatus = asset.status === 'Active' || asset.status === 'Đang dùng';
+                    return matchesUser && matchesStatus;
+                });
                 assetTableBody.innerHTML = ''; // Clear current list
                 if (userAssets.length > 0) {
                      userAssets.forEach(d => {

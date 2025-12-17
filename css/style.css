@@ -155,6 +155,15 @@ select option {
     width: 100%;
 }
 
+/* Ngăn dropdown tự động mở - đảm bảo chỉ hiển thị khi is-open */
+.choices__list--dropdown {
+    display: none !important;
+}
+
+.choices.is-open .choices__list--dropdown {
+    display: block !important;
+}
+
 .choices__list--dropdown .choices__item {
     white-space: normal;
 }
