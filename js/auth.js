@@ -5,20 +5,38 @@ const _cfg = window.__APP_CONFIG__ || {};
 const SUPABASE_URL = _cfg.SUPABASE_URL;
 const SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+// Khởi tạo Supabase client chỉ khi có config hợp lệ
+let supabaseClient = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try {
+        // Supabase client với cấu hình session riêng để tránh đụng các app khác cùng domain
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+                storageKey: 'qlts-auth-v1',
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
+    } catch (error) {
+        console.error('Lỗi khi khởi tạo Supabase client:', error);
+        supabaseClient = null;
+    }
+} else {
+    // Chỉ hiển thị lỗi trên console, không alert để tránh làm gián đoạn
+    // (trang seating.html không cần Supabase)
     console.error('CRITICAL: Supabase config missing. Please create config.js based on config.example.js');
-    alert('Lỗi cấu hình: Thiếu thông tin kết nối Supabase. Vui lòng kiểm tra file config.js');
+    // Chỉ alert nếu đang ở trang cần Supabase (không phải seating.html)
+    if (!window.location.pathname.includes('seating.html')) {
+        // Delay alert để tránh lỗi khi trang đang load
+        setTimeout(() => {
+            if (document.visibilityState === 'visible') {
+                alert('Lỗi cấu hình: Thiếu thông tin kết nối Supabase. Vui lòng kiểm tra file config.js');
+            }
+        }, 500);
+    }
 }
 
-// Supabase client với cấu hình session riêng để tránh đụng các app khác cùng domain
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-        storageKey: 'qlts-auth-v1',
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-    }
-});
 let currentUserProfile = null; // Biến toàn cục để lưu thông tin user và role
 
 /**
@@ -69,7 +87,9 @@ async function handleLogin(email, password) {
  * Xử lý đăng xuất
  */
 async function handleLogout() {
-    await supabaseClient.auth.signOut();
+    if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+    }
     window.location.href = 'login.html';
 }
 
@@ -78,32 +98,55 @@ async function handleLogout() {
  * Nếu chưa đăng nhập, chuyển hướng về trang login.
  */
 async function checkSession() {
-    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
-
-    if (!session) {
-        // Nếu không ở trang login thì mới chuyển hướng
-        if (!window.location.pathname.endsWith('login.html')) {
+    // Nếu không có Supabase client (ví dụ: trang seating.html), bỏ qua check session
+    if (!supabaseClient) {
+        // Trang seating.html không cần auth, các trang khác sẽ redirect
+        if (!window.location.pathname.includes('seating.html') && !window.location.pathname.endsWith('login.html')) {
+            console.warn('Supabase client không khả dụng, chuyển hướng về login');
             window.location.href = 'login.html';
         }
         return null;
     }
 
-    // Nếu đã có session, lấy thông tin profile (bao gồm cả role)
-    const { data: profile, error: profileError } = await supabaseClient
-        .from('profiles')
-        .select('id, full_name, avatar_url, role')
-        .eq('id', session.user.id)
-        .single();
+    try {
+        const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
 
-    if (profileError && !profile) {
-        console.error("Không thể lấy thông tin profile:", profileError);
-        // Có thể đăng xuất người dùng nếu không có profile
-        // await handleLogout();
+        if (sessionError) {
+            console.error('Lỗi khi kiểm tra session:', sessionError);
+        }
+
+        if (!session) {
+            // Nếu không ở trang login thì mới chuyển hướng
+            if (!window.location.pathname.endsWith('login.html') && !window.location.pathname.includes('seating.html')) {
+                window.location.href = 'login.html';
+            }
+            return null;
+        }
+
+        // Nếu đã có session, lấy thông tin profile (bao gồm cả role)
+        const { data: profile, error: profileError } = await supabaseClient
+            .from('profiles')
+            .select('id, full_name, avatar_url, role')
+            .eq('id', session.user.id)
+            .single();
+
+        if (profileError && !profile) {
+            console.error("Không thể lấy thông tin profile:", profileError);
+            // Có thể đăng xuất người dùng nếu không có profile
+            // await handleLogout();
+            return null;
+        }
+
+        currentUserProfile = { ...session.user, ...profile };
+        return currentUserProfile;
+    } catch (error) {
+        console.error('Lỗi trong checkSession:', error);
+        // Nếu lỗi kết nối, chỉ redirect nếu không phải trang login hoặc seating
+        if (!window.location.pathname.endsWith('login.html') && !window.location.pathname.includes('seating.html')) {
+            window.location.href = 'login.html';
+        }
         return null;
     }
-
-    currentUserProfile = { ...session.user, ...profile };
-    return currentUserProfile;
 }
 
 // Gắn sự kiện cho form đăng nhập

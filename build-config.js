@@ -45,7 +45,12 @@ window.__APP_CONFIG__ = {
 
 // Ghi file config.js
 const configPath = path.join(__dirname, 'config.js');
-fs.writeFileSync(configPath, configContent, 'utf8');
-
-console.log('✅ config.js đã được tạo thành công từ environment variables');
-console.log(`   SUPABASE_URL: ${SUPABASE_URL.substring(0, 30)}...`);
+try {
+    fs.writeFileSync(configPath, configContent, 'utf8');
+    console.log('✅ config.js đã được tạo thành công từ environment variables');
+    console.log(`   SUPABASE_URL: ${SUPABASE_URL.substring(0, 30)}...`);
+    console.log(`   File location: ${configPath}`);
+} catch (error) {
+    console.error('❌ Lỗi khi ghi file config.js:', error.message);
+    process.exit(1);
+}

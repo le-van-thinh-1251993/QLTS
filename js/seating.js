@@ -1,11 +1,23 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // Trang sắp xếp chỗ ngồi không cần Supabase/auth
+    // Trang sắp xếp chỗ ngồi - có thể dùng Supabase nếu có, nhưng vẫn hoạt động offline
 
     let rows = 5;
     let cols = 6;
-    let seatingData = {}; // Lưu dữ liệu: { "row-col": { name, department, notes } }
+    let seatingData = {}; // Lưu dữ liệu: { "row-col": { name, department, notes, user_id? } }
     let currentEditingCell = null;
     let sortableInstance = null;
+    let supabaseAvailable = false;
+    let usersList = []; // Danh sách users từ Supabase để suggest
+
+    // Kiểm tra xem có Supabase client không (từ auth.js)
+    if (typeof supabaseClient !== 'undefined' && supabaseClient !== null) {
+        supabaseAvailable = true;
+        await loadUsersFromSupabase();
+        await loadSeatingFromSupabase();
+    } else {
+        // Fallback: Load từ localStorage
+        loadSeatingFromLocalStorage();
+    }
 
     // Sidebar mobile toggle
     const hamburgerButton = document.getElementById('hamburger-button');
@@ -183,6 +195,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Reset styles
         targetCell.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900');
+        
+        // Auto-save after drag & drop
+        scheduleAutoSave();
     }
 
     function handleDragEnd(e) {
@@ -216,11 +231,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             delete seatingData[key];
             const cell = document.querySelector(`[data-key="${key}"]`);
             if (cell) renderCell(cell, key);
+            scheduleAutoSave();
         }
     };
 
-    // Person form submit
-    document.getElementById('personForm')?.addEventListener('submit', (e) => {
+    // Person form submit - với auto-save và user suggestion
+    document.getElementById('personForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!currentEditingCell) return;
 
@@ -230,10 +246,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // Tìm user từ Supabase nếu có
+        const matchedUser = findUserByName(name);
+        const department = document.getElementById('personDepartment').value.trim() || 
+                          (matchedUser && matchedUser.department ? matchedUser.department.name : '');
+
         seatingData[currentEditingCell] = {
             name: name,
-            department: document.getElementById('personDepartment').value.trim(),
-            notes: document.getElementById('personNotes').value.trim()
+            department: department,
+            notes: document.getElementById('personNotes').value.trim(),
+            user_id: matchedUser ? matchedUser.id : null
         };
 
         const cell = document.querySelector(`[data-key="${currentEditingCell}"]`);
@@ -241,6 +263,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('personModal').classList.add('hidden');
         currentEditingCell = null;
+
+        // Auto-save
+        scheduleAutoSave();
     });
 
     // Grid controls
@@ -262,18 +287,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         rows = newRows;
         cols = newCols;
         initGrid();
+        scheduleAutoSave();
     });
 
     document.getElementById('addRowBtn')?.addEventListener('click', () => {
         rows++;
         document.getElementById('rowsInput').value = rows;
         initGrid();
+        scheduleAutoSave();
     });
 
     document.getElementById('addColBtn')?.addEventListener('click', () => {
         cols++;
         document.getElementById('colsInput').value = cols;
         initGrid();
+        scheduleAutoSave();
     });
 
     // Import Excel
@@ -318,6 +346,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             initGrid();
+            scheduleAutoSave();
             alert('Import thành công!');
         } catch (error) {
             console.error('Import error:', error);
@@ -374,7 +403,210 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Initialize on load
-    initGrid();
+    // =================================================================
+    // SUPABASE INTEGRATION (Optional - works without it)
+    // =================================================================
+
+    /**
+     * Load danh sách users từ Supabase để suggest khi thêm người
+     */
+    async function loadUsersFromSupabase() {
+        if (!supabaseAvailable) return;
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('users')
+                .select('id, name, department:departments(name)')
+                .order('name');
+
+            if (error) throw error;
+            usersList = data || [];
+            console.log('✅ Đã tải danh sách users từ Supabase:', usersList.length);
+        } catch (error) {
+            console.warn('Không thể tải users từ Supabase:', error);
+            usersList = [];
+        }
+    }
+
+    /**
+     * Load seating data từ Supabase
+     */
+    async function loadSeatingFromSupabase() {
+        if (!supabaseAvailable) {
+            loadSeatingFromLocalStorage();
+            return;
+        }
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('seating_arrangements')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+                throw error;
+            }
+
+            if (data && data.layout_data) {
+                const layout = JSON.parse(data.layout_data);
+                seatingData = layout.seatingData || {};
+                rows = layout.rows || 5;
+                cols = layout.cols || 6;
+                
+                document.getElementById('rowsInput').value = rows;
+                document.getElementById('colsInput').value = cols;
+                
+                initGrid();
+                console.log('✅ Đã tải seating từ Supabase');
+            } else {
+                // Không có data trên Supabase, thử load từ localStorage
+                loadSeatingFromLocalStorage();
+            }
+        } catch (error) {
+            console.warn('Không thể tải seating từ Supabase:', error);
+            loadSeatingFromLocalStorage();
+        }
+    }
+
+    /**
+     * Load seating data từ localStorage (fallback)
+     */
+    function loadSeatingFromLocalStorage() {
+        try {
+            const saved = localStorage.getItem('seating_data');
+            if (saved) {
+                const data = JSON.parse(saved);
+                seatingData = data.seatingData || {};
+                rows = data.rows || 5;
+                cols = data.cols || 6;
+                
+                document.getElementById('rowsInput').value = rows;
+                document.getElementById('colsInput').value = cols;
+                
+                initGrid();
+                console.log('✅ Đã tải seating từ localStorage');
+            } else {
+                initGrid();
+            }
+        } catch (error) {
+            console.error('Lỗi khi load từ localStorage:', error);
+            initGrid();
+        }
+    }
+
+    /**
+     * Lưu seating data vào Supabase và localStorage
+     */
+    async function saveSeatingData() {
+        const layoutData = {
+            rows,
+            cols,
+            seatingData,
+            updated_at: new Date().toISOString()
+        };
+
+        // Luôn lưu vào localStorage để backup
+        try {
+            localStorage.setItem('seating_data', JSON.stringify(layoutData));
+        } catch (error) {
+            console.warn('Không thể lưu vào localStorage:', error);
+        }
+
+        // Lưu vào Supabase nếu có
+        if (supabaseAvailable) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('seating_arrangements')
+                    .upsert({
+                        layout_data: JSON.stringify(layoutData),
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'id'
+                    })
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                console.log('✅ Đã lưu seating vào Supabase');
+                showSaveNotification('Đã lưu vào Supabase', true);
+            } catch (error) {
+                console.error('Lỗi khi lưu vào Supabase:', error);
+                showSaveNotification('Đã lưu vào localStorage (Supabase lỗi)', false);
+            }
+        } else {
+            showSaveNotification('Đã lưu vào localStorage', true);
+        }
+    }
+
+    /**
+     * Hiển thị thông báo lưu
+     */
+    function showSaveNotification(message, isSuccess) {
+        // Tạo hoặc cập nhật notification
+        let notif = document.getElementById('saveNotification');
+        if (!notif) {
+            notif = document.createElement('div');
+            notif.id = 'saveNotification';
+            notif.className = 'fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+            document.body.appendChild(notif);
+        }
+        
+        notif.className = `fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 ${isSuccess ? 'bg-green-500 text-white' : 'bg-yellow-500 text-white'}`;
+        notif.innerHTML = `
+            <i class="fa-solid ${isSuccess ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i>
+            <span>${message}</span>
+        `;
+        
+        setTimeout(() => {
+            notif.style.opacity = '0';
+            notif.style.transition = 'opacity 0.3s';
+            setTimeout(() => notif.remove(), 300);
+        }, 2000);
+    }
+
+    /**
+     * Tìm user từ danh sách users để suggest
+     */
+    function findUserByName(name) {
+        if (!name || usersList.length === 0) return null;
+        const lowerName = name.toLowerCase().trim();
+        return usersList.find(u => 
+            u.name && u.name.toLowerCase().includes(lowerName) ||
+            lowerName.includes(u.name ? u.name.toLowerCase() : '')
+        );
+    }
+
+    // Auto-save khi có thay đổi (debounce)
+    let saveTimeout = null;
+    function scheduleAutoSave() {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            saveSeatingData();
+        }, 2000); // Auto-save sau 2 giây không có thay đổi
+    }
+
+    // Thêm nút Save vào header
+    function addSaveButton() {
+        const header = document.querySelector('header .flex.items-center.gap-3');
+        if (header && !document.getElementById('saveSeatingBtn')) {
+            const saveBtn = document.createElement('button');
+            saveBtn.id = 'saveSeatingBtn';
+            saveBtn.className = 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2';
+            saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i><span class="hidden md:inline">Lưu</span>';
+            saveBtn.addEventListener('click', () => {
+                saveSeatingData();
+            });
+            header.insertBefore(saveBtn, header.firstChild);
+        }
+    }
+
+    // Note: Các hàm addPerson, editPerson, removePerson, form submit, và grid controls
+    // đã được cập nhật ở trên để gọi scheduleAutoSave()
+
+    // Initialize
+    addSaveButton();
+    // initGrid() sẽ được gọi trong loadSeatingFromSupabase hoặc loadSeatingFromLocalStorage
 });
 
