@@ -1176,21 +1176,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (filterAssetStatus) {
             const statuses = [...new Set(assets.map(a => a.status || '').filter(Boolean))];
             const cur = filterAssetStatus.value;
+            // Preserve current value even if it's not in the new list
+            const statusSet = new Set(statuses);
+            if (cur && !statusSet.has(cur)) {
+                statuses.push(cur);
+            }
             filterAssetStatus.innerHTML = '<option value="">Tất cả trạng thái</option>' + statuses.map(s => `<option value="${s}">${(STATUS_MAP[s] && STATUS_MAP[s].text) || s}</option>`).join('');
-            filterAssetStatus.value = cur;
+            if (cur) filterAssetStatus.value = cur;
         }
         const filterAssetLocation = document.getElementById('filterAssetLocation');
         if (filterAssetLocation) {
             const locs = [...new Set(assets.map(a => (a.location || '').toString().trim()).filter(Boolean))];
             const cur = filterAssetLocation.value;
+            // Preserve current value even if it's not in the new list
+            const locSet = new Set(locs);
+            if (cur && !locSet.has(cur)) {
+                locs.push(cur);
+            }
             filterAssetLocation.innerHTML = '<option value="">Tất cả vị trí</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
-            filterAssetLocation.value = cur;
+            if (cur) filterAssetLocation.value = cur;
         }
         const filterAssetCategory = document.getElementById('filterAssetCategory');
         if (filterAssetCategory) {
             const cur = filterAssetCategory.value;
-            filterAssetCategory.innerHTML = '<option value="">Tất cả loại</option>' + categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-            filterAssetCategory.value = cur;
+            const categoryNames = categories.map(c => c.name);
+            // Preserve current value even if it's not in the new list
+            const catSet = new Set(categoryNames);
+            if (cur && !catSet.has(cur)) {
+                categoryNames.push(cur);
+            }
+            filterAssetCategory.innerHTML = '<option value="">Tất cả loại</option>' + categoryNames.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (cur) filterAssetCategory.value = cur;
         }
         const filterAssetUser = document.getElementById('filterAssetUser');
         if (filterAssetUser) {
@@ -2118,10 +2134,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const { error } = await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); } });
 
     async function refreshApp(resetFilters = false) {
+        // Preserve current filter state before refresh (only for assets page)
+        let preservedFilters = null;
+        if (document.getElementById('assetTableBody') && !resetFilters) {
+            preservedFilters = {
+                search: document.getElementById('searchInput')?.value || '',
+                status: document.getElementById('filterAssetStatus')?.value || '',
+                location: document.getElementById('filterAssetLocation')?.value || '',
+                category: document.getElementById('filterAssetCategory')?.value || '',
+                user: null
+            };
+            // Get user filter from Choices instance if available
+            if (filterAssetUserChoicesInstance) {
+                try {
+                    const selectedValue = filterAssetUserChoicesInstance.getValue(true);
+                    if (selectedValue && selectedValue.length > 0) {
+                        preservedFilters.user = selectedValue[0];
+                    }
+                } catch (e) {}
+            } else {
+                preservedFilters.user = document.getElementById('filterAssetUser')?.value || '';
+            }
+        }
+        
         await fetchAllData();
         updateDropdowns();
+        
         if (document.getElementById('assetTableBody')) { 
-            if (resetFilters) resetAssetFilters(); 
+            if (resetFilters) {
+                resetAssetFilters(); 
+            } else if (preservedFilters) {
+                // Restore preserved filter values
+                if (preservedFilters.search) document.getElementById('searchInput').value = preservedFilters.search;
+                if (preservedFilters.status) document.getElementById('filterAssetStatus').value = preservedFilters.status;
+                if (preservedFilters.location) document.getElementById('filterAssetLocation').value = preservedFilters.location;
+                if (preservedFilters.category) document.getElementById('filterAssetCategory').value = preservedFilters.category;
+                if (preservedFilters.user && filterAssetUserChoicesInstance) {
+                    try {
+                        filterAssetUserChoicesInstance.setChoiceByValue(preservedFilters.user);
+                    } catch (e) {
+                        // Fallback to element value if Choices fails
+                        const fau = document.getElementById('filterAssetUser');
+                        if (fau) fau.value = preservedFilters.user;
+                    }
+                } else if (preservedFilters.user) {
+                    const fau = document.getElementById('filterAssetUser');
+                    if (fau) fau.value = preservedFilters.user;
+                }
+            }
             applyAssetFilters(); 
             renderMaintenanceList(); 
             renderStockCheckList(); 
