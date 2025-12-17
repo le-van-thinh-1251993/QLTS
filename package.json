@@ -1,0 +1,11 @@
+{
+  "name": "qlts-web",
+  "version": "1.0.0",
+  "description": "IT Asset Management System",
+  "scripts": {
+    "build": "node build-config.js"
+  },
+  "engines": {
+    "node": ">=14.x"
+  }
+}
