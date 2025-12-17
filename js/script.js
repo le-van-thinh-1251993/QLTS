@@ -1196,7 +1196,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (filterAssetUser) {
             // Try to initialize Choices for a compact, scrollable dropdown
             try {
-                filterAssetUserChoicesInstance = initChoices('filterAssetUser', filterAssetUserChoicesInstance, users);
+                // Preserve the current selected value before reinitializing
+                let currentSelectedValue = null;
+                if (filterAssetUserChoicesInstance) {
+                    try {
+                        const selectedValue = filterAssetUserChoicesInstance.getValue(true);
+                        if (selectedValue && selectedValue.length > 0) {
+                            currentSelectedValue = selectedValue[0];
+                        }
+                    } catch (e) {}
+                } else {
+                    // If Choices instance doesn't exist, get value from the element directly
+                    currentSelectedValue = filterAssetUser.value || null;
+                }
+                filterAssetUserChoicesInstance = initChoices('filterAssetUser', filterAssetUserChoicesInstance, users, currentSelectedValue);
             } catch (e) {
                 // Fallback: populate plain <option> list from users encountered in assets
                 const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(assets.map(a => a.user || '').filter(Boolean))];
