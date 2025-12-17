@@ -39,7 +39,8 @@ body {
     border-color: #475569 !important;     /* slate-600 */
 }
 
-/* Chữ được chọn (hiển thị trong ô input) */
+/* Chữ được chọn (hiển thị trong ô input) - padding được điều chỉnh ở cuối file */
+
 .dark .choices__inner,
 .dark .choices__input {
     background-color: #334155 !important; /* slate-700 */
@@ -47,9 +48,17 @@ body {
 }
 
 /* Danh sách các lựa chọn (khi xổ xuống) */
+.choices__list--dropdown {
+    background-color: #ffffff !important; /* Màu trắng cho light mode */
+    border: 1px solid #e2e8f0 !important; /* Thêm border để rõ ràng hơn */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
 .dark .choices__list--dropdown {
     background-color: #1e293b !important; /* slate-800 */
     border-color: #475569 !important;     /* slate-600 */
+    border: 1px solid #475569 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
 }
 
 /* Từng mục trong danh sách lựa chọn */
@@ -137,6 +146,7 @@ select option {
 .filters-row,
 .filter-control {
     overflow: visible !important;
+    position: relative;
 }
 
 /* Ensure filter-control aligns items and spaces controls nicely */
@@ -147,12 +157,50 @@ select option {
     position: relative;
 }
 
-.choices__list--dropdown {
-    position: absolute;
-    z-index: 60;
-    max-height: 220px;
-    overflow: auto;
-    width: 100%;
+/* Đảm bảo mũi tên dropdown của Choices.js không đè lên text */
+.choices[data-type*="select-one"]::after {
+    right: 0.75rem !important;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Đảm bảo text trong Choices.js có đủ padding để không bị đè bởi mũi tên */
+.choices__inner {
+    padding-right: 2.5rem !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.choices__input {
+    padding-right: 0.5rem !important;
+}
+
+/* Standard HTML select dropdown styling */
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23334155' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1rem;
+    padding-right: 2.5rem !important; /* Tăng padding để mũi tên không đè lên chữ */
+    min-width: 8rem; /* Đảm bảo có đủ không gian */
+}
+
+/* Đảm bảo text trong select không bị đè bởi mũi tên */
+select option {
+    padding-right: 0.5rem;
+}
+
+select:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Dark mode for standard select */
+.dark select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23E5E7EB' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
 }
 
 /* Ngăn dropdown tự động mở - đảm bảo chỉ hiển thị khi is-open */
@@ -167,6 +215,177 @@ select option {
 .choices__list--dropdown .choices__item {
     white-space: normal;
 }
+
+/* Style nút X (remove button) trong Choices.js - chỉ hiển thị cho item đã chọn trong input */
+.choices__inner .choices__item--selectable .choices__button,
+.choices__inner .choices__item[data-id] .choices__button {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    left: auto !important;
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+    margin-left: 0.5rem !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer !important;
+    color: #64748b !important;
+    font-size: 0 !important; /* Ẩn text "Remove item" */
+    line-height: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    order: 2 !important;
+    overflow: visible !important;
+    text-indent: -9999px !important;
+}
+
+/* Thêm icon X bằng CSS - ẩn text gốc và hiển thị icon × */
+.choices__inner .choices__item--selectable .choices__button::before,
+.choices__inner .choices__item[data-id] .choices__button::before {
+    content: '×' !important;
+    text-indent: 0 !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    font-size: 1.5rem !important;
+    font-weight: 300 !important;
+    line-height: 1 !important;
+    color: inherit !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    pointer-events: none !important;
+}
+
+/* Ẩn text node trực tiếp trong button (nếu Choices.js render text) */
+.choices__inner .choices__item--selectable .choices__button > *,
+.choices__inner .choices__item[data-id] .choices__button > * {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    font-size: 0 !important;
+}
+
+.choices__inner .choices__item--selectable .choices__button:hover,
+.choices__inner .choices__item[data-id] .choices__button:hover {
+    color: #ef4444 !important;
+    background: transparent !important;
+}
+
+/* Dark mode cho nút X */
+.dark .choices__inner .choices__item--selectable .choices__button,
+.dark .choices__inner .choices__item[data-id] .choices__button {
+    color: #94a3b8 !important;
+}
+
+.dark .choices__inner .choices__item--selectable .choices__button:hover,
+.dark .choices__inner .choices__item[data-id] .choices__button:hover {
+    color: #f87171 !important;
+}
+
+/* Ẩn nút remove trong dropdown list (chỉ hiển thị trong input khi đã chọn) */
+.choices__list--dropdown .choices__item--selectable .choices__button,
+.choices__list--dropdown .choices__item[data-id] .choices__button,
+.choices__item--selectable[data-item] .choices__button {
+    display: none !important;
+}
+
+/* Ẩn hoàn toàn text "Remove item" nếu có hiển thị */
+.choices__inner .choices__item--selectable .choices__button[aria-label],
+.choices__inner .choices__item[data-id] .choices__button[aria-label] {
+    font-size: 0 !important;
+    text-indent: -9999px !important;
+}
+
+/* Ẩn text trong button nếu có */
+.choices__inner .choices__item--selectable .choices__button *,
+.choices__inner .choices__item[data-id] .choices__button * {
+    display: none !important;
+}
+
+/* Đảm bảo text và nút X có đủ không gian, text không bị đè */
+.choices__inner .choices__item {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding-right: 0 !important;
+    max-width: 100% !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+}
+
+.choices__inner .choices__item .choices__label {
+    flex: 1 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    order: 1 !important;
+    display: inline-block !important;
+}
+
+/* Đảm bảo khi đã chọn, hiển thị: [Tên người dùng] [Nút X] */
+.choices__inner .choices__list--single .choices__item {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+}
+
+.choices__inner .choices__list--single .choices__item .choices__label {
+    flex: 0 1 auto !important;
+    max-width: calc(100% - 2rem) !important; /* Trừ đi chỗ cho nút X và gap */
+}
+
+/* Đảm bảo mũi tên dropdown của Choices.js không đè lên text và nút X */
+.choices[data-type*="select-one"]::after {
+    right: 0.75rem !important;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Điều chỉnh padding để có đủ chỗ cho text, nút X và mũi tên */
+.choices__inner {
+    padding-right: 3rem !important; /* Tăng padding để có chỗ cho nút X và mũi tên */
+}
+
+/* Đảm bảo dropdown có thể click để mở lại sau khi đã chọn */
+.choices[data-type*="select-one"] .choices__inner {
+    cursor: pointer !important;
+}
+
+.choices[data-type*="select-one"].is-open .choices__inner {
+    cursor: pointer !important;
+}
+
+/* Đảm bảo nút X không chặn việc click vào dropdown */
+.choices__inner .choices__item--selectable .choices__button,
+.choices__inner .choices__item[data-id] .choices__button {
+    pointer-events: auto !important;
+    z-index: 2 !important;
+}
+
+/* Đảm bảo phần còn lại của input có thể click để mở dropdown */
+.choices__inner .choices__item {
+    pointer-events: none !important;
+}
+
+.choices__inner .choices__item .choices__label {
+    pointer-events: none !important;
+}
+
+/* Cho phép click vào toàn bộ input để mở dropdown */
+.choices[data-type*="select-one"] {
+    cursor: pointer !important;
+}
+
 .filter-control {
     display: flex;
     align-items: center;

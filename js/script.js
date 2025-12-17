@@ -1252,7 +1252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const el = filterAssetUser;
                 if (filterAssetUserChoicesInstance) { try { filterAssetUserChoicesInstance.destroy(); } catch (e) { } }
                 filterAssetUserChoicesInstance = new Choices(el, { 
-                    removeItemButton: true, 
+                    removeItemButton: true, // Bật nút X để xóa selection
                     maxItemCount: 1, 
                     placeholder: true, 
                     placeholderValue: 'Chọn...', 
@@ -1321,12 +1321,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 const el = filterLicenseUser;
                 if (filterLicenseUserChoicesInstance) { try { filterLicenseUserChoicesInstance.destroy(); } catch (e) { } }
-                filterLicenseUserChoicesInstance = new Choices(el, { 
-                    removeItemButton: true, 
-                    maxItemCount: 1, 
-                    placeholder: true, 
-                    placeholderValue: 'Chọn...', 
-                    searchPlaceholderValue: 'Tìm kiếm...', 
+                filterLicenseUserChoicesInstance = new Choices(el, {
+                    removeItemButton: true, // Bật nút X để xóa selection
+                    maxItemCount: 1,
+                    placeholder: true,
+                    placeholderValue: 'Chọn...',
+                    searchPlaceholderValue: 'Tìm kiếm...',
                     shouldSort: false,
                     shouldOpen: false, // Ngăn dropdown tự động mở
                     searchEnabled: true,
