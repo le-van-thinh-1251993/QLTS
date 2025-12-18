@@ -10,8 +10,11 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 // Xử lý trường hợp thiếu Environment Variables
-// Thay vì exit(1), tạo config.js với giá trị placeholder để build pass
-// App sẽ tự handle và hiển thị lỗi phù hợp khi chạy
+// Luôn tạo file config.js để tránh lỗi 404
+// Nếu không có env vars, tạo placeholder; nếu có, tạo với giá trị thật
+const configPath = path.join(__dirname, 'config.js');
+let configContent = '';
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn('');
   console.warn('⚠️  ============================================');
@@ -38,7 +41,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   
   // Tạo config.js với giá trị placeholder để build pass
   // App sẽ detect và hiển thị lỗi phù hợp
-  const placeholderConfig = `// File cấu hình Supabase - Tự động tạo từ environment variables
+  configContent = `// File cấu hình Supabase - Tự động tạo từ environment variables
 // ⚠️ CẢNH BÁO: Environment Variables chưa được cấu hình trên Vercel
 // Vui lòng thêm SUPABASE_URL và SUPABASE_ANON_KEY vào Vercel Settings
 
@@ -47,23 +50,9 @@ window.__APP_CONFIG__ = {
   SUPABASE_ANON_KEY: null
 };
 `;
-  
-  const configPath = path.join(__dirname, 'config.js');
-  try {
-    fs.writeFileSync(configPath, placeholderConfig, 'utf8');
-    console.warn('⚠️  Đã tạo config.js với giá trị placeholder');
-    console.warn('⚠️  App sẽ hiển thị lỗi khi chạy nếu thiếu config');
-  } catch (error) {
-    console.error('❌ Lỗi khi tạo config.js placeholder:', error.message);
-    // Không exit để build vẫn pass
-  }
-  
-  // Không exit(1) - để build pass, app sẽ handle lỗi khi runtime
-  // process.exit(1); // Đã comment để build không fail
-}
-
-// Nội dung file config.js
-const configContent = `// File cấu hình Supabase - Tự động tạo từ environment variables
+} else {
+  // Tạo config.js với giá trị thật từ environment variables
+  configContent = `// File cấu hình Supabase - Tự động tạo từ environment variables
 // File này được tạo tự động trong quá trình build trên Vercel
 // DO NOT COMMIT THIS FILE - Nó được tạo tự động từ env vars
 
@@ -72,15 +61,25 @@ window.__APP_CONFIG__ = {
   SUPABASE_ANON_KEY: '${SUPABASE_ANON_KEY}'
 };
 `;
+}
 
-// Ghi file config.js
-const configPath = path.join(__dirname, 'config.js');
+// Ghi file config.js (luôn tạo file để tránh lỗi 404)
 try {
     fs.writeFileSync(configPath, configContent, 'utf8');
-    console.log('✅ config.js đã được tạo thành công từ environment variables');
-    console.log(`   SUPABASE_URL: ${SUPABASE_URL.substring(0, 30)}...`);
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        console.log('✅ config.js đã được tạo thành công từ environment variables');
+        console.log(`   SUPABASE_URL: ${SUPABASE_URL.substring(0, 30)}...`);
+    } else {
+        console.warn('⚠️  Đã tạo config.js với giá trị placeholder');
+        console.warn('⚠️  App sẽ hiển thị lỗi khi chạy nếu thiếu config');
+    }
     console.log(`   File location: ${configPath}`);
 } catch (error) {
     console.error('❌ Lỗi khi ghi file config.js:', error.message);
-    process.exit(1);
+    // Chỉ exit nếu có env vars nhưng không ghi được file (lỗi thật sự)
+    // Nếu không có env vars, không exit để build vẫn pass
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        process.exit(1);
+    }
 }
+

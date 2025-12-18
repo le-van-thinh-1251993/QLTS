@@ -5,9 +5,14 @@ const _cfg = window.__APP_CONFIG__ || {};
 const SUPABASE_URL = _cfg.SUPABASE_URL;
 const SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY;
 
-// Khởi tạo Supabase client chỉ khi có config hợp lệ
+// Kiểm tra xem supabase library đã được load chưa
+if (typeof supabase === 'undefined') {
+    console.error('CRITICAL: Supabase library chưa được load. Vui lòng đảm bảo @supabase/supabase-js được load trước auth.js');
+}
+
+// Khởi tạo Supabase client chỉ khi có config hợp lệ và supabase library đã sẵn sàng
 let supabaseClient = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+if (SUPABASE_URL && SUPABASE_ANON_KEY && typeof supabase !== 'undefined') {
     try {
         // Supabase client với cấu hình session riêng để tránh đụng các app khác cùng domain
         supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -25,13 +30,26 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
 } else {
     // Chỉ hiển thị lỗi trên console, không alert để tránh làm gián đoạn
     // (trang seating.html không cần Supabase)
-    console.error('CRITICAL: Supabase config missing. Please create config.js based on config.example.js');
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        console.error('CRITICAL: Supabase config missing. Please create config.js based on config.example.js');
+        console.error('   SUPABASE_URL:', SUPABASE_URL);
+        console.error('   SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? '***' : 'missing');
+    }
+    if (typeof supabase === 'undefined') {
+        console.error('CRITICAL: Supabase library chưa được load');
+    }
     // Chỉ alert nếu đang ở trang cần Supabase (không phải seating.html)
     if (!window.location.pathname.includes('seating.html')) {
         // Delay alert để tránh lỗi khi trang đang load
         setTimeout(() => {
             if (document.visibilityState === 'visible') {
-                alert('Lỗi cấu hình: Thiếu thông tin kết nối Supabase. Vui lòng kiểm tra file config.js');
+                let errorMsg = 'Lỗi cấu hình: ';
+                if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+                    errorMsg += 'Thiếu thông tin kết nối Supabase. Vui lòng kiểm tra file config.js';
+                } else if (typeof supabase === 'undefined') {
+                    errorMsg += 'Supabase library chưa được load';
+                }
+                alert(errorMsg);
             }
         }, 500);
     }

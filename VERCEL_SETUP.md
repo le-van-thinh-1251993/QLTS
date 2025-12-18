@@ -71,3 +71,4 @@ Sau khi redeploy, kiểm tra build logs:
 - File `config.js` được tạo **trong quá trình build** và được deploy cùng với code
 - Không commit file `config.js` lên Git (đã có trong `.gitignore`)
 - Mỗi khi thay đổi Environment Variables, cần **Redeploy** để áp dụng thay đổi
+
