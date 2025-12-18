@@ -445,3 +445,18 @@ select:focus {
     gap: 0.5rem;
 }
 
+/* ================================================================== */
+/* SEATING GRID - MERGED CELLS                                       */
+/* ================================================================== */
+
+/* Đảm bảo merged cells lấp đầy đúng không gian trong CSS Grid */
+.merged-cell {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+}
+
+/* KHÔNG set grid-column/grid-row ở đây - để JS set trực tiếp với !important */
+/* JS sẽ set: cell.style.setProperty('grid-column', 'span X', 'important') */
+
