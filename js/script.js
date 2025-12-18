@@ -1260,11 +1260,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     shouldSort: false,
                     shouldOpen: false, // Ngăn dropdown tự động mở
                     searchEnabled: true,
-                    itemSelectText: ''
+                    itemSelectText: '',
+                    callbackOnInit: function() {
+                        // Callback khi khởi tạo xong
+                    }
                 });
                 const choices = users.map(u => ({ value: u.name, label: u.name }));
                 filterAssetUserChoicesInstance.setChoices(choices, 'value', 'label', true);
                 if (currentSelectedValue) filterAssetUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                
+                // Thêm event listener để trigger filter khi thay đổi
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('change', applyAssetFilters);
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('removeItem', applyAssetFilters);
+                
+                // Thêm callback cho Choices.js để trigger filter khi chọn item
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('addItem', function(event) {
+                    setTimeout(() => applyAssetFilters(), 100); // Delay nhỏ để đảm bảo value đã được set
+                });
             } catch (e) {
                 // Fallback: populate plain <option> list from users encountered in assets
                 const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(assets.map(a => a.user || '').filter(Boolean))];
@@ -1336,6 +1348,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const choices = users.map(u => ({ value: u.name, label: u.name }));
                 filterLicenseUserChoicesInstance.setChoices(choices, 'value', 'label', true);
                 if (currentSelectedValue) filterLicenseUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                
+                // Thêm event listener để trigger filter khi thay đổi
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('change', applyLicenseFilters);
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('removeItem', applyLicenseFilters);
+                
+                // Thêm callback cho Choices.js để trigger filter khi chọn item
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('addItem', function(event) {
+                    setTimeout(() => applyLicenseFilters(), 100); // Delay nhỏ để đảm bảo value đã được set
+                });
+                
                 // Đóng dropdown ngay sau khi khởi tạo để đảm bảo không tự động mở
                 setTimeout(() => {
                     try {
@@ -1516,11 +1538,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     // trigger filtering when user types in the datalist-input or when they change the value
     document.getElementById('filterAssetUser')?.addEventListener('input', applyAssetFilters);
     document.getElementById('filterAssetUser')?.addEventListener('change', applyAssetFilters);
+    
+    // Thêm event listener cho Choices.js instance để trigger filter khi thay đổi
+    // Sẽ được gọi sau khi Choices instance được tạo trong updateDropdowns()
     // NOTE: Clear button removed — rely on Choices' removeItemButton / input clear behavior
     document.getElementById('clearAssetFilters')?.addEventListener('click', () => {
         if (document.getElementById('filterAssetStatus')) document.getElementById('filterAssetStatus').value = '';
         if (document.getElementById('filterAssetLocation')) document.getElementById('filterAssetLocation').value = '';
         if (document.getElementById('filterAssetCategory')) document.getElementById('filterAssetCategory').value = '';
+        // Clear Choices instance nếu có
+        if (filterAssetUserChoicesInstance) {
+            try {
+                filterAssetUserChoicesInstance.removeActiveItems();
+                filterAssetUserChoicesInstance.clearInput();
+            } catch (err) {
+                console.warn('Error clearing filterAssetUserChoicesInstance:', err);
+            }
+        }
         if (document.getElementById('filterAssetUser')) document.getElementById('filterAssetUser').value = '';
         applyAssetFilters();
     });
@@ -1530,7 +1564,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('filterLicenseUser')?.addEventListener('input', applyLicenseFilters);
     document.getElementById('filterLicenseUser')?.addEventListener('change', applyLicenseFilters);
     document.getElementById('clearLicenseFilters')?.addEventListener('click', () => {
+        if (document.getElementById('filterLicenseType')) document.getElementById('filterLicenseType').value = '';
+        if (document.getElementById('filterPackageType')) document.getElementById('filterPackageType').value = '';
         if (document.getElementById('filterLicenseStatus')) document.getElementById('filterLicenseStatus').value = '';
+        // Clear Choices instance nếu có
+        if (filterLicenseUserChoicesInstance) {
+            try {
+                filterLicenseUserChoicesInstance.removeActiveItems();
+                filterLicenseUserChoicesInstance.clearInput();
+            } catch (err) {
+                console.warn('Error clearing filterLicenseUserChoicesInstance:', err);
+            }
+        }
         if (document.getElementById('filterLicenseUser')) document.getElementById('filterLicenseUser').value = '';
         applyLicenseFilters();
     });

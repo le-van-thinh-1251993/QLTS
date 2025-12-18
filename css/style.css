@@ -251,14 +251,15 @@ select:focus {
     opacity: 1 !important;
     position: relative !important;
     left: auto !important;
-    width: 1.5rem !important;
-    height: 1.5rem !important;
+    width: 1.25rem !important;
+    height: 1.25rem !important;
     margin-left: 0.5rem !important;
     padding: 0 !important;
-    background: transparent !important;
-    border: none !important;
+    background: #f1f5f9 !important; /* slate-100 */
+    border: 1px solid #cbd5e1 !important; /* slate-300 */
+    border-radius: 50% !important; /* circular */
     cursor: pointer !important;
-    color: #64748b !important;
+    color: #64748b !important; /* slate-500 */
     font-size: 0 !important; /* Ẩn text "Remove item" */
     line-height: 0 !important;
     align-items: center !important;
@@ -267,19 +268,44 @@ select:focus {
     order: 2 !important;
     overflow: visible !important;
     text-indent: -9999px !important;
+    transition: all 0.2s ease !important;
 }
 
-/* Thêm icon X bằng CSS - ẩn text gốc và hiển thị icon × */
+/* Dark mode cho nút X */
+.dark .choices__inner .choices__item--selectable .choices__button,
+.dark .choices__inner .choices__item[data-id] .choices__button {
+    background: #475569 !important; /* slate-600 */
+    border-color: #64748b !important; /* slate-500 */
+    color: #cbd5e1 !important; /* slate-300 */
+}
+
+/* Hover effect cho nút X */
+.choices__inner .choices__item--selectable .choices__button:hover,
+.choices__inner .choices__item[data-id] .choices__button:hover {
+    background: #ef4444 !important; /* red-500 */
+    border-color: #dc2626 !important; /* red-600 */
+    color: #ffffff !important;
+    transform: scale(1.1) !important;
+}
+
+.dark .choices__inner .choices__item--selectable .choices__button:hover,
+.dark .choices__inner .choices__item[data-id] .choices__button:hover {
+    background: #dc2626 !important; /* red-600 */
+    border-color: #b91c1c !important; /* red-700 */
+    color: #ffffff !important;
+}
+
+/* Thêm icon X đẹp bằng CSS - sử dụng Font Awesome icon hoặc SVG */
 .choices__inner .choices__item--selectable .choices__button::before,
 .choices__inner .choices__item[data-id] .choices__button::before {
-    content: '×' !important;
+    content: '✕' !important; /* Hoặc có thể dùng Font Awesome: '\f00d' */
     text-indent: 0 !important;
     position: absolute !important;
     top: 50% !important;
     left: 50% !important;
     transform: translate(-50%, -50%) !important;
-    font-size: 1.5rem !important;
-    font-weight: 300 !important;
+    font-size: 0.75rem !important; /* Nhỏ hơn để vừa với button */
+    font-weight: 600 !important; /* Bold hơn */
     line-height: 1 !important;
     color: inherit !important;
     width: 100% !important;
