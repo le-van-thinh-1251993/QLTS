@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Security: Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net;">
-        <!-- Auth config (not in repo) -->
-    <script src="config.js"></script>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
     <title>IT Asset Management Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script> 
     <script>
@@ -28,7 +26,6 @@
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -258,8 +255,10 @@
         </div>
     </div>
 
-    <!-- Auth script must be loaded before the main script -->
-    <script src="js/auth.js"></script>
+    <!-- LocalDB for local storage operations -->
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/localDB.js"></script>
     <script src="js/script.js"></script>
 </body>
 </html>

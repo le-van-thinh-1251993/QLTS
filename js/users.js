@@ -102,6 +102,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveDepartments = () => localStorage.setItem(STORAGE_KEY_DEPARTMENTS, JSON.stringify(departments));
     const saveAssets = () => localStorage.setItem(STORAGE_KEY_ASSETS, JSON.stringify(assets));
 
+    // Đảm bảo dữ liệu mặc định luôn được lưu vào localStorage (để các module khác đọc được)
+    if (!localStorage.getItem(STORAGE_KEY_USERS)) saveUsers();
+    if (!localStorage.getItem(STORAGE_KEY_DEPARTMENTS)) saveDepartments();
+
     // Cập nhật lại dữ liệu tài sản khi cần
     const reloadAssets = () => {
         assets = loadData(STORAGE_KEY_ASSETS, []);

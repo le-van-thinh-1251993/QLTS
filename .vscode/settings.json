@@ -1,3 +1,8 @@
 {
-    "CodeGPT.apiKey": "Google AI Studio"
+    "chat.tools.terminal.autoApprove": {
+        "/^node -v; npm -v; node serve\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

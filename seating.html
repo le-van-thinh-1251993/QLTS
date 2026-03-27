@@ -3,218 +3,255 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Security: Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net;">
-    <title>Sắp xếp chỗ ngồi - IT Asset Management</title>
-    <script src="https://cdn.tailwindcss.com"></script> 
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        // Giữ nguyên màu mặc định
-                    }
-                }
-            }
-        }
-    </script>
-    <script>
-        // Chạy ngay lập tức để tránh FOUC (Flash of Unstyled Content)
-        if (localStorage.getItem('darkMode') === 'true') {
-            document.documentElement.classList.add('dark');
-        }
-    </script>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://cdn.jsdelivr.net;">
+    <title>Sơ đồ vị trí nhân sự - IT Asset Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <script>if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark');</script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* ===== SEATING MODULE STYLES ===== */
+        .seating-grid-wrapper { overflow: auto; flex: 1; }
+        .seating-grid {
+            display: grid; gap: 1px; background: #cbd5e1;
+            border: 2px solid #94a3b8; border-radius: 6px;
+            user-select: none; min-width: max-content;
+        }
+        .dark .seating-grid { background: #334155; border-color: #475569; }
+        .seat-cell {
+            position: relative; min-width: 64px; min-height: 34px;
+            background: #fff; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 1px 2px; cursor: default; transition: box-shadow .15s, outline .15s;
+            overflow: hidden; word-wrap: break-word; overflow-wrap: break-word;
+            font-size: 9px; line-height: 1.2;
+        }
+        .dark .seat-cell { background: #1e293b; color: #e2e8f0; }
+        .seat-cell.selected { outline: 2px solid #f59e0b; outline-offset: -2px; z-index: 5; }
+        .seat-cell.drag-over { outline: 2px dashed #3b82f6 !important; outline-offset: -2px; }
+        .seat-cell .cell-name { font-weight: 600; font-size: 9px; text-align: center; word-break: break-word; max-width: 100%; }
+        .seat-cell .cell-dept { font-size: 7px; opacity: .7; text-align: center; word-break: break-word; }
+        .seat-cell .cell-label-text { font-weight: 700; font-size: 9px; text-align: center; color: #475569; }
+        .dark .seat-cell .cell-label-text { color: #94a3b8; }
+        .seat-cell .cell-actions { display: none; position: absolute; top: 1px; right: 1px; gap: 1px; z-index: 10; }
+        .seat-cell:hover .cell-actions { display: flex; }
+        .seat-cell .cell-actions button {
+            background: rgba(255,255,255,.85); border: none; cursor: pointer;
+            font-size: 9px; padding: 1px 3px; border-radius: 3px; color: #64748b; line-height: 1;
+        }
+        .dark .seat-cell .cell-actions button { background: rgba(30,41,59,.85); color: #94a3b8; }
+        .seat-cell .cell-actions button:hover { color: #3b82f6; }
+        .seat-cell .cell-actions button.act-del:hover { color: #ef4444; }
+        /* Paint mode */
+        .paint-mode .seat-cell { cursor: crosshair !important; }
+        .paint-mode .seat-cell:hover { filter: brightness(.93); }
+        /* User sidebar */
+        .user-sidebar { width: 200px; min-width: 200px; }
+        .user-chip {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 8px; background: #f8fafc; border: 1px solid #e2e8f0;
+            border-radius: 6px; cursor: grab; font-size: 11px;
+            transition: all .15s; user-select: none;
+        }
+        .dark .user-chip { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+        .user-chip:hover { border-color: #3b82f6; box-shadow: 0 1px 3px rgba(59,130,246,.2); }
+        .user-chip.dragging { opacity: .4; }
+        .user-chip .u-avatar {
+            width: 22px; height: 22px; border-radius: 50%; background: #3b82f6;
+            color: #fff; display: flex; align-items: center; justify-content: center;
+            font-size: 9px; font-weight: 700; flex-shrink: 0;
+        }
+        .user-chip.placed { opacity: .35; pointer-events: none; border-style: dashed; }
+        /* Color palette */
+        .color-swatch {
+            width: 24px; height: 24px; border-radius: 5px; cursor: pointer;
+            border: 2px solid transparent; transition: all .15s; flex-shrink: 0;
+        }
+        .color-swatch:hover { transform: scale(1.12); }
+        .color-swatch.active { border-color: #1e293b; box-shadow: 0 0 0 2px #3b82f6; }
+        .dark .color-swatch.active { border-color: #e2e8f0; }
+        /* Eraser active */
+        .eraser-active { background: #fef3c7 !important; border-color: #f59e0b !important; color: #92400e !important; }
+        /* Toolbar */
+        .tb { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid #e2e8f0; background: #fff; color: #334155; transition: all .15s; white-space: nowrap; }
+        .dark .tb { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+        .tb:hover { border-color: #3b82f6; color: #3b82f6; }
+        .tb.active { background: #3b82f6 !important; color: #fff !important; border-color: #3b82f6 !important; }
+        .tb.primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+        .tb.primary:hover { background: #2563eb; }
+        .tb.success { background: #10b981; color: #fff; border-color: #10b981; }
+        .tb.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
+        .tb-sep { width: 1px; height: 24px; background: #e2e8f0; margin: 0 2px; flex-shrink: 0; }
+        .dark .tb-sep { background: #334155; }
+        /* Scrollbar */
+        .seating-grid-wrapper::-webkit-scrollbar, .user-sidebar::-webkit-scrollbar { width: 7px; height: 7px; }
+        .seating-grid-wrapper::-webkit-scrollbar-thumb, .user-sidebar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        @media (max-width: 1024px) {
+            .user-sidebar {
+                position: fixed; right: -240px; top: 64px; bottom: 0; z-index: 45;
+                transition: right .3s; box-shadow: -2px 0 10px rgba(0,0,0,.1);
+                background: #fff; padding: 12px; width: 230px;
+            }
+            .dark .user-sidebar { background: #1e293b; }
+            .user-sidebar.open { right: 0; display: flex !important; flex-direction: column; }
+        }
+        /* Toast */
+        .toast-msg { position: fixed; top: 16px; right: 16px; z-index: 200; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.15); transform: translateY(-20px); opacity: 0; transition: all .3s; color: #fff; }
+        .toast-msg.show { transform: translateY(0); opacity: 1; }
+        .toast-msg.ok { background: #10b981; }
+        .toast-msg.err { background: #ef4444; }
+        .toast-msg.info { background: #3b82f6; }
+        /* Cell type icons */
+        .cell-type-icon { font-size: 14px; opacity: .6; }
+    </style>
 </head>
 <body class="font-sans text-slate-800 bg-slate-100 dark:bg-slate-900 dark:text-slate-100">
     <div class="relative min-h-screen md:flex">
-        <!-- Mobile menu backdrop -->
         <div id="sidebar-backdrop" class="hidden md:hidden fixed inset-0 bg-black opacity-50 z-40"></div>
-
-        <!-- Sidebar -->
+        <!-- Sidebar nav -->
         <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition duration-200 ease-in-out z-50 flex flex-col">
             <div class="h-16 flex items-center justify-center border-b border-slate-700">
                 <i class="fa-solid fa-cubes-stacked mr-3 text-2xl text-blue-400"></i>
                 <h1 class="text-xl font-bold">IT-AMS</h1>
             </div>
             <nav class="flex-1 px-2 space-y-2">
-                <a href="assets.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-boxes-stacked sidebar-icon"></i><span class="ml-4">Kho tài sản</span>
-                </a>
-                <a href="licenses.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-key sidebar-icon"></i><span class="ml-4">Quản lý License</span>
-                </a>
-                <a href="index.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-chart-simple sidebar-icon"></i><span class="ml-4">Dashboard</span>
-                </a>
-                <a href="users.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-users sidebar-icon"></i><span class="ml-4">Người dùng</span>
-                </a>
-                <a href="seating.html" class="nav-link flex items-center px-4 py-2.5 text-slate-100 bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-chair sidebar-icon"></i><span class="ml-4">Sắp xếp chỗ ngồi</span>
-                </a>
-                <a href="settings.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-gear sidebar-icon"></i><span class="ml-4">Cài đặt</span>
-                </a>
+                <a href="assets.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg"><i class="fa-solid fa-boxes-stacked sidebar-icon"></i><span class="ml-4">Kho tài sản</span></a>
+                <a href="licenses.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg"><i class="fa-solid fa-key sidebar-icon"></i><span class="ml-4">Quản lý License</span></a>
+                <a href="index.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg"><i class="fa-solid fa-chart-simple sidebar-icon"></i><span class="ml-4">Dashboard</span></a>
+                <a href="users.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg"><i class="fa-solid fa-users sidebar-icon"></i><span class="ml-4">Người dùng</span></a>
+                <a href="seating.html" class="nav-link flex items-center px-4 py-2.5 text-slate-100 bg-slate-700 rounded-lg"><i class="fa-solid fa-chair sidebar-icon"></i><span class="ml-4">Sơ đồ vị trí</span></a>
+                <a href="settings.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg"><i class="fa-solid fa-gear sidebar-icon"></i><span class="ml-4">Cài đặt</span></a>
             </nav>
         </aside>
 
         <div class="flex-1 flex flex-col">
-            <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-6">
-                <!-- Mobile menu button -->
-                <button id="hamburger-button" class="md:hidden text-slate-500 focus:outline-none">
-                    <i class="fa-solid fa-bars text-2xl"></i>
-                </button>
-
-                <div class="flex items-center gap-4">
-                    <h2 class="text-xl font-bold text-slate-800 dark:text-gray-200">Sắp xếp chỗ ngồi</h2>
-                </div>
+            <!-- Header -->
+            <header class="h-14 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 flex-shrink-0">
                 <div class="flex items-center gap-3">
-                    <select id="colorFilter" class="px-3 py-2 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
-                        <option value="">Tất cả màu</option>
-                    </select>
-                    <input type="file" id="importExcelInput" class="hidden" accept=".xlsx, .xls">
-                    <button id="importExcelBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2">
-                        <i class="fa-solid fa-file-import"></i>
-                        <span class="hidden md:inline">Import Excel</span>
-                    </button>
-                    <button id="exportExcelBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2">
-                        <i class="fa-solid fa-file-export"></i>
-                        <span class="hidden md:inline">Export Excel</span>
-                    </button>
-                    <button id="addRowBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2">
-                        <i class="fa-solid fa-plus"></i>
-                        <span class="hidden md:inline">Thêm hàng</span>
-                    </button>
-                    <button id="addColBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2">
-                        <i class="fa-solid fa-plus"></i>
-                        <span class="hidden md:inline">Thêm cột</span>
-                    </button>
+                    <button id="hamburger-button" class="md:hidden text-slate-500"><i class="fa-solid fa-bars text-xl"></i></button>
+                    <h2 class="text-base font-bold dark:text-gray-200"><i class="fa-solid fa-chair text-blue-500 mr-1"></i>Sơ đồ vị trí nhân sự</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="toggleUserSidebar" class="tb lg:hidden" title="DS nhân sự"><i class="fa-solid fa-users"></i></button>
+                    <input type="file" id="importExcelInput" class="hidden" accept=".xlsx,.xls">
+                    <button id="importExcelBtn" class="tb success"><i class="fa-solid fa-file-import"></i><span class="hidden sm:inline">Nhập Excel</span></button>
+                    <button id="exportExcelBtn" class="tb primary"><i class="fa-solid fa-file-export"></i><span class="hidden sm:inline">Xuất Excel</span></button>
+                    <button id="saveBtn" class="tb" title="Lưu (Ctrl+S)"><i class="fa-solid fa-floppy-disk"></i><span class="hidden sm:inline">Lưu</span></button>
                 </div>
             </header>
 
-            <main class="flex-1 p-6 overflow-auto bg-slate-50 dark:bg-slate-900">
-                <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
-                    <div class="mb-4 flex items-center gap-4 flex-wrap">
-                        <label class="text-sm font-semibold dark:text-gray-200">Số hàng:</label>
-                        <input type="number" id="rowsInput" min="1" max="20" value="5" class="w-20 px-3 py-1 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
-                        <label class="text-sm font-semibold dark:text-gray-200">Số cột:</label>
-                        <input type="number" id="colsInput" min="1" max="20" value="6" class="w-20 px-3 py-1 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
-                        <button id="applyGridBtn" class="px-4 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded">Áp dụng</button>
-                        <button id="manageColorsBtn" class="px-4 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded flex items-center gap-2">
-                            <i class="fa-solid fa-palette"></i>
-                            <span>Quản lý màu</span>
-                        </button>
-                        <button id="mergeCellsBtn" class="px-4 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded flex items-center gap-2">
-                            <i class="fa-solid fa-object-group"></i>
-                            <span>Merge Cells</span>
-                        </button>
-                        <button id="unmergeCellsBtn" class="px-4 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded flex items-center gap-2">
-                            <i class="fa-solid fa-object-ungroup"></i>
-                            <span>Unmerge</span>
-                        </button>
+            <main class="flex-1 flex overflow-hidden">
+                <!-- Main grid area -->
+                <div class="flex-1 flex flex-col p-3 overflow-hidden min-w-0">
+                    <!-- Toolbar: Grid -->
+                    <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
+                        <label class="text-[11px] font-semibold dark:text-gray-300">Hàng:</label>
+                        <input type="number" id="rowsInput" min="1" max="50" value="10" class="w-12 px-1 py-0.5 text-[11px] border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                        <label class="text-[11px] font-semibold dark:text-gray-300">Cột:</label>
+                        <input type="number" id="colsInput" min="1" max="50" value="12" class="w-12 px-1 py-0.5 text-[11px] border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                        <button id="applyGridBtn" class="tb primary"><i class="fa-solid fa-check"></i></button>
+                        <div class="tb-sep"></div>
+                        <button id="addRowBtn" class="tb" title="Thêm hàng cuối"><i class="fa-solid fa-plus"></i>H</button>
+                        <button id="addColBtn" class="tb" title="Thêm cột cuối"><i class="fa-solid fa-plus"></i>C</button>
+                        <button id="insertRowBtn" class="tb" title="Chèn hàng phía trên ô đã chọn"><i class="fa-solid fa-arrow-up"></i><i class="fa-solid fa-plus" style="font-size:7px;margin-left:1px;"></i></button>
+                        <button id="insertColBtn" class="tb" title="Chèn cột bên trái ô đã chọn"><i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-plus" style="font-size:7px;margin-left:1px;"></i></button>
+                        <button id="delRowBtn" class="tb" title="Xóa hàng cuối"><i class="fa-solid fa-minus"></i>H</button>
+                        <button id="delColBtn" class="tb" title="Xóa cột cuối"><i class="fa-solid fa-minus"></i>C</button>
+                        <div class="tb-sep"></div>
+                        <button id="mergeCellsBtn" class="tb" title="Gộp ô"><i class="fa-solid fa-object-group"></i><span class="hidden md:inline">Gộp ô</span></button>
+                        <button id="unmergeCellsBtn" class="tb" title="Tách ô"><i class="fa-solid fa-object-ungroup"></i><span class="hidden md:inline">Tách ô</span></button>
+                        <div class="tb-sep"></div>
+                        <button id="copyColBtn" class="tb" title="Copy cột đã chọn (chỉ copy ô trống/nhãn, bỏ qua ô có người)"><i class="fa-solid fa-copy"></i><span class="hidden md:inline">Copy cột</span></button>
+                        <div class="tb-sep"></div>
+                        <button id="clearAllBtn" class="tb danger" title="Xóa tất cả"><i class="fa-solid fa-trash"></i><span class="hidden md:inline">Xóa hết</span></button>
                     </div>
-                    
-                    <div id="seatingGrid" class="grid gap-3 p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg min-h-[400px] bg-slate-50 dark:bg-slate-800/50">
-                        <!-- Grid sẽ được tạo động bằng JavaScript -->
+                    <!-- Toolbar: Paint -->
+                    <div class="flex items-center gap-1.5 flex-wrap mb-2">
+                        <span class="text-[11px] font-semibold dark:text-gray-300"><i class="fa-solid fa-palette mr-0.5"></i>Tô màu:</span>
+                        <div id="colorPalette" class="flex items-center gap-1 flex-wrap"></div>
+                        <input type="color" id="customColor" class="w-6 h-6 rounded cursor-pointer border-0 p-0" value="#94a3b8" title="Màu tùy chỉnh">
+                        <button id="eraserBtn" class="tb" title="Xóa màu"><i class="fa-solid fa-eraser"></i></button>
+                        <div class="tb-sep"></div>
+                        <span class="text-[11px] font-semibold dark:text-gray-300">Nhãn:</span>
+                        <select id="cellTypeSelect" class="px-1.5 py-0.5 text-[11px] border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                            <option value="">-- Không --</option>
+                            <option value="pillar">🔲 Cột trụ</option>
+                            <option value="room">🚪 Phòng</option>
+                            <option value="entrance">🚶 Lối vào</option>
+                            <option value="pathway">➡️ Lối đi</option>
+                            <option value="label">🏷️ Nhãn</option>
+                            <option value="wall">🧱 Tường</option>
+                            <option value="empty">⬜ Trống</option>
+                        </select>
+                        <input type="text" id="cellLabelInput" class="w-24 px-1.5 py-0.5 text-[11px] border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="Nội dung...">
+                        <button id="applyLabelBtn" class="tb" title="Gán nhãn"><i class="fa-solid fa-tag"></i>Gán</button>
+                        <button id="clearLabelBtn" class="tb" title="Xóa nhãn"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <!-- Grid -->
+                    <div class="seating-grid-wrapper flex-1 bg-white dark:bg-slate-800 rounded-lg shadow border border-slate-200 dark:border-slate-700 p-2">
+                        <div id="seatingGrid" class="seating-grid"></div>
+                    </div>
+                    <!-- Legend -->
+                    <div id="legendBar" class="mt-1.5 flex items-center gap-2 flex-wrap text-[11px]">
+                        <span class="font-semibold dark:text-gray-300">Chú thích:</span>
+                        <div id="legendItems" class="flex items-center gap-2 flex-wrap"></div>
+                    </div>
+                </div>
+
+                <!-- User sidebar -->
+                <div id="userSidebar" class="user-sidebar bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 p-2.5 flex flex-col overflow-hidden" style="max-height: calc(100vh - 56px);">
+                    <div class="flex items-center justify-between mb-2 flex-shrink-0">
+                        <h3 class="text-xs font-bold dark:text-gray-200"><i class="fa-solid fa-users mr-1 text-blue-500"></i>Nhân sự <span id="userCount" class="font-normal text-slate-400 ml-1">(0)</span></h3>
+                        <div class="flex items-center gap-1">
+                            <button id="refreshUsersBtn" class="text-slate-400 hover:text-blue-500 transition-colors" title="Tải lại DS nhân sự"><i class="fa-solid fa-arrows-rotate text-xs"></i></button>
+                            <a href="users.html" class="text-slate-400 hover:text-green-500 transition-colors" title="Mở module Người dùng"><i class="fa-solid fa-external-link text-xs"></i></a>
+                            <button id="closeSidebarBtn" class="lg:hidden text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </div>
+                    <input type="text" id="userSearch" class="w-full px-2 py-1 text-[11px] border rounded mb-1.5 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 flex-shrink-0" placeholder="Tìm nhân sự...">
+                    <select id="userDeptFilter" class="w-full px-2 py-1 text-[11px] border rounded mb-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 flex-shrink-0">
+                        <option value="">-- Tất cả phòng ban --</option>
+                    </select>
+                    <div id="userList" class="flex-1 overflow-y-auto space-y-1 min-h-0"></div>
+                    <div class="mt-2 pt-1.5 border-t border-slate-200 dark:border-slate-700 text-[10px] text-slate-400 flex-shrink-0">
+                        <i class="fa-solid fa-info-circle mr-1"></i>Kéo thả nhân sự vào ô trống
                     </div>
                 </div>
             </main>
         </div>
     </div>
 
-    <!-- Modal: Thêm/Chỉnh sửa người -->
-    <div id="personModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm" onclick="handleModalBackdropClick(event)">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative border dark:border-slate-700" onclick="event.stopPropagation()">
-            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><i class="fa-solid fa-times text-2xl"></i></button>
-            <h3 id="personModalTitle" class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700">Thêm người</h3>
-            <form id="personForm" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Tên</label>
-                    <div class="relative">
-                        <input type="text" id="personName" autocomplete="off" class="w-full border-2 border-slate-300 dark:border-slate-600 rounded-lg p-2.5 pr-8 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-gray-200 transition-all" placeholder="Tìm kiếm tên..." required>
-                        <button type="button" id="clearNameBtn" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1">
-                            <i class="fa-solid fa-times"></i>
-                        </button>
-                        <div id="nameDropdown" class="hidden absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border-2 border-slate-300 dark:border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto"></div>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Phòng ban</label>
-                    <div class="relative">
-                        <input type="text" id="personDepartment" autocomplete="off" class="w-full border-2 border-slate-300 dark:border-slate-600 rounded-lg p-2.5 pr-8 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-gray-200 transition-all" placeholder="Tìm kiếm phòng ban...">
-                        <button type="button" id="clearDeptBtn" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1">
-                            <i class="fa-solid fa-times"></i>
-                        </button>
-                        <div id="deptDropdown" class="hidden absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border-2 border-slate-300 dark:border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto"></div>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Màu vị trí</label>
-                    <div class="flex gap-2 flex-wrap">
-                        <input type="color" id="personColor" value="#94a3b8" class="w-16 h-10 rounded border-2 border-slate-300 dark:border-slate-600 cursor-pointer">
-                        <select id="colorPreset" class="flex-1 border-2 border-slate-300 dark:border-slate-600 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-gray-200 transition-all">
-                            <option value="">Chọn màu mặc định...</option>
-                        </select>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ghi chú</label>
-                    <textarea id="personNotes" rows="3" class="w-full border-2 border-slate-300 dark:border-slate-600 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-gray-200 transition-all"></textarea>
-                </div>
-                <div class="flex justify-end gap-3 pt-2 border-t dark:border-slate-700">
-                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-200">Hủy</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Lưu</button>
+    <!-- Edit modal -->
+    <div id="editModal" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-5 border dark:border-slate-700" onclick="event.stopPropagation()">
+            <button id="closeEditModal" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+            <h3 id="editModalTitle" class="text-base font-bold mb-4 dark:text-gray-200">Chỉnh sửa</h3>
+            <form id="editForm" class="space-y-3">
+                <div><label class="block text-xs font-semibold mb-1 dark:text-gray-200">Tên</label><input type="text" id="editName" class="w-full border rounded-lg p-2 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="Tên nhân sự..."></div>
+                <div><label class="block text-xs font-semibold mb-1 dark:text-gray-200">Phòng ban</label><input type="text" id="editDept" class="w-full border rounded-lg p-2 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="Phòng ban..."></div>
+                <div><label class="block text-xs font-semibold mb-1 dark:text-gray-200">Ghi chú</label><input type="text" id="editNotes" class="w-full border rounded-lg p-2 text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="Ghi chú..."></div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" id="editCancelBtn" class="tb">Hủy</button>
+                    <button type="submit" class="tb primary">Lưu</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Quản lý màu -->
-    <div id="colorManageModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm" onclick="handleModalBackdropClick(event)">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl p-6 relative border dark:border-slate-700 max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
-            <button class="close-color-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><i class="fa-solid fa-times text-2xl"></i></button>
-            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700">Quản lý màu phòng ban</h3>
-            <div id="colorManageList" class="space-y-3">
-                <!-- Sẽ được render bằng JS -->
-            </div>
-            <div class="flex justify-end gap-3 pt-4 border-t dark:border-slate-700 mt-4">
-                <button class="close-color-modal px-4 py-2 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-200">Đóng</button>
+    <!-- Alert modal -->
+    <div id="alertModal" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-5 border dark:border-slate-700">
+            <h3 id="alertTitle" class="text-base font-bold mb-3 dark:text-gray-200">Thông báo</h3>
+            <p id="alertMessage" class="text-slate-700 dark:text-gray-300 mb-4 text-sm whitespace-pre-line"></p>
+            <div id="alertActions" class="flex justify-end gap-2">
+                <button id="alertCancel" class="tb hidden">Hủy</button>
+                <button id="alertOk" class="tb primary">OK</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Confirm/Alert thay thế alert/confirm -->
-    <div id="confirmModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative border dark:border-slate-700">
-            <h3 id="confirmModalTitle" class="text-xl font-bold mb-4 dark:text-gray-200">Xác nhận</h3>
-            <p id="confirmModalMessage" class="text-slate-700 dark:text-gray-300 mb-6"></p>
-            <div class="flex justify-end gap-3">
-                <button id="confirmModalCancel" class="px-4 py-2 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-200">Hủy</button>
-                <button id="confirmModalOk" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Xác nhận</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Alert thay thế alert -->
-    <div id="alertModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative border dark:border-slate-700">
-            <h3 id="alertModalTitle" class="text-xl font-bold mb-4 dark:text-gray-200">Thông báo</h3>
-            <p id="alertModalMessage" class="text-slate-700 dark:text-gray-300 mb-6"></p>
-            <div class="flex justify-end">
-                <button id="alertModalOk" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Đóng</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Load config và auth (optional - seating vẫn hoạt động nếu không có) -->
-    <script src="config.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/auth.js"></script>
     <script src="js/seating.js"></script>
 </body>
 </html>

@@ -1,11 +1,42 @@
-// auth.js phải được load trước script.js trong file HTML
-// auth.js sẽ xử lý việc kiểm tra session và chuyển hướng nếu chưa đăng nhập.
+// LocalDB mode - No authentication required
+// Use LocalDB instead of Supabase for all data operations
+let supabaseClient = null; // Will be set after LocalDB loads
+let currentUserProfile = { role: 'admin', full_name: 'Admin' }; // Default admin user for local mode
+let remoteSupabaseClient = null;
+let hasAttemptedAutoRestore = false;
+
 document.addEventListener('DOMContentLoaded', async () => {
-    // Gọi checkSession từ auth.js để đảm bảo người dùng đã đăng nhập.
-    // Nếu chưa, họ sẽ bị chuyển hướng sang login.html.
-    // currentUserProfile sẽ được gán giá trị trong hàm checkSession()
-    await checkSession();
-    if (!currentUserProfile) return; // Dừng thực thi nếu không có session (đang chuyển hướng)
+    // Initialize supabaseClient with LocalDB
+    supabaseClient = window.LocalDB;
+    
+    if (!supabaseClient) {
+        console.error('LocalDB not loaded!');
+        alert('Lỗi: LocalDB chưa được load. Vui lòng refresh trang.');
+        return;
+    }
+    
+    console.log('LocalDB initialized:', supabaseClient);
+    
+    // No authentication check - direct access
+    // =================================================================
+    // EXPORT TO EXCEL FUNCTION
+    // =================================================================
+    window.exportToExcel = function(data, filename) {
+        if (!data || data.length === 0) {
+            alert('Không có dữ liệu để xuất!');
+            return;
+        }
+        try {
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+            XLSX.writeFile(wb, filename);
+        } catch (error) {
+            console.error('Lỗi khi xuất Excel:', error);
+            alert('Có lỗi khi xuất file Excel: ' + error.message);
+        }
+    };
+
     // =================================================================
     // LOGIC FOR MOBILE SIDEBAR TOGGLE
     // =================================================================
@@ -69,6 +100,186 @@ document.addEventListener('DOMContentLoaded', async () => {
         showInfoModal(`Chi tiết: ${msg}`, `Lỗi khi ${context}`);
     }
 
+    function getRemoteSupabaseClient() {
+        if (remoteSupabaseClient) return remoteSupabaseClient;
+        const cfg = window.__APP_CONFIG__ || {};
+        if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || typeof supabase === 'undefined') {
+            return null;
+        }
+        try {
+            remoteSupabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false,
+                    detectSessionInUrl: false
+                }
+            });
+            return remoteSupabaseClient;
+        } catch (e) {
+            console.warn('Cannot initialize remote Supabase client for auto-restore:', e);
+            return null;
+        }
+    }
+
+    function safeArrayParse(raw) {
+        try {
+            const parsed = JSON.parse(raw || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function isLikelyDemoDataSnapshot(assetRows, userRows) {
+        if (!Array.isArray(assetRows) || !Array.isArray(userRows)) return false;
+        if (assetRows.length === 0) return false;
+        if (assetRows.length > 3 || userRows.length > 3) return false;
+
+        const normalized = (v) => (v || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const assetNames = assetRows.map((a) => normalized(a?.name));
+        const userNames = userRows.map((u) => normalized(u?.name));
+
+        const hasDemoAssets = assetNames.includes('laptop dell xps 13') || assetNames.includes('monitor lg 27"');
+        const hasDemoUsers = userNames.includes('nguyen van a') || userNames.includes('tran thi b');
+
+        return hasDemoAssets && hasDemoUsers;
+    }
+
+    async function autoRestoreFromSupabaseIfNeeded() {
+        if (hasAttemptedAutoRestore) return;
+        hasAttemptedAutoRestore = true;
+
+        const localAssets = safeArrayParse(localStorage.getItem(LocalDB.KEYS.ASSETS));
+        const localLicenses = safeArrayParse(localStorage.getItem(LocalDB.KEYS.LICENSES));
+        const localUsers = safeArrayParse(localStorage.getItem(LocalDB.KEYS.USERS));
+
+        const localEmpty = localAssets.length === 0 && localLicenses.length === 0;
+        const localLooksDemo = isLikelyDemoDataSnapshot(localAssets, localUsers);
+
+        if (!localEmpty && !localLooksDemo) {
+            return;
+        }
+
+        const remote = getRemoteSupabaseClient();
+        if (!remote) {
+            console.warn('Auto-restore skipped: Supabase config/sdk not available');
+            return;
+        }
+
+        try {
+            const [
+                deptRes,
+                catRes,
+                userRes,
+                assetRes,
+                licenseRes,
+                historyRes,
+                licenseTypeRes,
+                maintenanceTaskRes,
+                maintenanceEventRes,
+                stockCheckRes,
+                stockCheckItemRes,
+                alertSettingRes
+            ] = await Promise.all([
+                remote.from('departments').select('*'),
+                remote.from('categories').select('*'),
+                remote.from('users').select('*'),
+                remote.from('assets').select('*'),
+                remote.from('licenses').select('*'),
+                remote.from('asset_history').select('*'),
+                remote.from('license_types').select('*'),
+                remote.from('maintenance_tasks').select('*'),
+                remote.from('maintenance_events').select('*'),
+                remote.from('stock_checks').select('*'),
+                remote.from('stock_check_items').select('*'),
+                remote.from('alert_settings').select('*')
+            ]);
+
+            const hasRemoteError = [deptRes, catRes, userRes, assetRes, licenseRes].some((x) => x?.error);
+            if (hasRemoteError) {
+                console.warn('Auto-restore failed due to Supabase error:', {
+                    departments: deptRes?.error,
+                    categories: catRes?.error,
+                    users: userRes?.error,
+                    assets: assetRes?.error,
+                    licenses: licenseRes?.error
+                });
+                return;
+            }
+
+            const departmentsRemote = Array.isArray(deptRes?.data) ? deptRes.data : [];
+            const categoriesRemote = Array.isArray(catRes?.data) ? catRes.data : [];
+            const usersRemote = Array.isArray(userRes?.data) ? userRes.data : [];
+            const assetsRemote = Array.isArray(assetRes?.data) ? assetRes.data : [];
+            const licensesRemote = Array.isArray(licenseRes?.data) ? licenseRes.data : [];
+
+            const hasAnyRemoteData =
+                departmentsRemote.length > 0 ||
+                categoriesRemote.length > 0 ||
+                usersRemote.length > 0 ||
+                assetsRemote.length > 0 ||
+                licensesRemote.length > 0;
+
+            if (!hasAnyRemoteData) {
+                console.warn('Auto-restore skipped: Supabase returned empty data');
+                return;
+            }
+
+            let licenseTypesRemote = Array.isArray(licenseTypeRes?.data) ? licenseTypeRes.data : [];
+            if (licenseTypesRemote.length === 0) {
+                const names = [...new Set(licensesRemote.map((l) => (l?.key_type || '').toString().trim()).filter(Boolean))];
+                licenseTypesRemote = names.map((name, index) => ({ id: index + 1, name }));
+            }
+
+            const cleanRows = (rows) => rows.map((row) => {
+                const cloned = { ...row };
+                delete cloned.department;
+                delete cloned.category;
+                delete cloned.user;
+                delete cloned.asset;
+                return cloned;
+            });
+
+            localStorage.setItem(LocalDB.KEYS.DEPARTMENTS, JSON.stringify(cleanRows(departmentsRemote)));
+            localStorage.setItem(LocalDB.KEYS.CATEGORIES, JSON.stringify(cleanRows(categoriesRemote)));
+            localStorage.setItem(LocalDB.KEYS.USERS, JSON.stringify(cleanRows(usersRemote)));
+            localStorage.setItem(LocalDB.KEYS.ASSETS, JSON.stringify(cleanRows(assetsRemote)));
+            localStorage.setItem(LocalDB.KEYS.LICENSES, JSON.stringify(cleanRows(licensesRemote)));
+            localStorage.setItem(LocalDB.KEYS.ASSET_HISTORY, JSON.stringify(cleanRows(Array.isArray(historyRes?.data) ? historyRes.data : [])));
+            localStorage.setItem(LocalDB.KEYS.LICENSE_TYPES, JSON.stringify(cleanRows(licenseTypesRemote)));
+            localStorage.setItem(LocalDB.KEYS.MAINTENANCE_TASKS, JSON.stringify(cleanRows(Array.isArray(maintenanceTaskRes?.data) ? maintenanceTaskRes.data : [])));
+            localStorage.setItem(LocalDB.KEYS.MAINTENANCE_EVENTS, JSON.stringify(cleanRows(Array.isArray(maintenanceEventRes?.data) ? maintenanceEventRes.data : [])));
+            localStorage.setItem(LocalDB.KEYS.STOCK_CHECKS, JSON.stringify(cleanRows(Array.isArray(stockCheckRes?.data) ? stockCheckRes.data : [])));
+            localStorage.setItem(LocalDB.KEYS.STOCK_CHECK_ITEMS, JSON.stringify(cleanRows(Array.isArray(stockCheckItemRes?.data) ? stockCheckItemRes.data : [])));
+            localStorage.setItem(LocalDB.KEYS.ALERT_SETTINGS, JSON.stringify(cleanRows(Array.isArray(alertSettingRes?.data) ? alertSettingRes.data : [])));
+
+            const maxId = (rows) => (rows.length ? Math.max(...rows.map((x) => Number(x?.id) || 0)) : 0);
+            localStorage.setItem(LocalDB.KEYS.COUNTER, JSON.stringify({
+                assets: maxId(assetsRemote) + 1,
+                licenses: maxId(licensesRemote) + 1,
+                users: maxId(usersRemote) + 1,
+                departments: maxId(departmentsRemote) + 1,
+                categories: maxId(categoriesRemote) + 1,
+                license_types: maxId(licenseTypesRemote) + 1,
+                asset_history: maxId(Array.isArray(historyRes?.data) ? historyRes.data : []) + 1,
+                maintenance_tasks: maxId(Array.isArray(maintenanceTaskRes?.data) ? maintenanceTaskRes.data : []) + 1,
+                maintenance_events: maxId(Array.isArray(maintenanceEventRes?.data) ? maintenanceEventRes.data : []) + 1,
+                stock_checks: maxId(Array.isArray(stockCheckRes?.data) ? stockCheckRes.data : []) + 1,
+                stock_check_items: maxId(Array.isArray(stockCheckItemRes?.data) ? stockCheckItemRes.data : []) + 1,
+                alert_settings: maxId(Array.isArray(alertSettingRes?.data) ? alertSettingRes.data : []) + 1
+            }));
+
+            localStorage.setItem('qlts_seed_v2', '1');
+            localStorage.setItem('qlts_migrated_from_legacy_v1', '1');
+            localStorage.setItem('qlts_last_remote_restore_at', new Date().toISOString());
+
+            console.log('Auto-restore success: restored data from Supabase to localStorage');
+            showInfoModal('Đã tự khôi phục dữ liệu từ Supabase.', 'Khôi phục dữ liệu');
+        } catch (error) {
+            console.warn('Auto-restore failed:', error);
+        }
+    }
+
     // --- Data Stores ---
     let assets = [], licenses = [], assetHistory = [], categories = [], users = [], departments = [], licenseTypes = [];
     let maintenanceTasks = [], maintenanceEvents = [], stockChecks = [], stockCheckItems = [], alertSettings = [];
@@ -80,6 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let confirmCallback = null;
     let assetCurrentPage = 1, userCurrentPage = 1, licenseCurrentPage = 1;
     const ITEMS_PER_PAGE = 10;
+    let hasBootstrappedLocalData = false;
 
     // --- Filtered Data Buffers ---
     let currentFilteredAssets = [], currentFilteredUsers = [], currentFilteredLicenses = [];
@@ -120,99 +332,125 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =================================================================
 
     async function fetchAllData() {
-        // Run queries in parallel but check errors for each result. If Supabase is unavailable or returns an error
-        // we log it and fall back to localStorage where possible so the UI still shows data.
-        const [deptRes, catRes, userRes, assetRes, licenseRes, historyRes, licTypeRes, maintenanceTaskRes, maintenanceEventRes, stockCheckRes, stockCheckItemRes, alertSettingRes] = await Promise.all([
-            supabaseClient.from('departments').select('*'),
-            supabaseClient.from('categories').select('*'),
-            supabaseClient.from('users').select('*, department:departments(name)'),
-            supabaseClient.from('assets').select('*, category:categories(name), user:users(name)'),
-            supabaseClient.from('licenses').select('*, user:users(name)'),
-            // ensure order so created_at nulls don't break chronology
-            supabaseClient.from('asset_history').select('*, asset:assets(name)').order('id', { ascending: false }),
-            supabaseClient.from('license_types').select('*'),
-            supabaseClient.from('maintenance_tasks').select('*'),
-            supabaseClient.from('maintenance_events').select('*'),
-            supabaseClient.from('stock_checks').select('*'),
-            supabaseClient.from('stock_check_items').select('*'),
-            supabaseClient.from('alert_settings').select('*')
-        ]).catch(err => {
-            console.error('fetchAllData: Promise.all failed', err);
-            return [ { error: err }, {}, {}, { error: err }, { error: err }, {}, {}, {}, {}, {}, {}, {} ];
+        console.log('fetchAllData() called');
+        // Fetch all data from LocalDB
+        const [deptData, catData, userData, assetData, licenseData, historyData, licTypeData, maintenanceTaskData, maintenanceEventData, stockCheckData, stockCheckItemData, alertSettingData] = await Promise.all([
+            LocalDB.from('departments').select('*'),
+            LocalDB.from('categories').select('*'),
+            LocalDB.from('users').select('*'),
+            LocalDB.from('assets').select('*'),
+            LocalDB.from('licenses').select('*'),
+            LocalDB.from('asset_history').select('*'),
+            LocalDB.from('license_types').select('*'),
+            LocalDB.from('maintenance_tasks').select('*'),
+            LocalDB.from('maintenance_events').select('*'),
+            LocalDB.from('stock_checks').select('*'),
+            LocalDB.from('stock_check_items').select('*'),
+            LocalDB.from('alert_settings').select('*')
+        ]);
+
+        console.log('Raw data from LocalDB:', {
+            departments: deptData?.data?.length,
+            categories: catData?.data?.length,
+            users: userData?.data?.length,
+            assets: assetData?.data?.length,
+            licenses: licenseData?.data?.length
         });
 
-        // Helper to handle response errors
-        const handleResp = (resp, name) => {
-            if (!resp) return false;
-            if (resp.error) {
-                console.error(`Supabase error on ${name}:`, resp.error);
-                try { handleSupabaseError(resp.error, `fetch ${name}`); } catch (e) { console.warn('handleSupabaseError failed', e); }
-                return false;
-            }
-            return true;
-        };
+        const needsBootstrap =
+            (deptData?.data?.length || 0) === 0 &&
+            (catData?.data?.length || 0) === 0 &&
+            (userData?.data?.length || 0) === 0;
 
-        if (handleResp(deptRes, 'departments') && deptRes.data) departments = deptRes.data;
-        if (handleResp(catRes, 'categories') && catRes.data) categories = catRes.data;
-        if (handleResp(licTypeRes, 'license_types') && licTypeRes.data) licenseTypes = licTypeRes.data;
-        if (handleResp(userRes, 'users') && userRes.data) users = userRes.data.map(u => ({ ...u, department: u.department?.name || '-' }));
-        if (handleResp(maintenanceTaskRes, 'maintenance_tasks') && maintenanceTaskRes.data) maintenanceTasks = maintenanceTaskRes.data;
-        if (handleResp(maintenanceEventRes, 'maintenance_events') && maintenanceEventRes.data) maintenanceEvents = maintenanceEventRes.data;
-        if (handleResp(stockCheckRes, 'stock_checks') && stockCheckRes.data) stockChecks = stockCheckRes.data;
-        if (handleResp(stockCheckItemRes, 'stock_check_items') && stockCheckItemRes.data) stockCheckItems = stockCheckItemRes.data;
-        if (handleResp(alertSettingRes, 'alert_settings') && alertSettingRes.data) alertSettings = alertSettingRes.data;
+        if (needsBootstrap && !hasBootstrappedLocalData) {
+            console.warn('Core LocalDB tables are empty. Bootstrapping default data...');
+            hasBootstrappedLocalData = true;
+            LocalDB.setDefaultData();
+            return fetchAllData();
+        }
 
-        // assets and licenses: if Supabase fails, try load from localStorage fallback
-        if (handleResp(assetRes, 'assets') && assetRes.data) {
-            assets = assetRes.data.map(a => ({
+        // Process departments
+        departments = deptData.data || [];
+        
+        // Process categories
+        categories = catData.data || [];
+        
+        // Process license types
+        licenseTypes = licTypeData.data || [];
+        
+        // Process users with department name join
+        const usersRaw = userData.data || [];
+        users = usersRaw.map(u => {
+            const dept = departments.find(d => d.id === u.department_id);
+            return {
+                ...u,
+                department: dept ? dept.name : '-'
+            };
+        });
+        
+        console.log('Processed users:', users.length, users);
+        
+        // Process assets with category and user name joins
+        const assetsRaw = assetData.data || [];
+        assets = assetsRaw.map(a => {
+            const cat = categories.find(c => c.id === a.category_id);
+            const usr = users.find(u => u.id === a.user_id);
+            return {
                 ...a,
-                category: a.category?.name || '-',
-                user: a.user?.name || null,
+                category: cat ? cat.name : '-',
+                user: usr ? usr.name : null,
                 warranty_expiration_date: a.warranty_expiration_date || null,
                 purchase_date: a.purchase_date || null,
                 cost: a.cost || null,
                 salvage_value: a.salvage_value || null,
                 useful_life_months: a.useful_life_months || null,
                 depreciation_method: a.depreciation_method || 'straight_line'
-            }));
-        } else {
-            try {
-                const stored = localStorage.getItem('it_assets_final');
-                if (stored) {
-                    assets = JSON.parse(stored).map(a => ({
-                        ...a,
-                        purchase_date: a.purchase_date || null,
-                        cost: a.cost || null,
-                        salvage_value: a.salvage_value || null,
-                        useful_life_months: a.useful_life_months || null,
-                        depreciation_method: a.depreciation_method || 'straight_line'
-                    }));
-                    console.warn('fetchAllData: loaded assets from localStorage fallback (it_assets_final)');
-                }
-            } catch (e) { console.warn('fetchAllData: failed to parse localStorage assets', e); }
-        }
-
-        if (handleResp(licenseRes, 'licenses') && licenseRes.data) {
-            licenses = licenseRes.data.map(l => ({ ...l, user: l.user?.name || null }));
-        } else {
-            try {
-                const stored = localStorage.getItem('it_licenses_final');
-                if (stored) {
-                    licenses = JSON.parse(stored);
-                    console.warn('fetchAllData: loaded licenses from localStorage fallback (it_licenses_final)');
-                }
-            } catch (e) { console.warn('fetchAllData: failed to parse localStorage licenses', e); }
-        }
-
-        if (handleResp(historyRes, 'asset_history') && historyRes.data) assetHistory = historyRes.data.map(l => ({
-            id: l.id,
-            created_at: l.created_at,
-            time: l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : '',
-            assetId: l.asset_id,
-            assetName: l.asset?.name || 'N/A',
-            action: l.action,
-            desc: l.description
-        }));
+            };
+        });
+        
+        console.log('Processed assets:', assets.length, assets);
+        
+        // Process licenses with user name join
+        const licensesRaw = licenseData.data || [];
+        licenses = licensesRaw.map(l => {
+            const usr = users.find(u => u.id === l.user_id);
+            return {
+                ...l,
+                user: usr ? usr.name : null
+            };
+        });
+        
+        console.log('Processed licenses:', licenses.length, licenses);
+        
+        // Process asset history with asset name join
+        const historyRaw = historyData.data || [];
+        assetHistory = historyRaw.map(h => {
+            const asset = assets.find(a => a.id === h.asset_id);
+            return {
+                id: h.id,
+                created_at: h.created_at,
+                time: h.created_at ? new Date(h.created_at).toLocaleString('vi-VN') : '',
+                assetId: h.asset_id,
+                assetName: asset ? asset.name : 'N/A',
+                action: h.action,
+                desc: h.description
+            };
+        });
+        
+        // Process other tables
+        maintenanceTasks = maintenanceTaskData.data || [];
+        maintenanceEvents = maintenanceEventData.data || [];
+        stockChecks = stockCheckData.data || [];
+        stockCheckItems = stockCheckItemData.data || [];
+        alertSettings = alertSettingData.data || [];
+        
+        console.log('fetchAllData() complete - Final counts:', {
+            departments: departments.length,
+            categories: categories.length,
+            users: users.length,
+            assets: assets.length,
+            licenses: licenses.length
+        });
     }
 
     function safeCloseModal(id) {
@@ -497,6 +735,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 3. Hàm hiển thị (ĐÃ CẬP NHẬT TỰ TÌM TÊN CỘT & HIỂN THỊ)
+    // Map trạng thái tiếng Việt → English key
+    const STATUS_REVERSE_MAP = {};
+    Object.entries(STATUS_MAP).forEach(([key, val]) => {
+        STATUS_REVERSE_MAP[normalizeString(val.text)] = key;
+    });
+
     function renderLicenseImportPreview(data) {
         const tbody = document.getElementById('licenseImportPreviewTableBody');
         tbody.innerHTML = '';
@@ -505,24 +749,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (data.length === 0) return;
 
         data.forEach(row => {
-            // --- MAPPING CỘT THÔNG MINH ---
-            const keyType = row['Loại key'] || row['Key Type'] || row['Type'] || '';
-            const licenseKey = row['Mã key'] || row['License Key'] || row['Key'] || row['Serial'] || '';
-            const packageType = row['Loại gói gia hạn'] || row['Package'] || row['Plan'] || '';
-            const rawDate = row['Ngày hết hạn'] || row['Expiration Date'] || row['Date'] || '';
+            // --- MAPPING CỘT: khớp với tên cột export ---
+            const keyType = row['Loại Key'] || row['Loại key'] || row['Key Type'] || row['Type'] || '';
+            const licenseKey = row['Mã Key'] || row['Mã key'] || row['License Key'] || row['Key'] || row['Serial'] || '';
+            const packageType = row['Gói'] || row['Loại gói gia hạn'] || row['Package'] || row['Plan'] || '';
+            const rawDate = row['Hạn SD'] || row['Ngày hết hạn'] || row['Expiration Date'] || row['Date'] || '';
+            const userName = row['Người dùng'] || row['Người sử dụng'] || row['User'] || row['Account'] || row['Name'] || row['Họ tên'] || row['Họ và tên'] || row['Nhân viên'] || '';
+            const rawStatus = row['Trạng thái'] || row['Status'] || '';
+            const notes = row['Ghi chú'] || row['Notes'] || '';
 
-            // SỬA LỖI TÊN: Bổ sung thêm "Họ và tên", "Nhân viên"... để bắt được cột trong Excel
-            const userName = row['Người sử dụng'] || row['Người dùng'] || row['User'] || row['Account'] || row['Name'] || row['Họ tên'] || row['Họ và tên'] || row['Nhân viên'] || '';
+            // Xử lý ngày: "Vĩnh viễn" → null, "Hạn dd/mm/yyyy" → strip prefix
+            let cleanDate = null;
+            const dateStr = rawDate.toString().trim();
+            if (!dateStr || normalizeString(dateStr) === 'vinh vien' || dateStr.toLowerCase() === 'permanent') {
+                cleanDate = null; // Vĩnh viễn / permanent → no expiration
+            } else {
+                // Strip "Hạn " prefix if present
+                const stripped = dateStr.replace(/^Hạn\s*/i, '').trim();
+                cleanDate = parseDateToISO(stripped);
+            }
 
-            const notes = row['Notes'] || row['Ghi chú'] || '';
-
-            // Xử lý dữ liệu ngày tháng
-            const cleanDate = parseDateToISO(rawDate);
-            const dateDisplay = cleanDate || '<span class="text-red-500 text-xs italic">Sai/Thiếu ngày</span>';
+            const dateDisplay = cleanDate
+                ? formatDateDisplay(cleanDate)
+                : (dateStr && normalizeString(dateStr) !== 'vinh vien' && dateStr.toLowerCase() !== 'permanent'
+                    ? '<span class="text-red-500 text-xs italic">Sai/Thiếu ngày</span>'
+                    : '<span class="text-slate-400 italic">Vĩnh viễn</span>');
 
             // Tìm user trong hệ thống
             const foundUser = users.find(u => normalizeString(u.name) === normalizeString(userName));
-            const status = foundUser ? 'Active' : 'Stock';
+
+            // Xác định status: ưu tiên cột Trạng thái từ Excel, fallback theo user
+            let status = 'Stock';
+            if (rawStatus) {
+                const mapped = STATUS_REVERSE_MAP[normalizeString(rawStatus)];
+                status = mapped || rawStatus; // Nếu đã là English key thì giữ nguyên
+                // Fallback: nếu vẫn là tiếng Việt, thử exact match
+                if (!STATUS_MAP[status]) {
+                    status = foundUser ? 'Active' : 'Stock';
+                }
+            } else {
+                status = foundUser ? 'Active' : 'Stock';
+            }
 
             let userDisplayHTML = '';
             let userClass = '';
@@ -531,15 +798,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 userDisplayHTML = foundUser.name;
                 userClass = 'text-green-600 font-bold';
             } else if (userName) {
-                userDisplayHTML = `${userName} (Không khớp)`;
-                userClass = 'text-red-400 italic';
+                userDisplayHTML = `${userName} <span class="text-xs">(Sẽ tạo mới)</span>`;
+                userClass = 'text-amber-600 font-semibold';
             } else {
-                // Nếu không có tên trong Excel, hiện chữ "Chưa phân bổ" thay vì dấu gạch ngang
                 userDisplayHTML = '<span class="text-slate-300 italic">Chưa phân bổ</span>';
                 userClass = 'text-slate-400';
             }
 
-            const statusClass = status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-sky-100 text-sky-700';
+            const statusText = STATUS_MAP[status]?.text || status;
+            const statusClass = status === 'Active' ? 'bg-green-100 text-green-700' : status === 'Stock' ? 'bg-sky-100 text-sky-700' : status === 'Expired' ? 'bg-gray-100 text-gray-500' : 'bg-slate-100 text-slate-600';
 
             tempImportedLicenses.push({
                 key_type: keyType,
@@ -547,6 +814,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 package_type: packageType,
                 expiration_date: cleanDate,
                 user_id: foundUser ? foundUser.id : null,
+                user: foundUser ? foundUser.name : (userName || ''),
                 status: status,
                 notes: notes
             });
@@ -559,7 +827,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="px-4 py-3 text-slate-600">${packageType}</td>
                 <td class="px-4 py-3 text-slate-600">${dateDisplay}</td>
                 <td class="px-4 py-3 ${userClass}">${userDisplayHTML}</td>
-                <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs ${statusClass}">${status}</span></td>
+                <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs ${statusClass}">${statusText}</span></td>
             `;
             tbody.appendChild(tr);
         });
@@ -570,7 +838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 4. Sự kiện nút Lưu
+    // 4. Sự kiện nút Lưu - Tự động tạo user mới nếu chưa có
     if (btnSaveImportedLicenses) {
         btnSaveImportedLicenses.addEventListener('click', async () => {
             if (tempImportedLicenses.length === 0) return;
@@ -579,10 +847,52 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnSaveImportedLicenses.disabled = true;
 
             try {
+                // Bước 1: Tìm các user chưa có trong hệ thống và tạo mới
+                const missingUserNames = [...new Set(
+                    tempImportedLicenses
+                        .filter(l => l.user && !l.user_id)
+                        .map(l => l.user)
+                )];
+
+                let newUsersCreated = 0;
+                for (const name of missingUserNames) {
+                    const payload = {
+                        name: name,
+                        email: '',
+                        department_id: null,
+                        status: 'Active',
+                        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`
+                    };
+                    const { error } = await supabaseClient.from('users').insert(payload);
+                    if (!error) newUsersCreated++;
+                }
+
+                // Bước 2: Reload users để lấy ID của user vừa tạo
+                if (newUsersCreated > 0) {
+                    const { data: freshUsers } = await supabaseClient.from('users').select();
+                    if (freshUsers) users = freshUsers;
+                }
+
+                // Bước 3: Gắn lại user_id và status cho các license có user mới tạo
+                tempImportedLicenses.forEach(lic => {
+                    if (lic.user && !lic.user_id) {
+                        const found = users.find(u => normalizeString(u.name) === normalizeString(lic.user));
+                        if (found) {
+                            lic.user_id = found.id;
+                            lic.user = found.name;
+                            if (lic.status === 'Stock') lic.status = 'Active';
+                        }
+                    }
+                });
+
+                // Bước 4: Insert licenses
                 const { error } = await supabaseClient.from('licenses').insert(tempImportedLicenses);
                 if (error) throw error;
 
-                showInfoModal(`Đã import thành công ${tempImportedLicenses.length} license!`, "Thành công");
+                const msg = newUsersCreated > 0
+                    ? `Đã import ${tempImportedLicenses.length} license và tạo mới ${newUsersCreated} user!`
+                    : `Đã import thành công ${tempImportedLicenses.length} license!`;
+                showInfoModal(msg, "Thành công");
                 safeCloseModal('importLicenseModal');
 
                 await fetchAllData();
@@ -604,6 +914,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Helper: Chuẩn hóa chuỗi để so sánh (Fix lỗi thiếu hàm này khi import)
     function normalizeString(str) {
         return str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
+    }
+
+    function getSingleChoiceValue(choicesInstance, elementId) {
+        const normalizeChoiceValue = (value) => {
+            if (value === null || value === undefined) return '';
+            const raw = typeof value === 'string' ? value : String(value);
+            const normalized = normalizeString(raw);
+            if (!normalized || normalized === 'tat ca nguoi dung' || normalized === 'all users') return '';
+            return raw;
+        };
+
+        if (choicesInstance) {
+            try {
+                const selectedValue = choicesInstance.getValue(true);
+                if (Array.isArray(selectedValue)) {
+                    return normalizeChoiceValue(selectedValue[0] || '');
+                }
+                return normalizeChoiceValue(selectedValue || '');
+            } catch (e) {}
+        }
+        return normalizeChoiceValue(document.getElementById(elementId)?.value || '');
+    }
+
+    function pinSingleChoiceRemoveButton(choicesInstance, elementId) {
+        if (!choicesInstance) return;
+        try {
+            const sourceElement = document.getElementById(elementId);
+            const choicesContainer = sourceElement?.nextElementSibling;
+            if (!choicesContainer || !choicesContainer.classList.contains('choices')) return;
+
+            const applyPosition = () => {
+                const selectedItem = choicesContainer.querySelector('.choices__list--single .choices__item');
+                const removeButton = choicesContainer.querySelector('.choices__list--single .choices__item .choices__button');
+
+                if (selectedItem) {
+                    selectedItem.style.position = 'relative';
+                    selectedItem.style.width = '100%';
+                    selectedItem.style.paddingRight = '2.2rem';
+                    selectedItem.style.overflow = 'visible';
+                }
+
+                if (removeButton) {
+                    removeButton.style.position = 'absolute';
+                    removeButton.style.top = '50%';
+                    removeButton.style.right = '-0.25rem';
+                    removeButton.style.left = 'auto';
+                    removeButton.style.marginLeft = '0';
+                    removeButton.style.transform = 'translateY(-50%)';
+                    removeButton.style.zIndex = '3';
+                }
+            };
+
+            applyPosition();
+            requestAnimationFrame(applyPosition);
+            setTimeout(applyPosition, 0);
+        } catch (e) {}
     }
 
     // Helper: try common fields to find a created/added date on a record
@@ -1150,22 +1516,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             placeholderValue: 'Chọn...',
             searchPlaceholderValue: 'Tìm kiếm...',
             shouldSort: false,
-            shouldOpen: false, // Ngăn dropdown tự động mở
             searchEnabled: true,
             itemSelectText: '',
-            position: 'bottom' // Đặt vị trí dropdown
+            position: 'bottom'
         });
         const choices = data.map(u => ({ value: u.name, label: u.name }));
         newInstance.setChoices(choices, 'value', 'label', true);
         if (selectedValue) newInstance.setChoiceByValue(selectedValue);
-        // Đóng dropdown ngay sau khi khởi tạo để đảm bảo không tự động mở
-        setTimeout(() => {
-            try {
-                if (newInstance && newInstance.dropdown) {
-                    newInstance.hideDropdown();
-                }
-            } catch (e) {}
-        }, 0);
         return newInstance;
     }
 
@@ -1237,45 +1594,46 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Try to initialize Choices for a compact, scrollable dropdown
             try {
                 // Preserve the current selected value before reinitializing
-                let currentSelectedValue = null;
-                if (filterAssetUserChoicesInstance) {
-                    try {
-                        const selectedValue = filterAssetUserChoicesInstance.getValue(true);
-                        if (selectedValue && selectedValue.length > 0) {
-                            currentSelectedValue = selectedValue[0];
-                        }
-                    } catch (e) {}
-                } else {
-                    // If Choices instance doesn't exist, get value from the element directly
-                    currentSelectedValue = filterAssetUser.value || null;
-                }
+                const currentSelectedValue = getSingleChoiceValue(filterAssetUserChoicesInstance, 'filterAssetUser');
                 const el = filterAssetUser;
                 if (filterAssetUserChoicesInstance) { try { filterAssetUserChoicesInstance.destroy(); } catch (e) { } }
                 filterAssetUserChoicesInstance = new Choices(el, { 
-                    removeItemButton: true, // Bật nút X để xóa selection
+                    removeItemButton: true,
                     maxItemCount: 1, 
                     placeholder: true, 
-                    placeholderValue: 'Chọn...', 
-                    searchPlaceholderValue: 'Tìm kiếm...', 
+                    placeholderValue: 'Tất cả người dùng', 
+                    searchPlaceholderValue: 'Tìm người dùng...', 
                     shouldSort: false,
-                    shouldOpen: false, // Ngăn dropdown tự động mở
                     searchEnabled: true,
                     itemSelectText: '',
                     callbackOnInit: function() {
-                        // Callback khi khởi tạo xong
                     }
                 });
-                const choices = users.map(u => ({ value: u.name, label: u.name }));
+                const choices = [{ value: '', label: 'Tất cả người dùng' }, ...users.map(u => ({ value: u.name, label: u.name }))];
                 filterAssetUserChoicesInstance.setChoices(choices, 'value', 'label', true);
-                if (currentSelectedValue) filterAssetUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                if (currentSelectedValue) {
+                    filterAssetUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                } else {
+                    filterAssetUserChoicesInstance.setChoiceByValue('');
+                }
+                pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
                 
                 // Thêm event listener để trigger filter khi thay đổi
-                filterAssetUserChoicesInstance.passedElement.element.addEventListener('change', applyAssetFilters);
-                filterAssetUserChoicesInstance.passedElement.element.addEventListener('removeItem', applyAssetFilters);
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('change', () => {
+                    pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
+                    applyAssetFilters();
+                });
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('removeItem', () => {
+                    pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
+                    applyAssetFilters();
+                });
                 
                 // Thêm callback cho Choices.js để trigger filter khi chọn item
                 filterAssetUserChoicesInstance.passedElement.element.addEventListener('addItem', function(event) {
-                    setTimeout(() => applyAssetFilters(), 100); // Delay nhỏ để đảm bảo value đã được set
+                    setTimeout(() => {
+                        pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
+                        applyAssetFilters();
+                    }, 100); // Delay nhỏ để đảm bảo value đã được set
                 });
             } catch (e) {
                 // Fallback: populate plain <option> list from users encountered in assets
@@ -1300,18 +1658,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     shouldSort: false, 
                     removeItemButton: false, 
                     allowHTML: true,
-                    shouldOpen: false, // Ngăn dropdown tự động mở
                     itemSelectText: '',
-                    position: 'bottom' // Đặt vị trí dropdown
+                    position: 'bottom'
                 });
-                // Đóng dropdown ngay sau khi khởi tạo
-                setTimeout(() => {
-                    try {
-                        if (maintenanceAssetChoices && maintenanceAssetChoices.dropdown) {
-                            maintenanceAssetChoices.hideDropdown();
-                        }
-                    } catch (e) {}
-                }, 0);
             } catch (e) {}
         }
 
@@ -1320,52 +1669,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (filterLicenseUser) {
             try {
                 // Preserve the current selected value before reinitializing
-                let currentSelectedValue = null;
-                if (filterLicenseUserChoicesInstance) {
-                    try {
-                        const selectedValue = filterLicenseUserChoicesInstance.getValue(true);
-                        if (selectedValue && selectedValue.length > 0) {
-                            currentSelectedValue = selectedValue[0];
-                        }
-                    } catch (e) {}
-                } else {
-                    currentSelectedValue = filterLicenseUser.value || null;
-                }
+                const currentSelectedValue = getSingleChoiceValue(filterLicenseUserChoicesInstance, 'filterLicenseUser');
                 const el = filterLicenseUser;
                 if (filterLicenseUserChoicesInstance) { try { filterLicenseUserChoicesInstance.destroy(); } catch (e) { } }
                 filterLicenseUserChoicesInstance = new Choices(el, {
-                    removeItemButton: true, // Bật nút X để xóa selection
+                    removeItemButton: true,
                     maxItemCount: 1,
                     placeholder: true,
-                    placeholderValue: 'Chọn...',
-                    searchPlaceholderValue: 'Tìm kiếm...',
+                    placeholderValue: 'Tất cả người dùng',
+                    searchPlaceholderValue: 'Tìm người dùng...',
                     shouldSort: false,
-                    shouldOpen: false, // Ngăn dropdown tự động mở
                     searchEnabled: true,
                     itemSelectText: '',
-                    position: 'bottom' // Đặt vị trí dropdown
+                    position: 'bottom'
                 });
-                const choices = users.map(u => ({ value: u.name, label: u.name }));
+                const choices = [{ value: '', label: 'Tất cả người dùng' }, ...users.map(u => ({ value: u.name, label: u.name }))];
                 filterLicenseUserChoicesInstance.setChoices(choices, 'value', 'label', true);
-                if (currentSelectedValue) filterLicenseUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                if (currentSelectedValue) {
+                    filterLicenseUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                } else {
+                    filterLicenseUserChoicesInstance.setChoiceByValue('');
+                }
+                pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
                 
                 // Thêm event listener để trigger filter khi thay đổi
-                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('change', applyLicenseFilters);
-                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('removeItem', applyLicenseFilters);
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('change', () => {
+                    pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                    applyLicenseFilters();
+                });
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('removeItem', () => {
+                    pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                    applyLicenseFilters();
+                });
                 
                 // Thêm callback cho Choices.js để trigger filter khi chọn item
                 filterLicenseUserChoicesInstance.passedElement.element.addEventListener('addItem', function(event) {
-                    setTimeout(() => applyLicenseFilters(), 100); // Delay nhỏ để đảm bảo value đã được set
+                    setTimeout(() => {
+                        pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                        applyLicenseFilters();
+                    }, 100); // Delay nhỏ để đảm bảo value đã được set
                 });
                 
-                // Đóng dropdown ngay sau khi khởi tạo để đảm bảo không tự động mở
-                setTimeout(() => {
-                    try {
-                        if (filterLicenseUserChoicesInstance && filterLicenseUserChoicesInstance.dropdown) {
-                            filterLicenseUserChoicesInstance.hideDropdown();
-                        }
-                    } catch (e) {}
-                }, 0);
             } catch (e) {
                 const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(licenses.map(l => l.user || '').filter(Boolean))];
                 const cur = filterLicenseUser.value;
@@ -1384,35 +1728,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function applyAssetFilters() {
         const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
+        const normalizedTerm = normalizeString(term);
         const statusFilter = document.getElementById('filterAssetStatus')?.value || '';
         const locationFilter = document.getElementById('filterAssetLocation')?.value || '';
         const categoryFilter = document.getElementById('filterAssetCategory')?.value || '';
-        // Get user filter value from Choices instance if available, otherwise from element value
-        let userInput = '';
-        if (filterAssetUserChoicesInstance) {
-            try {
-                const selectedValue = filterAssetUserChoicesInstance.getValue(true);
-                if (selectedValue && selectedValue.length > 0) {
-                    userInput = selectedValue[0].toLowerCase().trim();
-                }
-            } catch (e) {
-                // Fallback to element value if Choices instance fails
-                userInput = (document.getElementById('filterAssetUser')?.value || '').toLowerCase().trim();
-            }
-        } else {
-            userInput = (document.getElementById('filterAssetUser')?.value || '').toLowerCase().trim();
-        }
+        const userInput = getSingleChoiceValue(filterAssetUserChoicesInstance, 'filterAssetUser');
+        const normalizedUserFilter = normalizeString(userInput);
 
         console.debug('applyAssetFilters: term=', term, 'status=', statusFilter, 'location=', locationFilter, 'category=', categoryFilter, 'user=', userInput, 'assetsCount=', assets.length);
 
         currentFilteredAssets = assets
-            .filter(a => (a.name || '').toLowerCase().includes(term) || ((a.user || '').toLowerCase().includes(term)))
+            .filter(a => {
+                if (!normalizedTerm) return true;
+                const searchPool = [a.name, a.config, a.category, a.location].map(v => normalizeString(v)).join(' ');
+                return searchPool.includes(normalizedTerm);
+            })
             .filter(a => {
                 if (statusFilter && String(a.status || '') !== String(statusFilter)) return false;
                 if (locationFilter && String((a.location || '').trim()) !== String(locationFilter)) return false;
                 if (categoryFilter && String((a.category || a.category_name || '')).trim() !== String(categoryFilter).trim()) return false;
-                if (userInput) {
-                    if (!((a.user || '').toLowerCase().includes(userInput))) return false;
+                if (normalizedUserFilter) {
+                    if (normalizeString(a.user || '') !== normalizedUserFilter) return false;
                 }
                 return true;
             })
@@ -1431,18 +1767,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function applyLicenseFilters() {
         const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
+        const normalizedTerm = normalizeString(term);
         const typeFilter = document.getElementById('filterLicenseType')?.value || '';
         const packageFilter = document.getElementById('filterPackageType')?.value || '';
         const statusFilter = document.getElementById('filterLicenseStatus')?.value || '';
-        const userInput = (document.getElementById('filterLicenseUser')?.value || '').toLowerCase().trim();
+        const userInput = getSingleChoiceValue(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+        const normalizedUserFilter = normalizeString(userInput);
+
+        console.debug('applyLicenseFilters: term=', term, 'type=', typeFilter, 'package=', packageFilter, 'status=', statusFilter, 'user=', userInput, 'licensesCount=', licenses.length);
 
         currentFilteredLicenses = licenses
-            .filter(l => (l.key_type || '').toLowerCase().includes(term) || ((l.user || '').toLowerCase().includes(term)))
+            .filter(l => {
+                if (!normalizedTerm) return true;
+                const searchPool = [l.key_type, l.package_type, l.license_key, l.notes].map(v => normalizeString(v)).join(' ');
+                return searchPool.includes(normalizedTerm);
+            })
             .filter(l => (typeFilter === '' || l.key_type === typeFilter) && (packageFilter === '' || l.package_type === packageFilter))
             .filter(l => {
                 if (statusFilter && String((l.status || '')).trim() !== String(statusFilter).trim()) return false;
-                if (userInput) {
-                    if (!((l.user || '').toLowerCase().includes(userInput))) return false;
+                if (normalizedUserFilter) {
+                    if (normalizeString(l.user || '') !== normalizedUserFilter) return false;
                 }
                 return true;
             })
@@ -1490,8 +1834,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (fd) fd.value = '';
     }
 
+    function isAssetFilterOrSearchActive() {
+        const term = (document.getElementById('searchInput')?.value || '').trim();
+        const status = document.getElementById('filterAssetStatus')?.value || '';
+        const location = document.getElementById('filterAssetLocation')?.value || '';
+        const category = document.getElementById('filterAssetCategory')?.value || '';
+        const user = (getSingleChoiceValue(filterAssetUserChoicesInstance, 'filterAssetUser') || '').trim();
+        return !!(term || status || location || category || user);
+    }
+
+    function isLicenseFilterOrSearchActive() {
+        const term = (document.getElementById('searchInput')?.value || '').trim();
+        const type = document.getElementById('filterLicenseType')?.value || '';
+        const packageType = document.getElementById('filterPackageType')?.value || '';
+        const status = document.getElementById('filterLicenseStatus')?.value || '';
+        const user = (getSingleChoiceValue(filterLicenseUserChoicesInstance, 'filterLicenseUser') || '').trim();
+        return !!(term || type || packageType || status || user);
+    }
+
+    function isUserFilterOrSearchActive() {
+        const term = (document.getElementById('searchUserInput')?.value || '').trim();
+        const deptId = document.getElementById('filterDepartment')?.value || '';
+        return !!(term || deptId);
+    }
+
+    function resolveExportData(filteredRows, fullRows, activeFilter) {
+        if (!activeFilter && (!filteredRows || filteredRows.length === 0) && (fullRows || []).length > 0) {
+            return fullRows;
+        }
+        return filteredRows || [];
+    }
+
     async function handleFormSubmit(e, table, payloadBuilder, modalId, postAction) {
-        if (e.target.tagName !== 'FORM') return;
         e.preventDefault();
         const payload = payloadBuilder();
         const id = payload.id; delete payload.id;
@@ -1505,8 +1879,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await supabaseClient.from(table).insert(payload).select();
             error = res.error; resData = res.data?.[0];
         }
-        if (!error && postAction) postAction(resData, isUpdate);
-        if (error) showInfoModal("Lỗi: " + error.message); else { await refreshApp(); showInfoModal("Lưu thành công!", "Thông báo"); }
+        if (error) { showInfoModal("Lỗi: " + error.message); return; }
+        // Post-action (e.g. add log)
+        if (postAction) postAction(resData, isUpdate);
+        // 1. Đóng form edit trước
+        if (modalId) safeCloseModal(modalId);
+        // 2. Hiển thị modal thành công
+        showInfoModal("Lưu thành công!", "Thông báo");
+        // 3. Tải lại dữ liệu ngầm, giữ nguyên filter/search
+        await fetchAllData();
+        // 4. Chỉ render lại bảng hiện tại, KHÔNG reload filter/dropdown
+        if (document.getElementById('assetTableBody')) applyAssetFilters();
+        if (document.getElementById('licenseTableBody')) applyLicenseFilters();
+        if (document.getElementById('userTableBody')) applyUserFilters();
     }
 
     // =================================================================
@@ -1757,7 +2142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // =================================================================
         // CÁC LOGIC KHÁC (Button, Close, Page...)
         // =================================================================
-        if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex'); if (modal) attemptCloseModal(modal.id); return; }
+        if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#btnConfirmClose') || t.closest('#cancelAddUser') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex'); if (modal) attemptCloseModal(modal.id); return; }
 
         const pageBtn = t.closest('a[data-page]');
         if (pageBtn) {
@@ -1803,9 +2188,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (t.closest('#addLicenseBtn')) { document.getElementById('licenseForm').reset(); document.getElementById('modal_licenseId').value = ''; document.getElementById('licenseModalTitle').textContent = 'Thêm License mới'; initAllUserDropdowns(); openModal('licenseModal'); return; }
         if (t.closest('#addUserBtn')) { safeCloseModal('addUserModal'); updateDropdowns(); openModal('addUserModal'); return; }
 
-        if (t.closest('#exportExcelBtn')) { const data = currentFilteredAssets.map(a => ({ "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Ngày nhập": formatDateDisplay(a.purchase_date), "Người dùng": a.user, "Trạng thái": a.status, "Ghi chú": a.notes })); exportToExcel(data, 'Assets.xlsx'); return; }
-        if (t.closest('#exportLicenseBtn')) { const data = currentFilteredLicenses.map(l => ({ "Loại Key": l.key_type, "Mã Key": l.license_key, "Gói": l.package_type, "Hạn SD": l.expiration_date, "Người dùng": l.user, "Trạng thái": l.status, "Ghi chú": l.notes })); exportToExcel(data, 'Licenses.xlsx'); return; }
-        if (t.closest('#exportUsersBtn')) { const data = currentFilteredUsers.map(u => ({ "Tên": u.name, "Email": u.email, "Phòng ban": u.department, "Trạng thái": u.status })); exportToExcel(data, 'Users.xlsx'); return; }
+        if (t.closest('#exportExcelBtn')) {
+            applyAssetFilters();
+            const activeFilter = isAssetFilterOrSearchActive();
+            const sourceRows = resolveExportData(currentFilteredAssets, assets, activeFilter);
+            const data = sourceRows.map(a => ({ "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Ngày nhập": formatDateDisplay(a.purchase_date), "Người dùng": a.user, "Trạng thái": a.status, "Ghi chú": a.notes }));
+            exportToExcel(data, 'Assets.xlsx');
+            return;
+        }
+        if (t.closest('#exportLicenseBtn')) {
+            applyLicenseFilters();
+            const activeFilter = isLicenseFilterOrSearchActive();
+            const sourceRows = resolveExportData(currentFilteredLicenses, licenses, activeFilter);
+            const data = sourceRows.map(l => ({
+                "Loại Key": l.key_type || '',
+                "Mã Key": l.license_key || '',
+                "Gói": l.package_type || '',
+                "Hạn SD": l.expiration_date ? formatDateDisplay(l.expiration_date) : 'Vĩnh viễn',
+                "Người dùng": l.user || '',
+                "Trạng thái": (STATUS_MAP[l.status] && STATUS_MAP[l.status].text) || l.status || '',
+                "Ghi chú": l.notes || ''
+            }));
+            exportToExcel(data, 'Licenses.xlsx');
+            return;
+        }
+        if (t.closest('#exportUsersBtn')) {
+            applyUserFilters();
+            const activeFilter = isUserFilterOrSearchActive();
+            const sourceRows = resolveExportData(currentFilteredUsers, users, activeFilter);
+            const data = sourceRows.map(u => ({ "Tên": u.name, "Email": u.email, "Phòng ban": u.department, "Trạng thái": u.status }));
+            exportToExcel(data, 'Users.xlsx');
+            return;
+        }
 
         if (t.closest('#btnConfirmAction') || t.closest('#confirmDeleteBtn')) { if (confirmCallback) await confirmCallback(); safeCloseModal('confirmationModal'); safeCloseModal('confirmModal'); return; }
 
@@ -2203,6 +2617,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         await refreshApp();
     });
 
+    // Backup & Restore handlers
+    document.getElementById('btnBackupData')?.addEventListener('click', () => {
+        const data = LocalDB.downloadBackup();
+        const statusEl = document.getElementById('backupStatus');
+        if (statusEl) {
+            const counts = `${data.ASSETS?.length || 0} assets, ${data.LICENSES?.length || 0} licenses, ${data.USERS?.length || 0} users`;
+            statusEl.textContent = `✓ Đã xuất lúc ${new Date().toLocaleString('vi-VN')} — ${counts}`;
+            statusEl.classList.remove('hidden');
+        }
+    });
+
+    document.getElementById('restoreFileInput')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const statusEl = document.getElementById('backupStatus');
+        try {
+            const data = await LocalDB.restoreFromFile(file);
+            const counts = `${data.ASSETS?.length || 0} assets, ${data.LICENSES?.length || 0} licenses, ${data.USERS?.length || 0} users`;
+            if (statusEl) {
+                statusEl.textContent = `✓ Đã khôi phục từ backup ${data._exportedAt || ''} — ${counts}`;
+                statusEl.classList.remove('hidden');
+            }
+            showInfoModal(`Đã khôi phục dữ liệu thành công!\n${counts}`, 'Khôi phục thành công');
+            setTimeout(() => location.reload(), 1500);
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = `✗ Lỗi: ${err.message}`;
+                statusEl.classList.remove('hidden');
+            }
+            showInfoModal('File backup không hợp lệ.', 'Lỗi');
+        }
+        e.target.value = '';
+    });
+
     document.getElementById('assetForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'assets', () => ({
         id: document.getElementById('modal_assetId').value,
         name: document.getElementById('modal_assetName').value,
@@ -2281,6 +2729,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const { error } = await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); } });
 
     async function refreshApp(resetFilters = false) {
+        await autoRestoreFromSupabaseIfNeeded();
+
         // Preserve current filter state before refresh (only for assets page)
         let preservedFilters = null;
         if (document.getElementById('assetTableBody') && !resetFilters) {
@@ -2295,8 +2745,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (filterAssetUserChoicesInstance) {
                 try {
                     const selectedValue = filterAssetUserChoicesInstance.getValue(true);
-                    if (selectedValue && selectedValue.length > 0) {
-                        preservedFilters.user = selectedValue[0];
+                    const normalizedSelectedValue = Array.isArray(selectedValue)
+                        ? (selectedValue[0] || '')
+                        : (selectedValue || '');
+                    if (normalizedSelectedValue) {
+                        preservedFilters.user = normalizedSelectedValue;
                     }
                 } catch (e) {}
             } else {

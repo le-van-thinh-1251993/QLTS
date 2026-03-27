@@ -126,13 +126,18 @@ select option {
 
 /* Choices.js dropdown height limit so user lists stay short and scrollable */
 .choices__list--dropdown {
+    max-height: 220px !important;
+    overflow: hidden !important;          /* outer container clips, no scrollbar here */
+}
+.choices__list--dropdown > .choices__list {
     max-height: 180px !important;
-    overflow-y: auto !important;
+    overflow-y: auto !important;           /* only inner list scrolls */
+    overflow-x: hidden !important;
 }
 .choices__list--dropdown .choices__item--choice {
     white-space: nowrap;
-    text-overflow: clip;
-    overflow: visible;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 
 /* Allow dropdown to expand horizontally to fit longest item but not exceed viewport */
@@ -230,14 +235,7 @@ select:focus {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23E5E7EB' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
 }
 
-/* Ngăn dropdown tự động mở - đảm bảo chỉ hiển thị khi is-open */
-.choices__list--dropdown {
-    display: none !important;
-}
-
-.choices.is-open .choices__list--dropdown {
-    display: block !important;
-}
+/* Choices dropdown visibility managed by Choices.js natively */
 
 .choices__list--dropdown .choices__item {
     white-space: normal;
@@ -394,19 +392,43 @@ select:focus {
 
 .choices__inner .choices__list--single .choices__item .choices__label {
     flex: 0 1 auto !important;
-    max-width: calc(100% - 2rem) !important; /* Trừ đi chỗ cho nút X và gap */
+    max-width: 100% !important;
 }
 
-/* Đảm bảo mũi tên dropdown của Choices.js không đè lên text và nút X */
+/* Mũi tên dropdown nằm sát mép phải */
 .choices[data-type*="select-one"]::after {
-    right: 0.75rem !important;
+    position: absolute !important;
+    right: 0.5rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
     pointer-events: none;
     z-index: 1;
 }
 
-/* Điều chỉnh padding để có đủ chỗ cho text, nút X và mũi tên */
-.choices__inner {
-    padding-right: 3rem !important; /* Tăng padding để có chỗ cho nút X và mũi tên */
+/* Inner cần đủ padding phải để chứa: [nút X] + [mũi tên] */
+.choices[data-type*="select-one"] .choices__inner {
+    position: relative !important;
+    padding-right: 2.75rem !important;
+    overflow: visible !important;
+}
+
+.choices[data-type*="select-one"] .choices__list--single .choices__item {
+    position: static !important;
+    width: 100% !important;
+    padding-right: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+/* Nút X: nằm ngay bên trái mũi tên, cùng hàng */
+.choices[data-type*="select-one"] .choices__list--single .choices__item .choices__button {
+    position: absolute !important;
+    top: 50% !important;
+    right: 1.5rem !important;      /* cách mép phải inner ~1.5rem, ngay trái mũi tên */
+    transform: translateY(-50%) !important;
+    margin: 0 !important;
+    z-index: 2 !important;
 }
 
 /* Đảm bảo dropdown có thể click để mở lại sau khi đã chọn */
@@ -439,10 +461,72 @@ select:focus {
     cursor: pointer !important;
 }
 
+/* User filter dropdown: cleaner item styling */
+.choices__list--dropdown .choices__item--choice {
+    padding: 0.5rem 0.75rem !important;
+}
+
 .filter-control {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+/* ================================================================== */
+/* Unified modal close button                                           */
+/* ================================================================== */
+.close-modal.absolute,
+.close-color-modal.absolute,
+#closeAddUserModal,
+#closeAssetModal,
+#closeDeptModal {
+    position: absolute !important;
+    top: 0.5rem !important;
+    right: 0.5rem !important;
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: #64748b !important;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    transition: all 0.15s ease;
+}
+
+.close-modal.absolute:hover,
+.close-color-modal.absolute:hover,
+#closeAddUserModal:hover,
+#closeAssetModal:hover,
+#closeDeptModal:hover {
+    color: #334155 !important;
+    background: #f1f5f9;
+}
+
+.dark .close-modal.absolute,
+.dark .close-color-modal.absolute,
+.dark #closeAddUserModal,
+.dark #closeAssetModal,
+.dark #closeDeptModal {
+    color: #cbd5e1 !important;
+    background: #334155;
+    border-color: #475569;
+}
+
+.dark .close-modal.absolute:hover,
+.dark .close-color-modal.absolute:hover,
+.dark #closeAddUserModal:hover,
+.dark #closeAssetModal:hover,
+.dark #closeDeptModal:hover {
+    color: #f8fafc !important;
+    background: #475569;
+}
+
+#addUserModal > div,
+#assetDetailsModal > div,
+#departmentManagementModal > div {
+    position: relative;
 }
 
 /* ================================================================== */

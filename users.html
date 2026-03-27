@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Security: Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
     <title>Quản lý người dùng - IT Asset Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -27,9 +27,8 @@
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
-    <!-- Supabase JS Library -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- SheetJS (xlsx) library for Excel processing -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body class="font-sans text-slate-800 bg-slate-100 dark:bg-slate-900 dark:text-slate-100">
@@ -211,7 +210,7 @@
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 border dark:border-slate-700">
             <div class="flex justify-between items-center mb-4 border-b pb-2 dark:border-slate-700">
                 <h3 id="modalTitle" class="text-xl font-bold text-slate-800 dark:text-gray-200">Thêm nhân viên</h3>
-                <button id="closeAddUserModal" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+                <button id="closeAddUserModal" class="close-modal text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
             </div>
             <form id="userForm">
                 <input type="hidden" id="userId" name="userId">
@@ -251,7 +250,7 @@
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl p-6 border dark:border-slate-700">
             <div class="flex justify-between items-center mb-4 border-b pb-2 dark:border-slate-700">
                 <h3 class="text-xl font-bold text-slate-800 dark:text-gray-200">Tài sản: <span id="assetModalUserName" class="text-blue-600"></span></h3>
-                <button id="closeAssetModal" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
+                <button id="closeAssetModal" class="close-modal text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-xl"></i></button>
             </div>
             <div class="overflow-x-auto dark:text-gray-200">
                 <table class="w-full text-left dark:text-gray-200">
@@ -276,7 +275,7 @@
             <!-- Modal Header -->
             <div class="flex justify-between items-center pb-3 border-b dark:border-slate-700">
                 <h3 id="deptModalTitle" class="text-xl font-bold text-gray-900 dark:text-gray-200">Quản lý phòng ban</h3>
-                <button id="closeDeptModal" class="text-gray-400 hover:text-gray-600">
+                <button id="closeDeptModal" class="close-modal text-gray-400 hover:text-gray-600">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
@@ -377,41 +376,9 @@
             </div>
         </div>
     </div>
-<div id="confirmationModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full items-center justify-center z-[60]">
-        <div class="relative mx-auto p-6 border w-full max-w-sm shadow-lg rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700">
-            <div class="text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
-                </div>
-                
-                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-200" id="confirmationModalTitle">Xác nhận</h3>
-                <div class="mt-2 px-2 py-2">
-                    <p class="text-sm text-gray-500 dark:text-gray-400" id="confirmationModalMessage">Bạn có chắc chắn muốn thực hiện hành động này?</p>
-                </div>
-                
-                <div class="flex justify-center gap-3 mt-4">
-                    <button id="cancelDeleteBtn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md hover:bg-gray-300 focus:outline-none">
-                        Hủy
-                    </button>
-                    <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md hover:bg-red-700 focus:outline-none">
-                        Đồng ý
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="infoModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full items-center justify-center z-[60]">
-        <div class="relative mx-auto p-6 border w-full max-w-sm shadow-lg rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700 text-center">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-200 mb-2" id="infoModalTitle">Thông báo</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6" id="infoModalMessage"></p>
-            <button id="closeInfoModalBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Đã hiểu</button>
-        </div>
-    </div>
-    <!-- Auth script phải được tải trước script chính -->
-        <script src="config.js"></script>
-        <script src="js/auth.js"></script>
+    <!-- LocalDB for local storage operations -->
+    <script src="config.js"></script>
+    <script src="js/localDB.js"></script>
     <script src="js/script.js"></script>
 </body>
 </html>

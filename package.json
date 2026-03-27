@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "IT Asset Management System",
   "scripts": {
+    "start": "node serve.js",
+    "serve": "node serve.js",
     "build": "node build-config.js"
   },
   "engines": {
