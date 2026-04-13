@@ -1873,19 +1873,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         let error;
         let resData = null;
         if (isUpdate) {
-            const res = await supabaseClient.from(table).update(payload).eq('id', id).select();
+            const res = await supabaseClient.from(table).update(payload).eq('id', id);
             error = res.error; resData = res.data?.[0] || { id, ...payload };
         } else {
-            const res = await supabaseClient.from(table).insert(payload).select();
+            const res = await supabaseClient.from(table).insert(payload);
             error = res.error; resData = res.data?.[0];
         }
-        if (error) { showInfoModal("Lỗi: " + error.message); return; }
+        if (error) { 
+            showInfoModal("Lỗi: " + error.message); 
+            return; 
+        }
         // Post-action (e.g. add log)
         if (postAction) postAction(resData, isUpdate);
         // 1. Đóng form edit trước
         if (modalId) safeCloseModal(modalId);
         // 2. Hiển thị modal thành công
         showInfoModal("Lưu thành công!", "Thông báo");
+        const modal = e.target.closest('.fixed.flex');
+        if (modal) attemptCloseModal(modal.id);
         // 3. Tải lại dữ liệu ngầm, giữ nguyên filter/search
         await fetchAllData();
         // 4. Chỉ render lại bảng hiện tại, KHÔNG reload filter/dropdown
