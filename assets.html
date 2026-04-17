@@ -210,7 +210,7 @@
                                     <span class="tooltiptext">Tạo đợt kiểm kê</span>
                                 </div>
                                 <div class="tooltip">
-                                    <button id="addAssetBtn" class="icon-btn bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center justify-center shadow-lg transition-all">
+                                    <button onclick="addTaiSan()" id="addAssetBtn" class="icon-btn bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center justify-center shadow-lg transition-all">
                                         <i class="fa-solid fa-plus"></i>
                                     </button>
                                     <span class="tooltiptext">Thêm tài sản mới</span>
@@ -363,10 +363,14 @@
                         <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Loại</label>
                         <select id="modal_assetCategory" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></select>
                     </div>
-                    <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Vị trí</label><input type="text" id="modal_assetLocation" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"></div>
+                    <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Vị trí</label>
+                        <select id="modal_assetLocation"
+                            class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                        </select>
+                    </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ngày nhập kho</label>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ngày nhập kho1</label>
                     <input type="date" id="modal_assetPurchaseDate" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
@@ -540,7 +544,7 @@
     </div>
 
     <!-- LocalDB for local storage operations -->
-    <script src="config.js"></script>
+    <!-- <script src="config.js"></script> -->
     <script src="js/localDB.js"></script>
     <script src="js/script.js"></script>
 </body>

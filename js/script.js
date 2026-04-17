@@ -1375,7 +1375,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="p-4 text-sm font-medium text-blue-600">${item.user || '-'}</td>
                 <td class="p-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${status.classes}">${status.text}</span></td>
                 <td class="p-4 text-xs text-slate-500 max-w-xs truncate">${item.notes || ''}</td>
-                <td class="p-4 flex items-center gap-2">
+                <td class="p-4 flex items-center gap-2 justify-end">
                     ${btns}
                     <div class="tooltip">${historyBtn}<span class="tooltiptext">Xem lịch sử</span></div>
                     ${adminActions}
@@ -1778,6 +1778,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         currentFilteredLicenses = licenses
             .filter(l => {
+                console.log('vfnjcxnbj ', licenses);
+                
                 if (!normalizedTerm) return true;
                 const searchPool = [l.key_type, l.package_type, l.license_key, l.notes].map(v => normalizeString(v)).join(' ');
                 return searchPool.includes(normalizedTerm);
@@ -2859,3 +2861,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load trang lần đầu - reset filter để đảm bảo trạng thái sạch
     refreshApp(true);
 });
+
+addTaiSan = () => {
+    const location = [
+      "Hà Nội","TP. Hồ Chí Minh","Hải Phòng","Đà Nẵng","Cần Thơ",
+      "An Giang","Bà Rịa - Vũng Tàu","Bắc Giang","Bắc Kạn","Bạc Liêu",
+      "Bắc Ninh","Bến Tre","Bình Định","Bình Dương","Bình Phước",
+      "Bình Thuận","Cà Mau","Cao Bằng","Đắk Lắk","Đắk Nông",
+      "Điện Biên","Đồng Nai","Đồng Tháp","Gia Lai","Hà Giang",
+      "Hà Nam","Hà Tĩnh","Hải Dương","Hậu Giang","Hòa Bình",
+      "Hưng Yên","Khánh Hòa","Kiên Giang","Kon Tum","Lai Châu",
+      "Lâm Đồng","Lạng Sơn","Lào Cai","Long An","Nam Định",
+      "Nghệ An","Ninh Bình","Ninh Thuận","Phú Thọ","Phú Yên",
+      "Quảng Bình","Quảng Nam","Quảng Ngãi","Quảng Ninh","Quảng Trị",
+      "Sóc Trăng","Sơn La","Tây Ninh","Thái Bình","Thái Nguyên",
+      "Thanh Hóa","Thừa Thiên Huế","Tiền Giang","Trà Vinh","Tuyên Quang",
+      "Vĩnh Long","Vĩnh Phúc","Yên Bái"
+    ];
+
+    const locationElement = document.getElementById('modal_assetLocation');
+    const defaultLocation = `<option value="">-- Chọn vị trí --</option>`;
+    locationElement.innerHTML = defaultLocation + location
+        .map(p => `<option value="${p}">${p}</option>`)
+        .join("");
+} 
