@@ -1778,8 +1778,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         currentFilteredLicenses = licenses
             .filter(l => {
-                console.log('vfnjcxnbj ', licenses);
-                
                 if (!normalizedTerm) return true;
                 const searchPool = [l.key_type, l.package_type, l.license_key, l.notes].map(v => normalizeString(v)).join(' ');
                 return searchPool.includes(normalizedTerm);
