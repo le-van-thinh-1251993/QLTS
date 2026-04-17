@@ -439,8 +439,8 @@ const LocalDB = {
                 { id: 2, name: 'Monitor LG 27"', config: '4K IPS 27 inch', category_id: 3, location: 'Phòng IT', purchase_date: '2024-01-20', user_id: null, status: 'Stock', notes: '', created_at: now }
             ];
             const seededLicenses = [
-                { id: 1, key_type: 'Windows 11 Pro', license_key: 'XXXXX-XXXXX-XXXXX-XXXXX', package_type: 'OEM', expiration_date: '2025-12-31', user_id: 1, status: 'Active', notes: '', created_at: now },
-                { id: 2, key_type: 'Office 365', license_key: 'YYYYY-YYYYY-YYYYY-YYYYY', package_type: 'Business', expiration_date: '2025-06-30', user_id: 2, status: 'Active', notes: '', created_at: now }
+                { id: 1, key_type: 'Windows', license_key: 'XXXXX-XXXXX-XXXXX-XXXXX', package_type: 'OEM', expiration_date: '2025-12-31', user_id: 1, status: 'Active', notes: '', created_at: now },
+                { id: 2, key_type: 'Adobe', license_key: 'YYYYY-YYYYY-YYYYY-YYYYY', package_type: 'Business', expiration_date: '2025-06-30', user_id: 2, status: 'Active', notes: '', created_at: now }
             ];
 
             localStorage.setItem(this.KEYS.ASSETS, JSON.stringify(seededAssets));
@@ -481,13 +481,13 @@ const LocalDB = {
                 { id: 3, name: 'Adobe', created_at: now }
             ],
             users: [
-                { id: 1, name: 'Nguyễn Văn A', email: 'a@company.com', department_id: 1, status: 'Active', created_at: now },
-                { id: 2, name: 'Trần Thị B', email: 'b@company.com', department_id: 2, status: 'Active', created_at: now }
+                { id: 1, name: 'Nguyễn Văn A', email: 'a@company.com', department_id: 1, status: 'Đang hoạt động', created_at: now },
+                { id: 2, name: 'Trần Thị B', email: 'b@company.com', department_id: 2, status: 'Đang hoạt động', created_at: now }
             ],
             assets: [],
             licenses: [
-                { id: 1, key_type: 'Windows 11 Pro', license_key: 'XXXXX-XXXXX-XXXXX-XXXXX', package_type: 'OEM', expiration_date: '2025-12-31', user_id: 1, status: 'Active', notes: '', created_at: now },
-                { id: 2, key_type: 'Office 365', license_key: 'YYYYY-YYYYY-YYYYY-YYYYY', package_type: 'Business', expiration_date: '2025-06-30', user_id: 2, status: 'Active', notes: '', created_at: now }
+                { id: 1, key_type: 'Windows', license_key: 'XXXXX-XXXXX-XXXXX-XXXXX', package_type: 'OEM', expiration_date: '2025-12-31', user_id: 1, status: 'Active', notes: '', created_at: now },
+                { id: 2, key_type: 'Office', license_key: 'YYYYY-YYYYY-YYYYY-YYYYY', package_type: 'Business', expiration_date: '2025-06-30', user_id: 2, status: 'Active', notes: '', created_at: now }
             ],
             asset_history: [],
             maintenance_tasks: [],

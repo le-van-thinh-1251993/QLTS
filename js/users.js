@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dept = filterDept ? filterDept.value : '';
         const filtered = users.filter(u => 
             (u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)) &&
-            (dept === '' || u.department.toLowerCase() === dept.toLowerCase())
+            (dept === '' || u.department?.toLowerCase() === dept.toLowerCase())
         );
         renderUserTable(filtered);
     };
