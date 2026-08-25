@@ -61,9 +61,14 @@
         return Number.isNaN(date.getTime()) ? null : date;
     };
 
+    const notify = (message, title) => {
+        if (typeof window.showInfoModal === 'function') window.showInfoModal(message, title);
+        else console.warn(message);
+    };
+
     const exportToCSV = (rows, filename) => {
         if (!Array.isArray(rows) || rows.length === 0) {
-            window.alert('Không có dữ liệu để xuất!');
+            notify('Không có dữ liệu để xuất!');
             return;
         }
 
@@ -82,7 +87,7 @@
             URL.revokeObjectURL(link.href);
         } catch (error) {
             console.error('Lỗi khi export CSV:', error);
-            window.alert('Có lỗi khi xuất CSV');
+            notify('Có lỗi khi xuất CSV', 'Lỗi');
         }
     };
 
@@ -92,6 +97,98 @@
         return fullRows || [];
     };
 
+    // =================================================================
+    // TEM / BARCODE / QR CODE HELPERS
+    // Mã tem theo quy ước: MÃ ĐƠN VỊ - MÃ LOẠI - MÃ BỘ PHẬN - SỐ THỨ TỰ
+    // =================================================================
+    const UNIT_CODE_KEY = 'qlts_unit_code';
+    const CODE_MAP_KEY = 'qlts_code_map'; // { category: {name: code}, department: {name: code}, type: {name: code} }
+
+    const getUnitCode = () => (localStorage.getItem(UNIT_CODE_KEY) || 'CTY').trim().toUpperCase() || 'CTY';
+    const setUnitCode = (code) => {
+        localStorage.setItem(UNIT_CODE_KEY, (code || '').trim().toUpperCase() || 'CTY');
+    };
+
+    const loadCodeMap = () => {
+        try {
+            const raw = JSON.parse(localStorage.getItem(CODE_MAP_KEY) || '{}');
+            return {
+                category: raw.category || {},
+                department: raw.department || {},
+                type: raw.type || {}
+            };
+        } catch (e) {
+            return { category: {}, department: {}, type: {} };
+        }
+    };
+
+    const saveCodeMap = (map) => {
+        localStorage.setItem(CODE_MAP_KEY, JSON.stringify(map));
+    };
+
+    // Sinh mã ngắn (3-4 ký tự, không dấu, viết hoa) từ tên, đảm bảo không trùng
+    // với các mã đã cấp trong cùng nhóm (kind).
+    const deriveShortCode = (name, existingCodes) => {
+        const clean = normalizeString(name).toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim();
+        const words = clean.split(/\s+/).filter(Boolean);
+        let base;
+        if (words.length > 1) {
+            base = words.map(w => w[0]).join('').slice(0, 4);
+        } else {
+            base = (words[0] || 'NA').slice(0, 3);
+        }
+        base = base || 'NA';
+
+        const used = new Set(existingCodes || []);
+        if (!used.has(base)) return base;
+        let suffix = 2;
+        while (used.has(`${base}${suffix}`)) suffix++;
+        return `${base}${suffix}`;
+    };
+
+    // Trả về mã ổn định cho 1 tên trong 1 nhóm (category/department/type),
+    // tự sinh và lưu lại lần đầu tiên gặp tên đó.
+    const getOrCreateCode = (kind, name) => {
+        const key = (name || '').trim();
+        if (!key) return 'NA';
+        const map = loadCodeMap();
+        const group = map[kind] || (map[kind] = {});
+        if (group[key]) return group[key];
+        const code = deriveShortCode(key, Object.values(group));
+        group[key] = code;
+        saveCodeMap(map);
+        return code;
+    };
+
+    // Tìm số thứ tự tiếp theo cho 1 tiền tố "DONVI-LOAI-BOPHAN-" bằng cách
+    // quét các mã đã có (không dùng bộ đếm riêng để tránh lệch khi dữ liệu bị sửa/xóa).
+    const nextSequenceForPrefix = (existingCodes, prefix) => {
+        let max = 0;
+        (existingCodes || []).forEach(code => {
+            if (!code || !code.startsWith(prefix)) return;
+            const tail = code.slice(prefix.length);
+            const n = parseInt(tail, 10);
+            if (!Number.isNaN(n) && n > max) max = n;
+        });
+        return max + 1;
+    };
+
+    // deptName: tên phòng ban của user được gán (hoặc null nếu đang trong kho)
+    const buildEntityCode = (kind, name, deptName, existingCodesOfSameEntity) => {
+        const unit = getUnitCode();
+        const typeCode = getOrCreateCode(kind, name || 'Khac');
+        const deptCode = deptName ? getOrCreateCode('department', deptName) : 'KHO';
+        const prefix = `${unit}-${typeCode}-${deptCode}-`;
+        const seq = nextSequenceForPrefix(existingCodesOfSameEntity, prefix);
+        return `${prefix}${String(seq).padStart(3, '0')}`;
+    };
+
+    const buildAssetCode = (categoryName, deptName, existingAssetCodes) =>
+        buildEntityCode('category', categoryName, deptName, existingAssetCodes);
+
+    const buildLicenseCode = (typeName, deptName, existingLicenseCodes) =>
+        buildEntityCode('type', typeName, deptName, existingLicenseCodes);
+
     window.QLTSHelpers = {
         normalizeString,
         parseDateToISO,
@@ -99,6 +196,13 @@
         getCreatedDate,
         safeDate,
         exportToCSV,
-        resolveExportData
+        resolveExportData,
+        getUnitCode,
+        setUnitCode,
+        deriveShortCode,
+        getOrCreateCode,
+        nextSequenceForPrefix,
+        buildAssetCode,
+        buildLicenseCode
     };
 })();

@@ -2,6 +2,23 @@ window.QLTSPageData = window.QLTSPageData || {};
 window.QLTSPageData.init = async function () {
     // =================================================================
 
+    // Trạng thái "Hết hạn" phải luôn khớp với ngày hết hạn thực tế, không phụ thuộc vào
+    // giá trị status đã lưu (dữ liệu cũ/nhập tay có thể bị lệch so với ngày thực tế).
+    // - Còn hạn (hoặc không có ngày hết hạn = vĩnh viễn) mà lỡ lưu "Expired" -> khôi phục về Active/Stock.
+    // - Đã quá hạn -> luôn hiển thị "Expired" dù status lưu là gì.
+    function computeEffectiveLicenseStatus(license, assignedUser) {
+        if (!license.expiration_date) {
+            return license.status === 'Expired' ? (assignedUser ? 'Active' : 'Stock') : license.status;
+        }
+        const expDate = new Date(license.expiration_date);
+        if (isNaN(expDate.getTime())) return license.status;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isPastDue = expDate < today;
+        if (isPastDue) return 'Expired';
+        return license.status === 'Expired' ? (assignedUser ? 'Active' : 'Stock') : license.status;
+    }
+
     async function fetchAllData() {
         console.log('fetchAllData() called');
         // Fetch all data from LocalDB
@@ -87,12 +104,15 @@ window.QLTSPageData.init = async function () {
             const usr = users.find(u => u.id === l.user_id);
             return {
                 ...l,
+                status: computeEffectiveLicenseStatus(l, usr),
                 user: usr ? usr.name : null
             };
         });
         
         console.log('Processed licenses:', licenses.length, licenses);
-        
+
+        await backfillEntityCodes();
+
         // Process asset history with asset name join
         const historyRaw = historyData.data || [];
         assetHistory = historyRaw.map(h => {
@@ -104,7 +124,8 @@ window.QLTSPageData.init = async function () {
                 assetId: h.asset_id,
                 assetName: asset ? asset.name : 'N/A',
                 action: h.action,
-                desc: h.description
+                desc: h.description,
+                createdBy: h.created_by_name || 'Admin'
             };
         });
         
@@ -114,7 +135,9 @@ window.QLTSPageData.init = async function () {
         stockChecks = stockCheckData.data || [];
         stockCheckItems = stockCheckItemData.data || [];
         alertSettings = alertSettingData.data || [];
-        
+
+        await migrateLegacyStatuses();
+
         console.log('fetchAllData() complete - Final counts:', {
             departments: departments.length,
             categories: categories.length,
@@ -122,6 +145,67 @@ window.QLTSPageData.init = async function () {
             assets: assets.length,
             licenses: licenses.length
         });
+    }
+
+    // Chuyển các giá trị trạng thái tiếng Anh còn sót lại từ dữ liệu cũ (trước khi
+    // hệ thống thống nhất trạng thái tiếng Việt) sang giá trị mới, và lưu lại luôn.
+    const LEGACY_MAINT_STATUS_MAP = { open: 'Chưa xử lý', in_progress: 'Đang xử lý', done: 'Hoàn thành', overdue: 'Quá hạn' };
+    const LEGACY_STOCK_STATUS_MAP = { open: 'Đang mở', closed: 'Hoàn thành' };
+    const LEGACY_ASSET_STATUS_MAP = { Inactive: 'Stock', Assigned: 'Active' };
+
+    async function migrateLegacyStatuses() {
+        for (const task of maintenanceTasks) {
+            const mapped = LEGACY_MAINT_STATUS_MAP[task.status];
+            if (!mapped) continue;
+            task.status = mapped;
+            try { await LocalDB.from('maintenance_tasks').update({ status: mapped }).eq('id', task.id); }
+            catch (e) { console.warn('Migrate maintenance status failed', task.id, e); }
+        }
+        for (const check of stockChecks) {
+            const mapped = LEGACY_STOCK_STATUS_MAP[check.status];
+            if (!mapped) continue;
+            check.status = mapped;
+            try { await LocalDB.from('stock_checks').update({ status: mapped }).eq('id', check.id); }
+            catch (e) { console.warn('Migrate stock check status failed', check.id, e); }
+        }
+        for (const asset of assets) {
+            const mapped = LEGACY_ASSET_STATUS_MAP[asset.status];
+            if (!mapped) continue;
+            asset.status = mapped;
+            try { await LocalDB.from('assets').update({ status: mapped }).eq('id', asset.id); }
+            catch (e) { console.warn('Migrate asset status failed', asset.id, e); }
+        }
+    }
+
+    // Sinh & lưu asset_code/license_code cho các bản ghi cũ chưa có mã tem
+    // (mã mới luôn được sinh sẵn lúc thêm mới trong page-settings.js).
+    async function backfillEntityCodes() {
+        const helpers = window.QLTSHelpers;
+        if (!helpers) return;
+
+        const assetCodes = assets.map(a => a.asset_code).filter(Boolean);
+        for (const a of assets) {
+            if (a.asset_code) continue;
+            const usr = users.find(u => u.id === a.user_id);
+            const deptName = (usr && usr.department && usr.department !== '-') ? usr.department : null;
+            const code = helpers.buildAssetCode(a.category, deptName, assetCodes);
+            a.asset_code = code;
+            assetCodes.push(code);
+            try { await LocalDB.from('assets').update({ asset_code: code }).eq('id', a.id); }
+            catch (e) { console.warn('Backfill asset_code failed for asset', a.id, e); }
+        }
+
+        const licenseCodes = licenses.map(l => l.license_code).filter(Boolean);
+        for (const l of licenses) {
+            if (l.license_code) continue;
+            const usr = users.find(u => u.id === l.user_id);
+            const deptName = (usr && usr.department && usr.department !== '-') ? usr.department : null;
+            const code = helpers.buildLicenseCode(l.key_type, deptName, licenseCodes);
+            l.license_code = code;
+            licenseCodes.push(code);
+            try { await LocalDB.from('licenses').update({ license_code: code }).eq('id', l.id); }
+            catch (e) { console.warn('Backfill license_code failed for license', l.id, e); }
+        }
     }
 
     function safeCloseModal(id) {
@@ -307,6 +391,13 @@ window.QLTSPageData.init = async function () {
         });
     }
 
+    function normalizeString(str) {
+        if (window.QLTSHelpers && typeof window.QLTSHelpers.normalizeString === 'function') {
+            return window.QLTSHelpers.normalizeString(str);
+        }
+        return str ? str.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
+    }
+
     // 2. Hàm xử lý ngày tháng
     function parseDateToISO(dateStr) {
         if (window.QLTSHelpers && typeof window.QLTSHelpers.parseDateToISO === 'function') {
@@ -338,17 +429,33 @@ window.QLTSPageData.init = async function () {
         return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('vi-VN');
     }
 
+    const MAINT_STOCK_PAGE_SIZE = 5;
+    const DONE_STATUS = 'Hoàn thành';
+
     function renderMaintenanceList() {
         const tbody = document.getElementById('maintenanceTableBody');
         if (!tbody) return;
-        const rows = (maintenanceTasks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map(task => {
+        const isAdmin = currentUserProfile.role === 'admin';
+        const sorted = (maintenanceTasks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        const start = (maintenanceCurrentPage - 1) * MAINT_STOCK_PAGE_SIZE;
+        const pageItems = sorted.slice(start, start + MAINT_STOCK_PAGE_SIZE);
+
+        if (pageItems.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">Chưa có lịch bảo trì</td></tr>';
+            if (window.renderPagination) window.renderPagination('maintenancePagination', 1, 0, MAINT_STOCK_PAGE_SIZE, 'maintenance');
+            return;
+        }
+
+        const rows = pageItems.map(task => {
             const assetName = assets.find(a => a.id === task.asset_id)?.name || 'N/A';
+            const isDone = task.status === DONE_STATUS;
             const statusClass = {
-                open: 'bg-amber-100 text-amber-700',
-                in_progress: 'bg-sky-100 text-sky-700',
-                done: 'bg-green-100 text-green-700',
-                overdue: 'bg-red-100 text-red-700'
+                'Chưa xử lý': 'bg-amber-100 text-amber-700',
+                'Đang xử lý': 'bg-sky-100 text-sky-700',
+                'Hoàn thành': 'bg-green-100 text-green-700',
+                'Quá hạn': 'bg-red-100 text-red-700'
             }[task.status] || 'bg-slate-100 text-slate-600';
+            const canDelete = !isDone || isAdmin;
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
                     <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${task.title || '-'}</td>
@@ -356,30 +463,51 @@ window.QLTSPageData.init = async function () {
                     <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(task.due_date)}</td>
                     <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${task.status || '-'}</span></td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${task.note || '-'}</td>
-                    <td class="p-3 text-right"><button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-maint" data-id="${task.id}">Xóa</button></td>
+                    <td class="p-3 text-right whitespace-nowrap">
+                        ${!isDone ? `<button class="text-green-600 hover:text-green-700 text-sm mr-3" data-action="complete-maint" data-id="${task.id}">Hoàn thành</button>` : ''}
+                        ${canDelete ? `<button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-maint" data-id="${task.id}">Xóa</button>` : '<span class="text-xs text-slate-400 italic">Đã khóa</span>'}
+                    </td>
                 </tr>`;
         });
-        tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="p-4 text-center text-slate-500">Chưa có lịch bảo trì</td></tr>';
+        tbody.innerHTML = rows.join('');
+        if (window.renderPagination) window.renderPagination('maintenancePagination', maintenanceCurrentPage, sorted.length, MAINT_STOCK_PAGE_SIZE, 'maintenance');
     }
 
     function renderStockCheckList() {
         const tbody = document.getElementById('stockCheckTableBody');
         if (!tbody) return;
-        const rows = (stockChecks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map(item => {
+        const isAdmin = currentUserProfile.role === 'admin';
+        const sorted = (stockChecks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        const start = (stockCheckCurrentPage - 1) * MAINT_STOCK_PAGE_SIZE;
+        const pageItems = sorted.slice(start, start + MAINT_STOCK_PAGE_SIZE);
+
+        if (pageItems.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-500">Chưa có đợt kiểm kê</td></tr>';
+            if (window.renderPagination) window.renderPagination('stockCheckPagination', 1, 0, MAINT_STOCK_PAGE_SIZE, 'stock');
+            return;
+        }
+
+        const rows = pageItems.map(item => {
+            const isDone = item.status === DONE_STATUS;
             const statusClass = {
-                open: 'bg-cyan-100 text-cyan-700',
-                closed: 'bg-green-100 text-green-700'
+                'Đang mở': 'bg-cyan-100 text-cyan-700',
+                'Hoàn thành': 'bg-green-100 text-green-700'
             }[item.status] || 'bg-slate-100 text-slate-600';
+            const canDelete = !isDone || isAdmin;
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
                     <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${item.note || '-'}</td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(item.started_at)}</td>
                     <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${item.status || '-'}</span></td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${item.note ? item.note : '-'}</td>
-                    <td class="p-3 text-right"><button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-stock" data-id="${item.id}">Xóa</button></td>
+                    <td class="p-3 text-right whitespace-nowrap">
+                        ${!isDone ? `<button class="text-green-600 hover:text-green-700 text-sm mr-3" data-action="complete-stock" data-id="${item.id}">Hoàn thành</button>` : ''}
+                        ${canDelete ? `<button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-stock" data-id="${item.id}">Xóa</button>` : '<span class="text-xs text-slate-400 italic">Đã khóa</span>'}
+                    </td>
                 </tr>`;
         });
-        tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="p-4 text-center text-slate-500">Chưa có đợt kiểm kê</td></tr>';
+        tbody.innerHTML = rows.join('');
+        if (window.renderPagination) window.renderPagination('stockCheckPagination', stockCheckCurrentPage, sorted.length, MAINT_STOCK_PAGE_SIZE, 'stock');
     }
 
     // Ghi log hoạt động; ưu tiên Supabase, nếu lỗi thì chỉ log console để không chặn flow
@@ -389,6 +517,8 @@ window.QLTSPageData.init = async function () {
                 asset_id: entityId,
                 action: `[${entityType}] ${action}`,
                 description: desc || '',
+                created_by: currentUserProfile?.id || null,
+                created_by_name: currentUserProfile?.full_name || currentUserProfile?.email || 'Admin',
                 created_at: new Date().toISOString()
             };
             await supabaseClient.from('asset_history').insert(payload);
@@ -581,13 +711,26 @@ window.QLTSPageData.init = async function () {
                 updateDashboard();
 
             } catch (err) {
-                handleSupabaseError(err, "Import License");
+                handleSupabaseError(err, "nhập License");
             } finally {
-                btnSaveImportedLicenses.textContent = "Lưu vào Database";
+                btnSaveImportedLicenses.textContent = "Lưu vào cơ sở dữ liệu";
                 btnSaveImportedLicenses.disabled = false;
             }
         });
     }
-    // =================================================================
-    // 3. UI HELPERS & RENDERING
+    window.fetchAllData = fetchAllData;
+    window.safeCloseModal = safeCloseModal;
+    window.attemptCloseModal = attemptCloseModal;
+    window.showConfirmationModal = showConfirmationModal;
+    window.checkAndDisplayNotifications = checkAndDisplayNotifications;
+    window.applyRoleBasedUI = applyRoleBasedUI;
+    window.updateHeaderUserInfo = updateHeaderUserInfo;
+    window.parseDateToISO = parseDateToISO;
+    window.formatDateDisplay = formatDateDisplay;
+    window.renderMaintenanceList = renderMaintenanceList;
+    window.renderStockCheckList = renderStockCheckList;
+    window.addLog = addLog;
+    window.exportToCSV = exportToCSV;
+    window.renderLicenseImportPreview = renderLicenseImportPreview;
+};
 

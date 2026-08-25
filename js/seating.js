@@ -34,9 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
         { color: '#ef4444', label: 'Đỏ' },
         { color: '#8b5cf6', label: 'Tím' },
         { color: '#ec4899', label: 'Hồng' },
-        { color: '#06b6d4', label: 'Cyan' },
+        { color: '#06b6d4', label: 'Xanh ngọc' },
         { color: '#f97316', label: 'Cam' },
-        { color: '#84cc16', label: 'Lime' },
+        { color: '#84cc16', label: 'Xanh chanh' },
         { color: '#64748b', label: 'Xám' },
         { color: '#a3a3a3', label: 'Bạc' },
         { color: '#1e293b', label: 'Đen' },
@@ -1122,10 +1122,10 @@ document.addEventListener('DOMContentLoaded', () => {
             scheduleAutoSave();
             refreshUserChips();
             updateLegend();
-            toast(`Import: ${count} ô từ "${sheetName}" (${rows}×${cols})`, 'ok');
+            toast(`Đã nhập: ${count} ô từ "${sheetName}" (${rows}×${cols})`, 'ok');
         } catch (err) {
             console.error('Import error:', err);
-            toast('Lỗi import: ' + err.message, 'err');
+            toast('Lỗi khi nhập file: ' + err.message, 'err');
         }
         e.target.value = '';
     });
@@ -1389,10 +1389,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             XLSX.utils.book_append_sheet(wb, ws, 'Sơ đồ vị trí');
             XLSX.writeFile(wb, `So_do_vi_tri_${new Date().toISOString().slice(0, 10)}.xlsx`);
-            toast('Đã export Excel', 'ok');
+            toast('Đã xuất Excel', 'ok');
         } catch (err) {
             console.error('Export error:', err);
-            toast('Lỗi export: ' + err.message, 'err');
+            toast('Lỗi khi xuất file: ' + err.message, 'err');
         }
     });
 
@@ -1587,9 +1587,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showConfirm(msg, onOk) {
-        if (window.SeatingHelpers && typeof window.SeatingHelpers.showConfirm === 'function') {
-            return window.SeatingHelpers.showConfirm(msg, onOk);
-        }
         const modal = el('alertModal');
         el('alertTitle').textContent = 'Xác nhận';
         el('alertMessage').textContent = msg;

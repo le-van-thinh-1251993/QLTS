@@ -14,10 +14,10 @@ QLTS Web là ứng dụng quản lý tài sản nội bộ chạy dạng static 
 2. Chạy server local:
    - `npm start`
 3. Mở trình duyệt tại:
-   - `http://localhost:8080`
+   - `http://localhost:9000`
 
 Ghi chú:
-- Port mặc định là `8080`.
+- Port mặc định là `9000`.
 - Có thể đổi port bằng biến môi trường `PORT`.
 
 ## Scripts chính
@@ -36,7 +36,6 @@ Ghi chú:
 - `seating.html`: sơ đồ vị trí
 - `js/`: mã JavaScript client
 - `css/`: stylesheet
-- `data/`: dữ liệu backup hoặc dữ liệu mẫu
 - `serve.js`: web server local đơn giản
 
 ## Triển khai nhanh trên Vercel
@@ -52,5 +51,4 @@ Các bước cơ bản:
 
 ## Lưu ý
 
-- Không commit thông tin nhạy cảm.
-- Kiểm tra dữ liệu trong thư mục `data/` trước khi public repository.
+- Không commit thông tin nhạy cảm (file `config.js` chứa key Supabase đã được `.gitignore`).

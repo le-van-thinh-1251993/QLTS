@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Security: Content Security Policy -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
-    <title>Quản lý người dùng - IT Asset Management</title>
+    <title>Quản lý người dùng - Quản lý Tài sản CNTT</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -126,11 +126,11 @@
                         </div>
                     </div>
                     <div class="ml-4 md:ml-6 flex items-center relative group">
-                        <img src="https://i.pravatar.cc/40?u=admin" alt="User Avatar" class="w-10 h-10 rounded-full cursor-pointer">
+                        <img src="https://i.pravatar.cc/40?u=admin" alt="Ảnh đại diện" class="w-10 h-10 rounded-full cursor-pointer">
                         <div class="absolute top-full right-0 pt-2 w-48 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                             <div class="bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 border dark:border-slate-700">
                                 <div class="px-4 py-2 text-sm text-slate-700 dark:text-gray-200 border-b dark:border-slate-600">
-                                    <p class="font-semibold" id="header-user-name">Admin User</p>
+                                    <p class="font-semibold" id="header-user-name">Người dùng</p>
                                     <p class="text-xs text-slate-500 dark:text-gray-400 truncate" id="header-user-email">admin@example.com</p>
                                 </div>
                                 <a href="settings.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-slate-700">Tài khoản</a>
@@ -151,9 +151,9 @@
                         <select id="filterDepartment" class="border border-slate-300 rounded-lg px-4 py-2 bg-white text-slate-600 focus:outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
                             <option value="">Tất cả phòng ban</option>
                             <option value="IT">IT</option>
-                            <option value="Sales">Sales</option>
+                            <option value="Kinh doanh">Kinh doanh</option>
                             <option value="Marketing">Marketing</option>
-                            <option value="HR">HR</option>
+                            <option value="Nhân sự">Nhân sự</option>
                         </select>
                         <input type="file" id="userExcelFileInput" class="hidden" accept=".xlsx, .xls, .csv">
                         <div class="tooltip">
@@ -322,7 +322,7 @@
             <div class="mt-6 pt-4 border-t flex justify-between items-center">
                 <button id="btnDeleteSelectedUserImportRows" class="px-4 py-2 text-red-600 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"><i class="fa-solid fa-trash-can mr-2"></i>Xóa dòng đã chọn</button>
                 <div class="flex gap-3">
-                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg">Hủy</button><button id="btnConfirmUserImport" class="px-5 py-2 bg-blue-600 text-white rounded-lg disabled:bg-blue-300 disabled:cursor-not-allowed" title="Chỉ import các dòng hợp lệ và không được chọn để xóa">Xác nhận Import</button>
+                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg">Hủy</button><button id="btnConfirmUserImport" class="px-5 py-2 bg-blue-600 text-white rounded-lg disabled:bg-blue-300 disabled:cursor-not-allowed" title="Chỉ import các dòng hợp lệ và không được chọn để xóa">Xác nhận nhập</button>
                 </div>
             </div>
         </div>
@@ -378,21 +378,15 @@
     </div>
     <!-- LocalDB for local storage operations -->
     <!-- <script src="config.js"></script> -->
-    <script src="js/localDB.js"></script>
-    <script src="js/modules/app-core.js"></script>
-    <script src="js/modules/local-storage.js"></script>
-    <script src="js/modules/script-helpers.js"></script>
-    <script src="js/modules/data-layer.js"></script>
-    <script src="js/modules/ui-layer.js"></script>
-    <script src="js/modules/filter-layer.js"></script>
+    <script src="js/localDB.js?v=20260825-1"></script>
+    <script src="js/modules/script-helpers.js?v=20260825-1"></script>
     
-<script src="js/modules/page-common.js"></script>
-<script src="js/modules/page-data.js"></script>
-<script src="js/modules/page-ui.js"></script>
-<script src="js/modules/page-dashboard.js"></script>
-<script src="js/modules/page-license.js"></script>
-<script src="js/modules/page-settings.js"></script>
-<script src="js/script.js"></script>
-    <script src="./js/users.js"></script>
+<script src="js/modules/page-common.js?v=20260825-1"></script>
+<script src="js/modules/page-data.js?v=20260825-1"></script>
+<script src="js/modules/page-ui.js?v=20260825-1"></script>
+<script src="js/modules/page-dashboard.js?v=20260825-1"></script>
+<script src="js/modules/page-license.js?v=20260825-1"></script>
+<script src="js/modules/page-settings.js?v=20260825-1"></script>
+<script src="js/script.js?v=20260825-1"></script>
 </body>
 </html>

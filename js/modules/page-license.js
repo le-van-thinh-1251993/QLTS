@@ -1,32 +1,42 @@
 window.QLTSPageLicense = window.QLTSPageLicense || {};
+
+if (typeof window.handleAssetFileSelect !== 'function') window.handleAssetFileSelect = function () {};
+if (typeof window.handleUserFileSelect !== 'function') window.handleUserFileSelect = function () {};
+if (typeof window.applyAssetFilters !== 'function') window.applyAssetFilters = function () {};
+if (typeof window.applyLicenseFilters !== 'function') window.applyLicenseFilters = function () {};
+if (typeof window.applyUserFilters !== 'function') window.applyUserFilters = function () {};
+
 window.QLTSPageLicense.init = async function () {
     // =================================================================
-    
+    // filterAssetUser / filterLicenseUser Choices.js instances are already
+    // created and kept up to date by page-dashboard.js's updateDropdowns().
+    // Re-initializing them here caused "multiple instances of Choices" errors.
+
     // Gắn sự kiện cho các bộ lọc và tìm kiếm một cách rõ ràng hơn
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         searchInput.addEventListener('input', () => {
             if (document.getElementById('licenseTableBody')) {
-                applyLicenseFilters();
+                window.applyLicenseFilters();
             } else if (document.getElementById('assetTableBody')) {
-                applyAssetFilters();
+                window.applyAssetFilters();
             }
         });
     }
-    document.getElementById('searchUserInput')?.addEventListener('input', applyUserFilters);
-    document.getElementById('filterDepartment')?.addEventListener('change', applyUserFilters);
-    document.getElementById('filterLicenseType')?.addEventListener('change', applyLicenseFilters);
-    document.getElementById('filterPackageType')?.addEventListener('change', applyLicenseFilters); // [MỚI] Thêm event listener
-    document.getElementById('userExcelFileInput')?.addEventListener('change', handleUserFileSelect);
-    document.getElementById('excelFileInput')?.addEventListener('change', handleAssetFileSelect);
+    document.getElementById('searchUserInput')?.addEventListener('input', window.applyUserFilters);
+    document.getElementById('filterDepartment')?.addEventListener('change', window.applyUserFilters);
+    document.getElementById('filterLicenseType')?.addEventListener('change', window.applyLicenseFilters);
+    document.getElementById('filterPackageType')?.addEventListener('change', window.applyLicenseFilters); // [MỚI] Thêm event listener
+    document.getElementById('userExcelFileInput')?.addEventListener('change', window.handleUserFileSelect);
+    document.getElementById('excelFileInput')?.addEventListener('change', window.handleAssetFileSelect);
     // Date filter listeners (assets)
     // Asset filter listeners
-    document.getElementById('filterAssetStatus')?.addEventListener('change', applyAssetFilters);
-    document.getElementById('filterAssetLocation')?.addEventListener('change', applyAssetFilters);
-    document.getElementById('filterAssetCategory')?.addEventListener('change', applyAssetFilters);
+    document.getElementById('filterAssetStatus')?.addEventListener('change', window.applyAssetFilters);
+    document.getElementById('filterAssetLocation')?.addEventListener('change', window.applyAssetFilters);
+    document.getElementById('filterAssetCategory')?.addEventListener('change', window.applyAssetFilters);
     // trigger filtering when user types in the datalist-input or when they change the value
-    document.getElementById('filterAssetUser')?.addEventListener('input', applyAssetFilters);
-    document.getElementById('filterAssetUser')?.addEventListener('change', applyAssetFilters);
+    document.getElementById('filterAssetUser')?.addEventListener('input', window.applyAssetFilters);
+    document.getElementById('filterAssetUser')?.addEventListener('change', window.applyAssetFilters);
     
     // Thêm event listener cho Choices.js instance để trigger filter khi thay đổi
     // Sẽ được gọi sau khi Choices instance được tạo trong updateDropdowns()
@@ -35,38 +45,42 @@ window.QLTSPageLicense.init = async function () {
         if (document.getElementById('filterAssetStatus')) document.getElementById('filterAssetStatus').value = '';
         if (document.getElementById('filterAssetLocation')) document.getElementById('filterAssetLocation').value = '';
         if (document.getElementById('filterAssetCategory')) document.getElementById('filterAssetCategory').value = '';
-        // Clear Choices instance nếu có
         if (filterAssetUserChoicesInstance) {
             try {
-                filterAssetUserChoicesInstance.removeActiveItems();
+                const selectedValue = filterAssetUserChoicesInstance.getValue(true);
+                if (selectedValue) {
+                    filterAssetUserChoicesInstance.setChoiceByValue('');
+                }
                 filterAssetUserChoicesInstance.clearInput();
             } catch (err) {
                 console.warn('Error clearing filterAssetUserChoicesInstance:', err);
             }
         }
         if (document.getElementById('filterAssetUser')) document.getElementById('filterAssetUser').value = '';
-        applyAssetFilters();
+        window.applyAssetFilters();
     });
     // Date filter listeners (licenses)
     // License filter listeners
-    document.getElementById('filterLicenseStatus')?.addEventListener('change', applyLicenseFilters);
-    document.getElementById('filterLicenseUser')?.addEventListener('input', applyLicenseFilters);
-    document.getElementById('filterLicenseUser')?.addEventListener('change', applyLicenseFilters);
+    document.getElementById('filterLicenseStatus')?.addEventListener('change', window.applyLicenseFilters);
+    document.getElementById('filterLicenseUser')?.addEventListener('input', window.applyLicenseFilters);
+    document.getElementById('filterLicenseUser')?.addEventListener('change', window.applyLicenseFilters);
     document.getElementById('clearLicenseFilters')?.addEventListener('click', () => {
         if (document.getElementById('filterLicenseType')) document.getElementById('filterLicenseType').value = '';
         if (document.getElementById('filterPackageType')) document.getElementById('filterPackageType').value = '';
         if (document.getElementById('filterLicenseStatus')) document.getElementById('filterLicenseStatus').value = '';
-        // Clear Choices instance nếu có
         if (filterLicenseUserChoicesInstance) {
             try {
-                filterLicenseUserChoicesInstance.removeActiveItems();
+                const selectedValue = filterLicenseUserChoicesInstance.getValue(true);
+                if (selectedValue) {
+                    filterLicenseUserChoicesInstance.setChoiceByValue('');
+                }
                 filterLicenseUserChoicesInstance.clearInput();
             } catch (err) {
                 console.warn('Error clearing filterLicenseUserChoicesInstance:', err);
             }
         }
         if (document.getElementById('filterLicenseUser')) document.getElementById('filterLicenseUser').value = '';
-        applyLicenseFilters();
+        window.applyLicenseFilters();
     });
 
     // Export lịch sử (asset / license)
@@ -256,19 +270,28 @@ window.QLTSPageLicense.init = async function () {
             // Khi chuyển trang, GIỮ NGUYÊN filter, chỉ thay đổi trang hiện tại
             if (tbl === 'assets') {
                 assetCurrentPage = p;
-                applyAssetFilters();
+                window.applyAssetFilters();
             } else if (tbl === 'licenses') {
                 licenseCurrentPage = p;
-                applyLicenseFilters();
+                window.applyLicenseFilters();
             } else if (tbl === 'users') {
                 userCurrentPage = p;
-                applyUserFilters();
+                window.applyUserFilters();
+            } else if (tbl === 'maintenance') {
+                maintenanceCurrentPage = p;
+                renderMaintenanceList();
+            } else if (tbl === 'stock') {
+                stockCheckCurrentPage = p;
+                renderStockCheckList();
+            } else if (tbl === 'activity') {
+                activityLogCurrentPage = p;
+                if (typeof window.renderActivityLog === 'function') window.renderActivityLog();
             }
             return;
         }
 
         const sortHeader = t.closest('.sortable-header');
-        if (sortHeader) { const col = sortHeader.dataset.sort, tbl = sortHeader.closest('table').id; let sObj = tbl === 'assetTable' ? assetSort : (tbl === 'userTable' ? userSort : licenseSort); if (sObj.column === col) sObj.direction = sObj.direction === 'asc' ? 'desc' : 'asc'; else { sObj.column = col; sObj.direction = 'asc'; } if (tbl === 'assetTable') applyAssetFilters(); else if (tbl === 'userTable') applyUserFilters(); else applyLicenseFilters(); return; }
+        if (sortHeader) { const col = sortHeader.dataset.sort, tbl = sortHeader.closest('table').id; let sObj = tbl === 'assetTable' ? assetSort : (tbl === 'userTable' ? userSort : licenseSort); if (sObj.column === col) sObj.direction = sObj.direction === 'asc' ? 'desc' : 'asc'; else { sObj.column = col; sObj.direction = 'asc'; } if (tbl === 'assetTable') window.applyAssetFilters(); else if (tbl === 'userTable') window.applyUserFilters(); else window.applyLicenseFilters(); return; }
 
         if (t.closest('#importUsersBtn')) { document.getElementById('userExcelFileInput').click(); return; }
         if (t.closest('#importExcelBtn')) { document.getElementById('excelFileInput').click(); return; }
@@ -293,18 +316,19 @@ window.QLTSPageLicense.init = async function () {
         if (t.closest('#addUserBtn')) { safeCloseModal('addUserModal'); updateDropdowns(); openModal('addUserModal'); return; }
 
         if (t.closest('#exportExcelBtn')) {
-            applyAssetFilters();
+            window.applyAssetFilters();
             const activeFilter = isAssetFilterOrSearchActive();
             const sourceRows = resolveExportData(currentFilteredAssets, assets, activeFilter);
-            const data = sourceRows.map(a => ({ "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Ngày nhập": formatDateDisplay(a.purchase_date), "Người dùng": a.user, "Trạng thái": a.status, "Ghi chú": a.notes }));
+            const data = sourceRows.map(a => ({ "Mã tài sản": a.asset_code || '', "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Ngày nhập": formatDateDisplay(a.purchase_date), "Người dùng": a.user, "Trạng thái": a.status, "Ghi chú": a.notes }));
             exportToExcel(data, 'Assets.xlsx');
             return;
         }
         if (t.closest('#exportLicenseBtn')) {
-            applyLicenseFilters();
+            window.applyLicenseFilters();
             const activeFilter = isLicenseFilterOrSearchActive();
             const sourceRows = resolveExportData(currentFilteredLicenses, licenses, activeFilter);
             const data = sourceRows.map(l => ({
+                "Mã license": l.license_code || '',
                 "Loại Key": l.key_type || '',
                 "Mã Key": l.license_key || '',
                 "Gói": l.package_type || '',
@@ -341,6 +365,35 @@ window.QLTSPageLicense.init = async function () {
                 return showInfoModal("Bạn không có quyền thực hiện hành động này.", "Truy cập bị từ chối");
             }
 
+            if (action === 'copy-key') {
+                const keyValue = actionBtn.dataset.key || '';
+                const icon = actionBtn.querySelector('i');
+                const restoreIcon = () => { if (icon) { icon.classList.remove('fa-check', 'text-green-600'); icon.classList.add('fa-regular', 'fa-copy'); } };
+                const markCopied = () => {
+                    if (icon) { icon.classList.remove('fa-regular', 'fa-copy'); icon.classList.add('fa-solid', 'fa-check', 'text-green-600'); }
+                    setTimeout(restoreIcon, 1500);
+                };
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(keyValue);
+                    } else {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = keyValue;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                    }
+                    markCopied();
+                } catch (err) {
+                    console.warn('Copy mã key thất bại', err);
+                    showInfoModal('Không thể copy mã key. Vui lòng copy thủ công.', 'Lỗi');
+                }
+                return;
+            }
+
             // [KHÔI PHỤC] Xử lý đánh dấu đã đọc thông báo
             if (action === 'mark-notif-read') {
                 const notifId = actionBtn.dataset.notifId;
@@ -356,17 +409,26 @@ window.QLTSPageLicense.init = async function () {
                 return;
             }
 
-            if (action === 'delete-asset') showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'ASSET', 'Xóa', 'Xóa tài sản'); await refreshApp(); } });
+            if (action === 'delete-asset') {
+                const assetToDelete = assets.find(a => a.id === id);
+                if (assetToDelete && assetToDelete.status !== 'Stock') {
+                    return showInfoModal('Tài sản đang sử dụng hoặc hỏng hóc. Vui lòng thu hồi về kho trước khi xóa.', 'Không thể xóa');
+                }
+                const assetName = assetToDelete?.name || 'tài sản';
+                showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'ASSET', 'Xóa', `Xóa tài sản: ${assetName}`); await refreshApp(); showInfoModal(`Đã xóa "${assetName}"!`, 'Xóa thành công'); } });
+            }
             else if (action === 'edit-asset') { const item = assets.find(a => a.id === id); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); document.getElementById('modal_assetPurchaseDate').value = item.purchase_date ? item.purchase_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetCost').value = item.cost || 0; document.getElementById('modal_assetSalvage').value = item.salvage_value || 0; document.getElementById('modal_assetLife').value = item.useful_life_months || ''; document.getElementById('modal_assetDepMethod').value = item.depreciation_method || 'straight_line'; updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
             else if (action === 'checkout-asset') { tempId = id; document.getElementById('assignAssetName').textContent = assets.find(a => a.id === id)?.name; initAllUserDropdowns(); openModal('checkOutModal'); }
             else if (action === 'checkin-asset') {
                 const assetToCheckIn = assets.find(a => a.id === id);
                 const fromUser = assetToCheckIn?.user || 'Không rõ';
+                const assetName = assetToCheckIn?.name || 'tài sản';
                 showConfirmationModal(`Thu hồi tài sản từ ${fromUser}?`, async () => {
                     await supabaseClient.from('assets').update({ status: 'Stock', user_id: null }).eq('id', id);
                     // SỬA LỖI: Thêm tên người dùng vào log để lịch sử chi tiết hơn
                     await addLog(id, 'ASSET', 'Thu hồi', `Từ người dùng: ${fromUser}`);
                     await refreshApp();
+                    showInfoModal(`Đã thu hồi "${assetName}" từ ${fromUser}!`, 'Thu hồi thành công');
                 });
             }
             else if (action === 'transfer') { tempId = id; document.getElementById('transferAssetName').textContent = assets.find(a => a.id === id)?.name; document.getElementById('transferCurrentUser').value = assets.find(a => a.id === id)?.user || 'Chưa có'; initAllUserDropdowns(); openModal('transferModal'); }
@@ -380,44 +442,196 @@ window.QLTSPageLicense.init = async function () {
                     : '<tr><td colspan="4" class="p-4 text-center">Không có lịch sử</td></tr>';
                 openModal('historyModal');
             }
-            else if (action === 'delete-license') showConfirmationModal("Xóa License?", async () => { const { error } = await supabaseClient.from('licenses').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'LICENSE', 'Xóa', 'Xóa license'); await refreshApp(); } });
+            else if (action === 'delete-license') {
+                const licenseToDelete = licenses.find(l => l.id === id);
+                if (licenseToDelete && licenseToDelete.status !== 'Stock') {
+                    return showInfoModal('License đang sử dụng hoặc hỏng hóc. Vui lòng thu hồi về kho trước khi xóa.', 'Không thể xóa');
+                }
+                const licenseName = licenseToDelete?.key_type || 'license';
+                showConfirmationModal("Xóa License?", async () => { const { error } = await supabaseClient.from('licenses').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'LICENSE', 'Xóa', `Xóa license: ${licenseName}`); await refreshApp(); showInfoModal(`Đã xóa "${licenseName}"!`, 'Xóa thành công'); } });
+            }
             else if (action === 'edit-license') { const item = licenses.find(l => l.id === id); if (item) { document.getElementById('modal_licenseId').value = item.id;['modal_licenseKey', 'modal_packageType', 'modal_expirationDate', 'modal_licenseStatus', 'modal_licenseNotes'].forEach(k => { let val = item[k.replace('modal_', '').replace('expirationDate', 'expiration_date').replace('licenseKey', 'license_key').replace('packageType', 'package_type').replace('licenseStatus', 'status').replace('licenseNotes', 'notes')]; document.getElementById(k).value = val || ''; }); updateDropdowns(); document.getElementById('modal_licenseType').value = item.key_type; document.getElementById('licenseModalTitle').textContent = 'Sửa License'; initAllUserDropdowns(item.user); openModal('licenseModal'); } }
             else if (action === 'checkout-license') { tempId = id; document.getElementById('assignLicenseName').textContent = licenses.find(l => l.id === id)?.key_type; initAllUserDropdowns(); openModal('checkOutLicenseModal'); }
             else if (action === 'checkin-license') {
                 const licenseToCheckIn = licenses.find(l => l.id === id);
                 const fromUser = licenseToCheckIn?.user || 'Không rõ';
+                const licenseName = licenseToCheckIn?.key_type || 'license';
                 showConfirmationModal(`Thu hồi license từ ${fromUser}?`, async () => {
                     await supabaseClient.from('licenses').update({ status: 'Stock', user_id: null }).eq('id', id);
                     await addLog(id, 'LICENSE', 'Thu hồi', `Từ người dùng: ${fromUser}`);
                     await refreshApp();
+                    showInfoModal(`Đã thu hồi "${licenseName}" từ ${fromUser}!`, 'Thu hồi thành công');
                 });
             }
 
             else if (action === 'delete-user') { if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal("Xóa nhân viên?", async () => { await supabaseClient.from('users').delete().eq('id', id); await addLog(id, 'USER', 'Xóa', 'Xóa nhân viên'); await refreshApp(); }); }
             else if (action === 'edit-user') { const u = users.find(x => x.id === id); if (u) { document.getElementById('userId').value = u.id; document.getElementById('name').value = u.name; document.getElementById('email').value = u.email; document.getElementById('status').value = u.status; updateDropdowns(); document.getElementById('department').value = departments.find(d => d.name === u.department)?.id || ''; openModal('addUserModal'); } }
 
-            else if (action === 'delete-cat') showConfirmationModal("Xóa danh mục?", async () => { await supabaseClient.from('categories').delete().eq('id', id); await refreshApp(); renderLists(); });
+            else if (action === 'delete-cat') { const catName = categories.find(c => c.id === id)?.name || ''; showConfirmationModal("Xóa danh mục?", async () => { await supabaseClient.from('categories').delete().eq('id', id); await addLog(id, 'CATEGORY', 'Xóa', catName); await refreshApp(); renderLists(); }); }
             else if (action === 'edit-cat') { document.getElementById('categoryName').value = actionBtn.dataset.name; document.getElementById('categoryOldName').value = id; document.getElementById('btnCancelCategoryEdit').classList.remove('hidden'); document.getElementById('categoryName').focus(); }
-            else if (action === 'delete-dept') showConfirmationModal("Xóa phòng ban?", async () => { await supabaseClient.from('departments').delete().eq('id', id); await refreshApp(); renderLists(); });
+            else if (action === 'delete-dept') { const deptName = departments.find(d => d.id === id)?.name || ''; showConfirmationModal("Xóa phòng ban?", async () => { await supabaseClient.from('departments').delete().eq('id', id); await addLog(id, 'DEPARTMENT', 'Xóa', deptName); await refreshApp(); renderLists(); }); }
             else if (action === 'edit-dept') { document.getElementById('deptName').value = actionBtn.dataset.name; document.getElementById('deptId').value = id; document.getElementById('cancelDeptEdit').classList.remove('hidden'); }
-            else if (action === 'delete-lic-type') showConfirmationModal("Xóa loại key?", async () => { await supabaseClient.from('license_types').delete().eq('id', id); await refreshApp(); renderLists(); });
+            else if (action === 'delete-lic-type') { const typeName = licenseTypes.find(t => t.id === id)?.name || ''; showConfirmationModal("Xóa loại key?", async () => { await supabaseClient.from('license_types').delete().eq('id', id); await addLog(id, 'LICENSE_TYPE', 'Xóa', typeName); await refreshApp(); renderLists(); }); }
             else if (action === 'edit-lic-type') { document.getElementById('licenseTypeName').value = actionBtn.dataset.name; document.getElementById('licenseTypeId').value = id; document.getElementById('btnCancelLicenseTypeEdit').classList.remove('hidden'); }
             else if (action === 'delete-maint') {
+                const task = maintenanceTasks.find(t => t.id === id);
+                if (task && task.status === 'Hoàn thành' && currentUserProfile.role !== 'admin') {
+                    return showInfoModal('Lịch bảo trì đã hoàn thành, chỉ admin mới được xóa.', 'Không thể xóa');
+                }
                 showConfirmationModal("Xóa lịch bảo trì này?", async () => {
                     const { error } = await supabaseClient.from('maintenance_tasks').delete().eq('id', id);
                     if (error) return handleSupabaseError(error, 'xóa lịch bảo trì');
+                    if (task?.asset_id) await addLog(task.asset_id, 'MAINT', 'Xóa', `Xóa lịch bảo trì: ${task.title || ''}`);
                     await refreshApp();
+                    showInfoModal('Đã xóa lịch bảo trì!', 'Xóa thành công');
+                });
+            }
+            else if (action === 'complete-maint') {
+                const task = maintenanceTasks.find(t => t.id === id);
+                showConfirmationModal("Đánh dấu lịch bảo trì này đã hoàn thành?", async () => {
+                    const { error } = await supabaseClient.from('maintenance_tasks').update({ status: 'Hoàn thành' }).eq('id', id);
+                    if (error) return handleSupabaseError(error, 'cập nhật lịch bảo trì');
+                    if (task?.asset_id) await addLog(task.asset_id, 'MAINT', 'Hoàn thành', `Hoàn thành lịch bảo trì: ${task.title || ''}`);
+                    await refreshApp();
+                    showInfoModal(`Đã đánh dấu "${task?.title || 'lịch bảo trì'}" hoàn thành!`, 'Cập nhật thành công');
                 });
             }
             else if (action === 'delete-stock') {
+                const stockCheck = stockChecks.find(s => s.id === id);
+                if (stockCheck && stockCheck.status === 'Hoàn thành' && currentUserProfile.role !== 'admin') {
+                    return showInfoModal('Đợt kiểm kê đã hoàn thành, chỉ admin mới được xóa.', 'Không thể xóa');
+                }
                 showConfirmationModal("Xóa đợt kiểm kê này?", async () => {
                     const { error } = await supabaseClient.from('stock_checks').delete().eq('id', id);
                     if (error) return handleSupabaseError(error, 'xóa đợt kiểm kê');
+                    await addLog(id, 'STOCK_CHECK', 'Xóa', stockCheck?.note || '');
                     await refreshApp();
+                    showInfoModal('Đã xóa đợt kiểm kê!', 'Xóa thành công');
                 });
             }
+            else if (action === 'complete-stock') {
+                const stockCheck = stockChecks.find(s => s.id === id);
+                showConfirmationModal("Đánh dấu đợt kiểm kê này đã hoàn thành?", async () => {
+                    const { error } = await supabaseClient.from('stock_checks').update({ status: 'Hoàn thành' }).eq('id', id);
+                    if (error) return handleSupabaseError(error, 'cập nhật đợt kiểm kê');
+                    await addLog(id, 'STOCK_CHECK', 'Hoàn thành', stockCheck?.note || '');
+                    await refreshApp();
+                    showInfoModal('Đã đánh dấu đợt kiểm kê hoàn thành!', 'Cập nhật thành công');
+                });
+            }
+            else if (action === 'print-asset-label') openPrintLabelModal('asset', [id]);
+            else if (action === 'print-license-label') openPrintLabelModal('license', [id]);
         }
     });
+
+    // =================================================================
+    // IN TEM BARCODE/QR (Assets & Licenses)
+    // =================================================================
+    document.body.addEventListener('change', (e) => {
+        const t = e.target;
+        if (t.matches('.asset-select-checkbox')) {
+            const id = parseInt(t.dataset.id, 10);
+            if (t.checked) selectedAssetIds.add(id); else selectedAssetIds.delete(id);
+        } else if (t.matches('.license-select-checkbox')) {
+            const id = parseInt(t.dataset.id, 10);
+            if (t.checked) selectedLicenseIds.add(id); else selectedLicenseIds.delete(id);
+        } else if (t.id === 'selectAllAssets') {
+            document.querySelectorAll('.asset-select-checkbox').forEach(cb => {
+                cb.checked = t.checked;
+                const id = parseInt(cb.dataset.id, 10);
+                if (t.checked) selectedAssetIds.add(id); else selectedAssetIds.delete(id);
+            });
+        } else if (t.id === 'selectAllLicenses') {
+            document.querySelectorAll('.license-select-checkbox').forEach(cb => {
+                cb.checked = t.checked;
+                const id = parseInt(cb.dataset.id, 10);
+                if (t.checked) selectedLicenseIds.add(id); else selectedLicenseIds.delete(id);
+            });
+        } else if (t.name === 'labelType' && document.getElementById('printLabelModal') && !document.getElementById('printLabelModal').classList.contains('hidden')) {
+            renderPrintLabelPreview();
+        }
+    });
+
+    document.getElementById('printAssetLabelsBtn')?.addEventListener('click', () => {
+        const ids = selectedAssetIds.size ? Array.from(selectedAssetIds) : (isAssetFilterOrSearchActive() ? currentFilteredAssets.map(a => a.id) : assets.map(a => a.id));
+        if (!ids.length) return showInfoModal('Không có tài sản nào để in tem.');
+        openPrintLabelModal('asset', ids);
+    });
+
+    document.getElementById('printLicenseLabelsBtn')?.addEventListener('click', () => {
+        const ids = selectedLicenseIds.size ? Array.from(selectedLicenseIds) : (isLicenseFilterOrSearchActive() ? currentFilteredLicenses.map(l => l.id) : licenses.map(l => l.id));
+        if (!ids.length) return showInfoModal('Không có license nào để in tem.');
+        openPrintLabelModal('license', ids);
+    });
+
+    let printLabelState = { kind: 'asset', ids: [] };
+
+    function openPrintLabelModal(kind, ids) {
+        printLabelState = { kind, ids };
+        const countEl = document.getElementById('printLabelCount');
+        if (countEl) countEl.textContent = `${ids.length} tem sẽ được in`;
+        openModal('printLabelModal');
+        renderPrintLabelPreview();
+    }
+
+    function renderPrintLabelPreview() {
+        const container = document.getElementById('printLabelPreview');
+        if (!container) return;
+        const type = document.querySelector('input[name="labelType"]:checked')?.value || 'barcode';
+        const { kind, ids } = printLabelState;
+
+        const items = kind === 'asset'
+            ? ids.map(id => assets.find(a => a.id === id)).filter(Boolean)
+            : ids.map(id => licenses.find(l => l.id === id)).filter(Boolean);
+
+        if (!items.length) { container.innerHTML = '<p class="text-center text-slate-400 p-8">Không có dữ liệu để in.</p>'; return; }
+
+        container.innerHTML = items.map(item => {
+            const code = kind === 'asset' ? (item.asset_code || '') : (item.license_code || '');
+            const title = kind === 'asset' ? item.name : item.key_type;
+            const elId = `label-${kind}-${item.id}`;
+            return `
+                <div class="label-card">
+                    <div class="label-card-title">${title || ''}</div>
+                    ${type === 'barcode'
+                        ? `<svg class="label-barcode" id="${elId}"></svg>`
+                        : `<div class="label-qr" id="${elId}"></div>`}
+                    <div class="label-card-code">${code}</div>
+                </div>
+            `;
+        }).join('');
+
+        items.forEach(item => {
+            const code = kind === 'asset' ? (item.asset_code || '') : (item.license_code || '');
+            const elId = `label-${kind}-${item.id}`;
+            const el = document.getElementById(elId);
+            if (!el) return;
+            if (type === 'barcode') {
+                try {
+                    if (typeof JsBarcode === 'function') JsBarcode(el, code || '-', { format: 'CODE128', width: 2, height: 50, fontSize: 14, margin: 4 });
+                } catch (e) { console.warn('JsBarcode render failed', e); }
+            } else {
+                const info = kind === 'asset'
+                    ? `Mã tài sản: ${code}\nTên: ${item.name || ''}\nLoại: ${item.category || ''}\nVị trí: ${item.location || ''}\nNgười dùng: ${item.user || 'Chưa cấp phát'}\nTrạng thái: ${(STATUS_MAP[item.status] || {}).text || item.status || ''}`
+                    : `Mã license: ${code}\nLoại key: ${item.key_type || ''}\nGói: ${item.package_type || ''}\nHạn SD: ${item.expiration_date || 'Vĩnh viễn'}\nNgười dùng: ${item.user || 'Chưa cấp phát'}\nTrạng thái: ${(STATUS_MAP[item.status] || {}).text || item.status || ''}`;
+                try {
+                    if (typeof window.qrcode === 'function') {
+                        // Mặc định thư viện dùng bảng mã 'default' (cắt mỗi ký tự về 1 byte thấp),
+                        // làm hỏng tiếng Việt có dấu khi quét. Chuyển sang bộ mã hoá UTF-8 có sẵn.
+                        if (window.qrcode.stringToBytesFuncs && window.qrcode.stringToBytesFuncs['UTF-8']) {
+                            window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8'];
+                        }
+                        const qr = window.qrcode(0, 'M');
+                        qr.addData(info);
+                        qr.make();
+                        el.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
+                    }
+                } catch (e) { console.warn('QRCode render failed', e); }
+            }
+        });
+    }
+
+    document.getElementById('btnDoPrintLabels')?.addEventListener('click', () => window.print());
     // =================================================================
     // LOGIC CHUYỂN ĐỔI LICENSE (TRANSFER) & LỊCH SỬ (HISTORY)
     // =================================================================
@@ -524,9 +738,9 @@ window.QLTSPageLicense.init = async function () {
                 );
 
                 // 3. Thông báo & Refresh
-                showInfoModal("Chuyển đổi thành công!");
                 safeCloseModal('transferLicenseModal');
                 await refreshApp();
+                showInfoModal(`Đã chuyển "${license?.key_type || 'license'}" sang ${newUser?.name}!`, 'Chuyển đổi thành công');
 
             } catch (err) {
                 handleSupabaseError(err, "Chuyển đổi License");
@@ -583,7 +797,7 @@ window.QLTSPageLicense.init = async function () {
             tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-red-400">Lỗi tải lịch sử.</td></tr>';
         }
     }
-    // Form Submits
-    // =================================================================
-    // 8. SETTINGS PAGE LOGIC
+
+    return;
+};
 

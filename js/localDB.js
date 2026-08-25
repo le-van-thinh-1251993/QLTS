@@ -476,40 +476,167 @@ const LocalDB = {
     setDefaultData() {
         console.log('LocalDB.setDefaultData() called');
         const now = new Date().toISOString();
+        const departments = [
+            { id: 1, name: 'IT', created_at: now },
+            { id: 2, name: 'Kế toán', created_at: now },
+            { id: 3, name: 'Nhân sự', created_at: now },
+            { id: 4, name: 'Kinh doanh', created_at: now },
+            { id: 5, name: 'Marketing', created_at: now },
+            { id: 6, name: 'Hành chính', created_at: now }
+        ];
+
+        const categories = [
+            { id: 1, name: 'Laptop', created_at: now },
+            { id: 2, name: 'Desktop', created_at: now },
+            { id: 3, name: 'Monitor', created_at: now },
+            { id: 4, name: 'Bàn phím', created_at: now },
+            { id: 5, name: 'Chuột', created_at: now },
+            { id: 6, name: 'Điện thoại', created_at: now },
+            { id: 7, name: 'Máy tính bảng', created_at: now },
+            { id: 8, name: 'Máy in', created_at: now }
+        ];
+
+        const licenseTypes = [
+            { id: 1, name: 'Windows', created_at: now },
+            { id: 2, name: 'Office', created_at: now },
+            { id: 3, name: 'Adobe', created_at: now },
+            { id: 4, name: 'Autodesk', created_at: now },
+            { id: 5, name: 'Google Workspace', created_at: now }
+        ];
+
+        const userNames = [
+            'Nguyễn Văn A', 'Trần Thị B', 'Lê Văn C', 'Phạm Thị D', 'Hoàng Văn E',
+            'Vũ Thị F', 'Đặng Văn G', 'Ngô Thị H', 'Bùi Văn I', 'Mai Thị K',
+            'Dương Văn L', 'Hà Thị M', 'Tô Văn N', 'Lý Thị O', 'Quách Văn P',
+            'Hồ Thị Q', 'Trịnh Văn R', 'Kim Thị S', 'Mạch Văn T', 'Cao Thị U'
+        ];
+
+        const users = userNames.map((name, index) => ({
+            id: index + 1,
+            name,
+            email: `${name.toLowerCase().normalize('NFD').replace(/[^a-z ]/g, '').replace(/\s+/g, '.')}@company.com`,
+            department_id: (index % departments.length) + 1,
+            status: index % 4 === 0 ? 'Nghỉ phép' : 'Đang hoạt động',
+            avatar: this.buildUserAvatar(name),
+            created_at: now
+        }));
+
+        const assetNames = [
+            'Laptop Dell XPS 13', 'Laptop ThinkPad T14', 'Laptop MacBook Pro 14', 'Desktop Dell OptiPlex',
+            'Desktop HP ProDesk', 'Monitor LG 27inch', 'Monitor Dell 24inch', 'Keyboard Logitech K380',
+            'Mouse Logitech M185', 'Phone iPhone 15', 'Phone Samsung S24', 'Tablet iPad Air',
+            'Printer Canon LBP', 'Printer HP LaserJet', 'Laptop ASUS VivoBook', 'Desktop Lenovo ThinkCentre',
+            'Monitor AOC 32inch', 'Keyboard Keychron K2', 'Mouse Rapoo M500', 'Phone Xiaomi 14'
+        ];
+
+        const assetLocation = ['Phòng IT', 'Phòng Kế toán', 'Phòng Nhân sự', 'Phòng Kinh doanh', 'Phòng Marketing', 'Phòng Hành chính', 'Kho trung tâm'];
+        const assetStatus = ['Active', 'Stock', 'Repair', 'Broken'];
+
+        const assets = assetNames.map((name, index) => ({
+            id: index + 1,
+            name,
+            config: `${['i7', 'i5', 'Ryzen 5', 'Ryzen 7'][index % 4]} ${['16GB', '32GB'][index % 2]} RAM ${['512GB SSD', '1TB SSD', '27 inch', '4K'][index % 4]}`,
+            category_id: (index % categories.length) + 1,
+            location: assetLocation[index % assetLocation.length],
+            purchase_date: new Date(Date.now() - (index + 1) * 20 * 86400000).toISOString().slice(0, 10),
+            cost: 9000000 + index * 450000,
+            salvage_value: 500000 + index * 40000,
+            useful_life_months: 24 + (index % 5) * 12,
+            depreciation_method: index % 2 === 0 ? 'straight_line' : 'declining_balance',
+            status: assetStatus[index % assetStatus.length],
+            notes: index % 2 === 0 ? 'Thiết bị đang sử dụng' : 'Sẵn sàng cấp phát',
+            user_id: index < 10 ? (index % users.length) + 1 : null,
+            created_at: now
+        }));
+
+        const licenseKeys = [
+            'WIN-2024-001', 'WIN-2024-002', 'OFF-2024-001', 'OFF-2024-002', 'ADBE-2024-001',
+            'ADBE-2024-002', 'AUTO-2024-001', 'AUTO-2024-002', 'GWS-2024-001', 'GWS-2024-002',
+            'WIN-2024-003', 'OFF-2024-003', 'ADBE-2024-003', 'AUTO-2024-003', 'GWS-2024-003',
+            'WIN-2024-004', 'OFF-2024-004', 'ADBE-2024-004', 'AUTO-2024-004', 'GWS-2024-004'
+        ];
+
+        const licenses = licenseKeys.map((key, index) => {
+            // Vài license đã hết hạn thật sự (ngày trong quá khứ) để demo trạng thái "Hết hạn",
+            // số còn lại còn hạn dùng - status luôn khớp với expiration_date, không random độc lập.
+            const isExpiredDemo = index % 5 === 0;
+            const offsetDays = isExpiredDemo ? -(index + 10) * 20 : (index + 1) * 45;
+            return {
+                id: index + 1,
+                key_type: licenseTypes[index % licenseTypes.length].name,
+                license_key: key,
+                package_type: ['OEM', 'Business', 'Enterprise', 'Education'][index % 4],
+                expiration_date: new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10),
+                user_id: (index % users.length) + 1,
+                status: isExpiredDemo ? 'Expired' : 'Active',
+                notes: index % 2 === 0 ? 'Thuê bao có phí' : 'Đã kích hoạt',
+                created_at: now
+            };
+        });
+
+        const maintenanceTasks = Array.from({ length: 8 }, (_, index) => ({
+            id: index + 1,
+            asset_id: (index % assets.length) + 1,
+            title: `Bảo trì ${['Máy văn phòng', 'Màn hình', 'Máy in', 'Laptop', 'Thiết bị mạng'][index % 5]}`,
+            due_date: new Date(Date.now() + (index + 2) * 10 * 86400000).toISOString().slice(0, 10),
+            status: index % 3 === 0 ? 'Chưa xử lý' : 'Hoàn thành',
+            note: ['Ưu tiên cao', 'Cần kiểm tra định kỳ', 'Bảo dưỡng thường kỳ'][index % 3],
+            created_by: 1,
+            created_at: now
+        }));
+
+        const maintenanceEvents = maintenanceTasks.map((task, index) => ({
+            id: index + 1,
+            maintenance_task_id: task.id,
+            asset_id: task.asset_id,
+            action: ['Checked', 'Updated', 'Resolved'][index % 3],
+            details: `Ghi nhận ${task.title}`,
+            created_at: now
+        }));
+
+        const stockChecks = Array.from({ length: 5 }, (_, index) => ({
+            id: index + 1,
+            name: `Đợt kiểm kê ${index + 1}`,
+            started_at: new Date(Date.now() - index * 8 * 86400000).toISOString().slice(0, 10),
+            status: index % 2 === 0 ? 'Đang mở' : 'Hoàn thành',
+            note: ['Kiểm kê hàng quý', 'Kiểm kê theo phòng ban', 'Kiểm kê định kỳ'][index % 3],
+            created_by: 1,
+            created_at: now
+        }));
+
+        const stockCheckItems = stockChecks.flatMap((check, checkIndex) =>
+            Array.from({ length: 3 }, (_, itemIndex) => ({
+                id: checkIndex * 10 + itemIndex + 1,
+                stock_check_id: check.id,
+                asset_id: ((checkIndex + itemIndex) % assets.length) + 1,
+                status: itemIndex % 2 === 0 ? 'matched' : 'missing',
+                note: `Item ${itemIndex + 1}`,
+                created_at: now
+            }))
+        );
+
+        const alertSettings = [{
+            id: 1,
+            warranty_threshold_days: 30,
+            license_threshold_days: 45,
+            maintenance_threshold_days: 7,
+            emails: ['it@example.com', 'ops@example.com'],
+            created_at: now
+        }];
+
         const defaultData = {
-            departments: [
-                { id: 1, name: 'IT', created_at: now },
-                { id: 2, name: 'Kế toán', created_at: now },
-                { id: 3, name: 'Nhân sự', created_at: now },
-                { id: 4, name: 'Kinh doanh', created_at: now }
-            ],
-            categories: [
-                { id: 1, name: 'Laptop', created_at: now },
-                { id: 2, name: 'Desktop', created_at: now },
-                { id: 3, name: 'Monitor', created_at: now },
-                { id: 4, name: 'Keyboard', created_at: now },
-                { id: 5, name: 'Mouse', created_at: now }
-            ],
-            license_types: [
-                { id: 1, name: 'Windows', created_at: now },
-                { id: 2, name: 'Office', created_at: now },
-                { id: 3, name: 'Adobe', created_at: now }
-            ],
-            users: [
-                { id: 1, name: 'Nguyễn Văn A', email: 'a@company.com', department_id: 1, status: 'Đang hoạt động', avatar: this.buildUserAvatar('Nguyễn Văn A'), created_at: now },
-                { id: 2, name: 'Trần Thị B', email: 'b@company.com', department_id: 2, status: 'Đang hoạt động', avatar: this.buildUserAvatar('Trần Thị B'), created_at: now }
-            ],
-            assets: [],
-            licenses: [
-                { id: 1, key_type: 'Windows', license_key: 'XXXXX-XXXXX-XXXXX-XXXXX', package_type: 'OEM', expiration_date: '2025-12-31', user_id: 1, status: 'Active', notes: '', created_at: now },
-                { id: 2, key_type: 'Office', license_key: 'YYYYY-YYYYY-YYYYY-YYYYY', package_type: 'Business', expiration_date: '2025-06-30', user_id: 2, status: 'Active', notes: '', created_at: now }
-            ],
+            departments,
+            categories,
+            license_types: licenseTypes,
+            users,
+            assets,
+            licenses,
             asset_history: [],
-            maintenance_tasks: [],
-            maintenance_events: [],
-            stock_checks: [],
-            stock_check_items: [],
-            alert_settings: []
+            maintenance_tasks: maintenanceTasks,
+            maintenance_events: maintenanceEvents,
+            stock_checks: stockChecks,
+            stock_check_items: stockCheckItems,
+            alert_settings: alertSettings
         };
 
         // Save all default data
@@ -522,18 +649,18 @@ const LocalDB = {
 
         // Initialize ID counter
         localStorage.setItem(this.KEYS.COUNTER, JSON.stringify({
-            assets: 1,
-            licenses: 3,
-            users: 3,
-            departments: 5,
-            categories: 6,
-            license_types: 4,
+            assets: assets.length + 1,
+            licenses: licenses.length + 1,
+            users: users.length + 1,
+            departments: departments.length + 1,
+            categories: categories.length + 1,
+            license_types: licenseTypes.length + 1,
             asset_history: 1,
-            maintenance_tasks: 1,
-            maintenance_events: 1,
-            stock_checks: 1,
-            stock_check_items: 1,
-            alert_settings: 1
+            maintenance_tasks: maintenanceTasks.length + 1,
+            maintenance_events: maintenanceEvents.length + 1,
+            stock_checks: stockChecks.length + 1,
+            stock_check_items: stockCheckItems.length + 1,
+            alert_settings: alertSettings.length + 1
         }));
 
         console.log('LocalDB: Initialized with default data');

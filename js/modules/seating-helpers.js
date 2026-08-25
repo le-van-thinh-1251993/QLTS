@@ -64,9 +64,36 @@
         window.__SEATING_TOAST_TIMER__ = setTimeout(() => container.classList.add('hidden'), 2200);
     };
 
+    // Không dùng window.confirm() (native dialog) - ưu tiên modal #alertModal của trang seating.
     const showConfirm = (message, onOk) => {
-        const confirmed = window.confirm(message);
-        if (confirmed && typeof onOk === 'function') onOk();
+        const modal = document.getElementById('alertModal');
+        const titleEl = document.getElementById('alertTitle');
+        const msgEl = document.getElementById('alertMessage');
+        const okBtn = document.getElementById('alertOk');
+        const cancelBtn = document.getElementById('alertCancel');
+        if (!modal || !msgEl || !okBtn) {
+            if (typeof onOk === 'function') onOk();
+            return;
+        }
+        if (titleEl) titleEl.textContent = 'Xác nhận';
+        msgEl.textContent = message;
+        if (cancelBtn) cancelBtn.classList.remove('hidden');
+        modal.classList.remove('hidden');
+        const newOk = okBtn.cloneNode(true);
+        okBtn.parentNode.replaceChild(newOk, okBtn);
+        newOk.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            if (typeof onOk === 'function') onOk();
+        });
+        if (cancelBtn) {
+            const newCancel = cancelBtn.cloneNode(true);
+            cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+            newCancel.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                newCancel.classList.add('hidden');
+            });
+        }
     };
 
     window.SeatingHelpers = {

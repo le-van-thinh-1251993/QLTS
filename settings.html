@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Security: Content Security Policy -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
-    <title>Cài đặt - IT Asset Management</title>
+    <title>Cài đặt - Quản lý Tài sản CNTT</title>
     <script src="https://cdn.tailwindcss.com"></script> 
     <script>
         tailwind.config = {
@@ -57,6 +57,9 @@
                 <a href="users.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
                     <i class="fa-solid fa-users sidebar-icon"></i><span class="ml-4">Người dùng</span>
                 </a>
+                <a href="seating.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
+                    <i class="fa-solid fa-chair sidebar-icon"></i><span class="ml-4">Sắp xếp chỗ ngồi</span>
+                </a>
                 <a href="settings.html" class="nav-link flex items-center px-4 py-2.5 text-slate-100 bg-slate-700 rounded-lg">
                     <i class="fa-solid fa-gear sidebar-icon"></i><span class="ml-4">Cài đặt</span>
                 </a>
@@ -85,11 +88,11 @@
                         </div>
                     </div>
                     <div class="ml-4 md:ml-6 flex items-center relative group">
-                        <img src="https://i.pravatar.cc/40?u=admin" alt="User Avatar" class="w-10 h-10 rounded-full cursor-pointer">
+                        <img src="https://i.pravatar.cc/40?u=admin" alt="Ảnh đại diện" class="w-10 h-10 rounded-full cursor-pointer">
                         <div class="absolute top-full right-0 pt-2 w-48 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                             <div class="bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 border dark:border-slate-700">
                                 <div class="px-4 py-2 text-sm text-slate-700 dark:text-gray-200 border-b dark:border-slate-600">
-                                    <p class="font-semibold" id="header-user-name">Admin User</p>
+                                    <p class="font-semibold" id="header-user-name">Người dùng</p>
                                     <p class="text-xs text-slate-500 dark:text-gray-400 truncate" id="header-user-email">admin@example.com</p>
                                 </div>
                                 <a href="settings.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-slate-700">Tài khoản</a>
@@ -102,43 +105,32 @@
 
             <!-- Content Area -->
             <main class="flex-1 p-6 overflow-y-auto" id="content-area">
-                <div id="settingsContent" class="max-w-7xl mx-auto dark:text-gray-200">
-                    <h2 class="text-3xl font-bold text-slate-800 dark:text-gray-200 mb-8">Cài đặt Tài khoản</h2>
+                <div id="settingsContent" class="max-w-6xl mx-auto dark:text-gray-200">
+                    <h2 class="text-3xl font-bold text-slate-800 dark:text-gray-200 mb-4">Cài đặt Tài khoản</h2>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <!-- Left Column: Profile & Security -->
-                        <div class="lg:col-span-1 space-y-8">
+                    <!-- Tabs -->
+                    <div class="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700 mb-6">
+                        <button type="button" class="settings-tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px" data-tab="account">Tài khoản</button>
+                        <button type="button" class="settings-tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px" data-tab="system">Hệ thống &amp; Mã tem</button>
+                        <button type="button" class="settings-tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px" data-tab="backup">Sao lưu &amp; Khôi phục</button>
+                        <button type="button" class="settings-tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px" data-tab="my-assets">Tài sản của tôi</button>
+                        <button type="button" id="activityLogTabBtn" class="settings-tab-btn hidden px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px" data-tab="activity-log">Nhật ký hoạt động</button>
+                    </div>
+
+                    <!-- Tab: Tài khoản -->
+                    <div class="settings-tab-panel" data-tab-panel="account">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Profile Card -->
                             <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
                                 <div class="flex items-center space-x-4 mb-6">
-                                    <img id="profile-avatar" src="https://i.pravatar.cc/40?u=admin" alt="User Avatar" class="w-16 h-16 rounded-full border-2 border-blue-500">
+                                    <img id="profile-avatar" src="https://i.pravatar.cc/40?u=admin" alt="Ảnh đại diện" class="w-16 h-16 rounded-full border-2 border-blue-500">
                                     <div class="dark:text-gray-200">
-                                        <h3 id="profile-name" class="text-xl font-bold text-slate-800 dark:text-gray-200">Loading...</h3>
+                                        <h3 id="profile-name" class="text-xl font-bold text-slate-800 dark:text-gray-200">Đang tải...</h3>
                                         <p id="profile-email" class="text-sm text-slate-500 dark:text-gray-400">loading@example.com</p>
-                                        <span id="profile-role" class="mt-1 inline-block px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-100 rounded-full">viewer</span>
+                                        <span id="profile-role" class="mt-1 inline-block px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-100 rounded-full">Đang tải...</span>
                                     </div>
                                 </div>
                                 <button id="editProfileBtn" class="w-full px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100">Chỉnh sửa Profile</button>
-                            </div>
-
-                            <!-- Security Card -->
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
-                                <h4 class="text-lg font-bold text-slate-800 dark:text-gray-200 mb-4 border-b pb-2">Bảo mật</h4>
-                                <form id="password-update-form" class="space-y-4">
-                                    <div>
-                                        <label for="old-password" class="block text-sm font-medium text-slate-600 dark:text-gray-200">Mật khẩu cũ</label>
-                                        <input type="password" id="old-password" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" required>
-                                    </div>
-                                    <div>
-                                        <label for="new-password" class="block text-sm font-medium text-slate-600 dark:text-gray-200">Mật khẩu mới</label>
-                                        <input type="password" id="new-password" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" required>
-                                    </div>
-                                    <div>
-                                        <label for="confirm-password" class="block text-sm font-medium text-slate-600 dark:text-gray-200">Xác nhận mật khẩu</label>
-                                        <input type="password" id="confirm-password" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" required>
-                                    </div>
-                                    <button type="submit" class="w-full px-4 py-2 font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-900">Cập nhật mật khẩu</button>
-                                </form>
                             </div>
 
                             <!-- Appearance Card -->
@@ -153,20 +145,59 @@
                                 </div>
                             </div>
 
+                            <!-- Security Card -->
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700 md:col-span-2">
+                                <h4 class="text-lg font-bold text-slate-800 dark:text-gray-200 mb-4 border-b pb-2">Bảo mật</h4>
+                                <form id="password-update-form" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                                    <div>
+                                        <label for="old-password" class="block text-sm font-medium text-slate-600 dark:text-gray-200">Mật khẩu cũ</label>
+                                        <input type="password" id="old-password" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" required>
+                                    </div>
+                                    <div>
+                                        <label for="new-password" class="block text-sm font-medium text-slate-600 dark:text-gray-200">Mật khẩu mới</label>
+                                        <input type="password" id="new-password" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" required>
+                                    </div>
+                                    <div>
+                                        <label for="confirm-password" class="block text-sm font-medium text-slate-600 dark:text-gray-200">Xác nhận mật khẩu</label>
+                                        <input type="password" id="confirm-password" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" required>
+                                    </div>
+                                    <button type="submit" class="md:col-span-3 px-4 py-2 font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-900">Cập nhật mật khẩu</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Hệ thống & Mã tem -->
+                    <div class="settings-tab-panel hidden" data-tab-panel="system">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
+                                <h4 class="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b pb-2"><i class="fa-solid fa-tag mr-2"></i>Mã tem (Barcode/QR)</h4>
+                                <form id="unit-code-form" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="unit-code-input">Mã đơn vị</label>
+                                        <input id="unit-code-input" type="text" maxlength="10" class="mt-1 w-full border rounded-lg p-2 uppercase dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="VD: HNL">
+                                        <p class="text-xs text-slate-400 mt-1">Dùng làm phần đầu của mã tem: MÃ ĐƠN VỊ - MÃ LOẠI - MÃ BỘ PHẬN - SỐ THỨ TỰ.</p>
+                                    </div>
+                                    <button type="submit" class="w-full px-4 py-2 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Lưu mã đơn vị</button>
+                                </form>
+                            </div>
+
                             <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
                                 <h4 class="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b pb-2">Cảnh báo nâng cao</h4>
                                 <form id="alert-settings-form" class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-warranty-days">Bảo hành còn lại (ngày)</label>
-                                        <input id="alert-warranty-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="30">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-license-days">License sắp hết hạn (ngày)</label>
-                                        <input id="alert-license-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="30">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-maintenance-days">Bảo trì sắp tới (ngày)</label>
-                                        <input id="alert-maintenance-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="7">
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-warranty-days">Bảo hành (ngày)</label>
+                                            <input id="alert-warranty-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="30">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-license-days">License (ngày)</label>
+                                            <input id="alert-license-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="30">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-maintenance-days">Bảo trì (ngày)</label>
+                                            <input id="alert-maintenance-days" type="number" min="1" class="mt-1 w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="7">
+                                        </div>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-slate-600 dark:text-gray-200 mb-1" for="alert-emails">Email nhận cảnh báo (phân tách dấu phẩy)</label>
@@ -175,30 +206,31 @@
                                     <button type="submit" class="w-full px-4 py-2 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">Lưu cấu hình</button>
                                 </form>
                             </div>
-
-                            <!-- Backup & Restore Card -->
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
-                                <h4 class="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b pb-2"><i class="fa-solid fa-database mr-2"></i>Sao lưu & Khôi phục</h4>
-                                <p class="text-sm text-slate-500 dark:text-gray-400 mb-4">Xuất toàn bộ dữ liệu (assets, licenses, users...) ra file JSON để backup. Hoặc khôi phục từ file backup.</p>
-                                <div class="space-y-3">
-                                    <button id="btnBackupData" class="w-full px-4 py-2.5 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">
-                                        <i class="fa-solid fa-download"></i> Xuất backup (JSON)
-                                    </button>
-                                    <label class="w-full px-4 py-2.5 font-semibold text-slate-700 dark:text-gray-200 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 flex items-center justify-center gap-2 cursor-pointer">
-                                        <i class="fa-solid fa-upload"></i> Khôi phục từ file backup
-                                        <input type="file" id="restoreFileInput" accept=".json" class="hidden">
-                                    </label>
-                                </div>
-                                <p id="backupStatus" class="text-xs text-slate-400 mt-3 text-center hidden"></p>
-                            </div>
                         </div>
+                    </div>
 
-                        <!-- Right Column: My Assets -->
-                        <div class="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
-                            <h4 class="text-lg font-bold text-slate-800 dark:text-gray-200 mb-4 border-b pb-2">Tài sản & License của tôi</h4>
-                            
-                            <!-- My Assets Table -->
-                            <div class="mb-8">
+                    <!-- Tab: Sao lưu & Khôi phục -->
+                    <div class="settings-tab-panel hidden" data-tab-panel="backup">
+                        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700 max-w-lg">
+                            <h4 class="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b pb-2"><i class="fa-solid fa-database mr-2"></i>Sao lưu &amp; Khôi phục</h4>
+                            <p class="text-sm text-slate-500 dark:text-gray-400 mb-4">Xuất toàn bộ dữ liệu (tài sản, license, người dùng...) ra file JSON để backup. Hoặc khôi phục từ file backup.</p>
+                            <div class="space-y-3">
+                                <button id="btnBackupData" class="w-full px-4 py-2.5 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-download"></i> Xuất backup (JSON)
+                                </button>
+                                <label class="w-full px-4 py-2.5 font-semibold text-slate-700 dark:text-gray-200 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 flex items-center justify-center gap-2 cursor-pointer">
+                                    <i class="fa-solid fa-upload"></i> Khôi phục từ file backup
+                                    <input type="file" id="restoreFileInput" accept=".json" class="hidden">
+                                </label>
+                            </div>
+                            <p id="backupStatus" class="text-xs text-slate-400 mt-3 text-center hidden"></p>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Tài sản của tôi -->
+                    <div class="settings-tab-panel hidden" data-tab-panel="my-assets">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
                                 <h5 class="font-semibold text-slate-700 dark:text-gray-200 mb-3">Thiết bị đang giữ</h5>
                                 <div class="overflow-x-auto border rounded-lg">
                                     <table class="w-full text-sm text-left">
@@ -216,8 +248,7 @@
                                 </div>
                             </div>
 
-                            <!-- My Licenses Table -->
-                            <div>
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
                                 <h5 class="font-semibold text-slate-700 dark:text-gray-200 mb-3">License đang giữ</h5>
                                 <div class="overflow-x-auto border rounded-lg">
                                     <table class="w-full text-sm text-left">
@@ -234,6 +265,31 @@
                                     </table>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Nhật ký hoạt động (chỉ admin) -->
+                    <div class="settings-tab-panel hidden" data-tab-panel="activity-log">
+                        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border dark:border-slate-700">
+                            <div class="flex items-center justify-between mb-4 border-b pb-2">
+                                <h4 class="text-lg font-bold text-slate-800 dark:text-white"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Nhật ký hoạt động</h4>
+                                <span id="activityLogCount" class="text-xs text-slate-400"></span>
+                            </div>
+                            <div class="overflow-x-auto border rounded-lg">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="bg-slate-50 dark:bg-slate-700 dark:text-gray-200">
+                                        <tr>
+                                            <th class="p-3 font-semibold text-slate-600 dark:text-slate-200 whitespace-nowrap">Thời gian</th>
+                                            <th class="p-3 font-semibold text-slate-600 dark:text-slate-200">Loại</th>
+                                            <th class="p-3 font-semibold text-slate-600 dark:text-slate-200">Hành động</th>
+                                            <th class="p-3 font-semibold text-slate-600 dark:text-slate-200">Chi tiết</th>
+                                            <th class="p-3 font-semibold text-slate-600 dark:text-slate-200 whitespace-nowrap">Người thực hiện</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="activityLogTableBody" class="divide-y"></tbody>
+                                </table>
+                            </div>
+                            <div id="activityLogPagination" class="p-3 flex justify-end"></div>
                         </div>
                     </div>
                 </div>
@@ -261,20 +317,15 @@
     <!-- Auth script phải được tải trước script chính -->
     <!-- LocalDB for local storage operations -->
     <!-- <script src="config.js"></script> -->
-    <script src="js/localDB.js"></script>
-    <script src="js/modules/app-core.js"></script>
-    <script src="js/modules/local-storage.js"></script>
-    <script src="js/modules/script-helpers.js"></script>
-    <script src="js/modules/data-layer.js"></script>
-    <script src="js/modules/ui-layer.js"></script>
-    <script src="js/modules/filter-layer.js"></script>
+    <script src="js/localDB.js?v=20260825-1"></script>
+    <script src="js/modules/script-helpers.js?v=20260825-1"></script>
     
-<script src="js/modules/page-common.js"></script>
-<script src="js/modules/page-data.js"></script>
-<script src="js/modules/page-ui.js"></script>
-<script src="js/modules/page-dashboard.js"></script>
-<script src="js/modules/page-license.js"></script>
-<script src="js/modules/page-settings.js"></script>
-<script src="js/script.js"></script>
+<script src="js/modules/page-common.js?v=20260825-1"></script>
+<script src="js/modules/page-data.js?v=20260825-1"></script>
+<script src="js/modules/page-ui.js?v=20260825-1"></script>
+<script src="js/modules/page-dashboard.js?v=20260825-1"></script>
+<script src="js/modules/page-license.js?v=20260825-1"></script>
+<script src="js/modules/page-settings.js?v=20260825-1"></script>
+<script src="js/script.js?v=20260825-1"></script>
 </body>
 </html>

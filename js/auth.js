@@ -38,9 +38,9 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY && typeof supabase !== 'undefined') {
     if (typeof supabase === 'undefined') {
         console.error('CRITICAL: Supabase library chưa được load');
     }
-    // Chỉ alert nếu đang ở trang cần Supabase (không phải seating.html)
+    // Chỉ hiển thị nếu đang ở trang cần Supabase (không phải seating.html)
     if (!window.location.pathname.includes('seating.html')) {
-        // Delay alert để tránh lỗi khi trang đang load
+        // Delay để tránh hiển thị lỗi khi trang đang load
         setTimeout(() => {
             if (document.visibilityState === 'visible') {
                 let errorMsg = 'Lỗi cấu hình: ';
@@ -49,7 +49,7 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY && typeof supabase !== 'undefined') {
                 } else if (typeof supabase === 'undefined') {
                     errorMsg += 'Supabase library chưa được load';
                 }
-                alert(errorMsg);
+                showAuthError(errorMsg);
             }
         }, 500);
     }

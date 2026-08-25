@@ -27,8 +27,8 @@ const mimeTypes = {
 
 const cacheControl = {
   html: 'no-cache, no-store, must-revalidate',
-  css: 'public, max-age=31536000, immutable',
-  js: 'public, max-age=31536000, immutable',
+  css: 'no-cache, no-store, must-revalidate',
+  js: 'no-cache, no-store, must-revalidate',
   json: 'public, max-age=86400',
   image: 'public, max-age=86400',
   font: 'public, max-age=31536000, immutable',

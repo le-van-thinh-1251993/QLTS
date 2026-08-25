@@ -3,7 +3,67 @@ window.currentUserProfile = window.currentUserProfile || { role: 'admin', full_n
 window.remoteSupabaseClient = window.remoteSupabaseClient || null;
 window.hasAttemptedAutoRestore = !!window.hasAttemptedAutoRestore;
 
+// Shared in-memory data state used across all page-*.js modules (each module
+// runs in its own function scope, so these must live on window to be shared).
+window.departments = window.departments || [];
+window.categories = window.categories || [];
+window.users = window.users || [];
+window.assets = window.assets || [];
+window.licenses = window.licenses || [];
+window.assetHistory = window.assetHistory || [];
+window.licenseTypes = window.licenseTypes || [];
+window.maintenanceTasks = window.maintenanceTasks || [];
+window.maintenanceEvents = window.maintenanceEvents || [];
+window.stockChecks = window.stockChecks || [];
+window.stockCheckItems = window.stockCheckItems || [];
+window.alertSettings = window.alertSettings || [];
+window.historyExportBuffer = window.historyExportBuffer || [];
+window.tempImportedUsers = window.tempImportedUsers || [];
+window.tempImportedAssets = window.tempImportedAssets || [];
+window.tempId = window.tempId ?? null;
+window.confirmCallback = window.confirmCallback || null;
+window.assetCurrentPage = window.assetCurrentPage || 1;
+window.userCurrentPage = window.userCurrentPage || 1;
+window.licenseCurrentPage = window.licenseCurrentPage || 1;
+window.maintenanceCurrentPage = window.maintenanceCurrentPage || 1;
+window.stockCheckCurrentPage = window.stockCheckCurrentPage || 1;
+window.activityLogCurrentPage = window.activityLogCurrentPage || 1;
+window.hasBootstrappedLocalData = window.hasBootstrappedLocalData || false;
+window.currentFilteredAssets = window.currentFilteredAssets || [];
+window.currentFilteredUsers = window.currentFilteredUsers || [];
+window.currentFilteredLicenses = window.currentFilteredLicenses || [];
+window.assetSort = window.assetSort || { column: 'name', direction: 'asc' };
+window.userSort = window.userSort || { column: 'name', direction: 'asc' };
+window.licenseSort = window.licenseSort || { column: 'key_type', direction: 'asc' };
+window.chartAssetHealth = window.chartAssetHealth || null;
+window.chartCategory = window.chartCategory || null;
+window.chartLocation = window.chartLocation || null;
+window.chartLicenseStatus = window.chartLicenseStatus || null;
+window.chartDepartment = window.chartDepartment || null;
+window.chartUserAsset = window.chartUserAsset || null;
+window.chartUserLicense = window.chartUserLicense || null;
+window.chartActivity = window.chartActivity || null;
+window.chartLicenseExpiration = window.chartLicenseExpiration || null;
+window.assignUserChoicesInstance = window.assignUserChoicesInstance || null;
+window.userChoicesInstance = window.userChoicesInstance || null;
+window.licenseUserChoicesInstance = window.licenseUserChoicesInstance || null;
+window.licenseAssignUserChoicesInstance = window.licenseAssignUserChoicesInstance || null;
+window.transferUserChoicesInstance = window.transferUserChoicesInstance || null;
+window.maintenanceAssetChoices = window.maintenanceAssetChoices || null;
+window.filterAssetUserChoicesInstance = window.filterAssetUserChoicesInstance || null;
+window.filterLicenseUserChoicesInstance = window.filterLicenseUserChoicesInstance || null;
+window.selectedAssetIds = window.selectedAssetIds || new Set();
+window.selectedLicenseIds = window.selectedLicenseIds || new Set();
+
 const core = window.QLTSCore || {};
+
+window.STATUS_MAP = window.STATUS_MAP || {
+    Active: { text: 'Đang dùng', classes: 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700' },
+    Stock: { text: 'Trong kho', classes: 'bg-sky-100 text-sky-700 border border-sky-200 dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700' },
+    Repair: { text: 'Sửa chữa', classes: 'bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300 dark:border-yellow-700' },
+    Broken: { text: 'Hỏng', classes: 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-700' },
+    Expired: { text: 'Hết hạn', classes: 'bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' }
+};
 
 function showInfoModal(message, title = 'Thông báo') {
     const titleEl = document.getElementById('infoModalTitle');
@@ -18,8 +78,8 @@ function showInfoModal(message, title = 'Thông báo') {
         if (typeof window.openModal === 'function') {
             window.openModal('infoModal');
         }
-    } else if (document.visibilityState === 'visible') {
-        alert(`${title}: ${String(message).replace(/<[^>]*>?/gm, '')}`);
+    } else {
+        console.warn(`showInfoModal: không tìm thấy #infoModal trên trang. ${title}: ${String(message).replace(/<[^>]*>?/gm, '')}`);
     }
 }
 
@@ -164,7 +224,15 @@ window.QLTSPageCommon.init = async function () {
 
     if (!supabaseClient) {
         console.error('LocalDB not loaded!');
-        alert('Lỗi: LocalDB chưa được load. Vui lòng refresh trang.');
+        const modal = document.getElementById('infoModal');
+        const titleEl = document.getElementById('infoModalTitle');
+        const msgEl = document.getElementById('infoModalMessage');
+        if (modal && titleEl && msgEl) {
+            titleEl.textContent = 'Lỗi';
+            msgEl.textContent = 'LocalDB chưa được load. Vui lòng tải lại trang.';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
         return;
     }
 
@@ -172,7 +240,7 @@ window.QLTSPageCommon.init = async function () {
 
     window.exportToExcel = function(data, filename) {
         if (!data || data.length === 0) {
-            alert('Không có dữ liệu để xuất!');
+            showInfoModal('Không có dữ liệu để xuất!');
             return;
         }
         try {
@@ -182,7 +250,7 @@ window.QLTSPageCommon.init = async function () {
             XLSX.writeFile(wb, filename);
         } catch (error) {
             console.error('Lỗi khi xuất Excel:', error);
-            alert('Có lỗi khi xuất file Excel: ' + error.message);
+            showInfoModal('Có lỗi khi xuất file Excel: ' + error.message, 'Lỗi');
         }
     };
 

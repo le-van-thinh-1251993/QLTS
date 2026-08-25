@@ -118,6 +118,10 @@ window.QLTSPageUI.init = async function () {
         if (focusable) focusable.focus();
     }
 
-    // =================================================================
-    // 4. DASHBOARD & DRILL-DOWN LOGIC
+    window.openModal = openModal;
+    window.getSingleChoiceValue = getSingleChoiceValue;
+    window.pinSingleChoiceRemoveButton = pinSingleChoiceRemoveButton;
+    window.getCreatedDate = getCreatedDate;
+    window.normalizeString = window.normalizeString || normalizeString;
+};
 

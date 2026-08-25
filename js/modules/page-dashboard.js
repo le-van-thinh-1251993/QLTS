@@ -1,6 +1,7 @@
 window.QLTSPageDashboard = window.QLTSPageDashboard || {};
 window.QLTSPageDashboard.init = async function () {
     // =================================================================
+    const ITEMS_PER_PAGE = 10;
 
     function showDrillDown(title, items, type = 'asset') {
         const modalTitle = document.getElementById('drillDownModalTitle');
@@ -44,7 +45,7 @@ window.QLTSPageDashboard.init = async function () {
         if (document.getElementById('assetsInStock')) document.getElementById('assetsInStock').textContent = assets.filter(a => a.status === 'Stock').length;
         if (document.getElementById('assetsInRepair')) document.getElementById('assetsInRepair').textContent = assets.filter(a => ['Repair', 'Broken'].includes(a.status)).length;
 
-        const backlogTasks = maintenanceTasks.filter(t => (t.status || '').toLowerCase() !== 'done');
+        const backlogTasks = maintenanceTasks.filter(t => (t.status || '').toLowerCase() !== 'hoàn thành');
         const nextDue = backlogTasks
             .map(t => safeDate(t.next_due_date || t.due_date || t.scheduled_for))
             .filter(Boolean)
@@ -58,7 +59,7 @@ window.QLTSPageDashboard.init = async function () {
             }
             return sum;
         }, 0);
-        const openStock = stockChecks.filter(c => (c.status || '').toLowerCase() !== 'closed').length;
+        const openStock = stockChecks.filter(c => (c.status || '').toLowerCase() !== 'hoàn thành').length;
 
         const alertCfg = alertSettings[0] || {};
         const warrantyThreshold = alertCfg.warranty_threshold_days || 30;
@@ -223,9 +224,12 @@ window.QLTSPageDashboard.init = async function () {
 
         // --- 1. TÍNH COLSPAN (Để ô phân trang trải dài hết bảng) ---
         let colCount = 10;
-        if (tableType === 'assets') colCount = 10;
-        if (tableType === 'licenses') colCount = 8;
+        if (tableType === 'assets') colCount = 11;
+        if (tableType === 'licenses') colCount = 9;
         if (tableType === 'users') colCount = 5;
+        if (tableType === 'maintenance') colCount = 6;
+        if (tableType === 'stock') colCount = 5;
+        if (tableType === 'activity') colCount = 5;
 
         // Tìm thẻ TD cha và set colSpan
         const parentTd = container.closest('td') || (container.tagName === 'TD' ? container : null);
@@ -291,7 +295,7 @@ window.QLTSPageDashboard.init = async function () {
         document.getElementById('assetTotalCount').classList.remove('hidden');
         const start = (assetCurrentPage - 1) * ITEMS_PER_PAGE;
         const pageData = data.slice(start, start + ITEMS_PER_PAGE);
-        if (pageData.length === 0) { tbody.innerHTML = `<tr><td colspan="10" class="p-8 text-center text-slate-400">Không có dữ liệu.</td></tr>`; renderPagination('assetPagination', 1, 0, ITEMS_PER_PAGE, 'assets'); return; }
+        if (pageData.length === 0) { tbody.innerHTML = `<tr><td colspan="11" class="p-8 text-center text-slate-400">Không có dữ liệu.</td></tr>`; renderPagination('assetPagination', 1, 0, ITEMS_PER_PAGE, 'assets'); return; }
         tbody.innerHTML = pageData.map(item => {
             const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
             const isAdmin = currentUserProfile.role === 'admin';
@@ -308,7 +312,8 @@ window.QLTSPageDashboard.init = async function () {
             }
 
             return `<tr class="border-b hover:bg-slate-50 group asset-row" data-id="${item.id}">
-                <td class="p-4 font-semibold text-slate-700">${item.name}</td>
+                <td class="p-4 text-center"><input type="checkbox" class="asset-select-checkbox" data-id="${item.id}" ${selectedAssetIds.has(item.id) ? 'checked' : ''}></td>
+                <td class="p-4 font-semibold text-slate-700">${item.name}<div class="text-xs font-mono font-normal text-slate-400">${item.asset_code || ''}</div></td>
                 <td class="p-4 text-xs text-slate-500 font-mono whitespace-pre-wrap">${item.config || ''}</td>
                 <td class="p-4">${item.category}</td><td class="p-4 text-sm">${item.location || '-'}</td>
                 <td class="p-4 text-sm">${formatDateDisplay(item.purchase_date)}</td>
@@ -318,6 +323,7 @@ window.QLTSPageDashboard.init = async function () {
                 <td class="p-4 text-xs text-slate-500 max-w-xs truncate">${item.notes || ''}</td>
                 <td class="p-4 flex gap-2 items-center">
                     ${btns}
+                    <div class="tooltip"><button data-action="print-asset-label" data-id="${item.id}" class="${btnClasses} text-indigo-500 hover:bg-indigo-100"><i class="fa-solid fa-tag"></i></button><span class="tooltiptext">In tem</span></div>
                     <div class="tooltip"><button data-action="history-asset" data-id="${item.id}" class="${btnClasses} text-slate-400 hover:bg-slate-200 hover:text-blue-600"><i class="fa-solid fa-clock-rotate-left"></i></button><span class="tooltiptext">Xem lịch sử</span></div>
                     ${isAdmin ? `
                         <div class="tooltip"><button data-action="edit-asset" data-id="${item.id}" class="${btnClasses} text-green-600 hover:bg-green-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div>
@@ -370,7 +376,8 @@ window.QLTSPageDashboard.init = async function () {
             }
 
             return `<tr class="border-b hover:bg-slate-50 license-row cursor-pointer" data-id="${item.id}">
-                <td class="p-4 font-semibold text-slate-700">${item.key_type}</td>
+                <td class="p-4 text-center"><input type="checkbox" class="license-select-checkbox" data-id="${item.id}" ${selectedLicenseIds.has(item.id) ? 'checked' : ''}></td>
+                <td class="p-4 font-semibold text-slate-700">${item.key_type}<div class="text-xs font-mono font-normal text-slate-400">${item.license_code || ''}</div></td>
                 <td class="p-4 font-mono text-xs text-slate-500">${isAdmin ? (item.license_key || '') : '******'}</td>
                 <td class="p-4 text-sm">${item.package_type || '-'}</td>
                 <td class="p-4 text-sm">${item.expiration_date || 'Vĩnh viễn'}</td>
@@ -379,6 +386,7 @@ window.QLTSPageDashboard.init = async function () {
                 <td class="p-4 text-xs text-slate-500 max-w-xs truncate">${item.notes || ''}</td>
                 <td class="p-4 flex items-center gap-2 justify-end">
                     ${btns}
+                    <div class="tooltip"><button data-action="print-license-label" data-id="${item.id}" class="${btnClasses} text-indigo-500 hover:bg-indigo-100"><i class="fa-solid fa-tag"></i></button><span class="tooltiptext">In tem</span></div>
                     <div class="tooltip">${historyBtn}<span class="tooltiptext">Xem lịch sử</span></div>
                     ${adminActions}
                 </td>
@@ -488,7 +496,7 @@ window.QLTSPageDashboard.init = async function () {
             const payload = { name: u.name, email: u.email, department_id: deptObj?.id || null, status: u.status, avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email || 'User')}&background=random` };
             const { error } = await supabaseClient.from('users').insert(payload); if (!error) successCount++;
         }
-        btn.textContent = 'Xác nhận Import'; btn.disabled = false;
+        btn.textContent = 'Xác nhận nhập'; btn.disabled = false;
         showInfoModal(`Đã import ${successCount} nhân viên.`, "Hoàn tất"); safeCloseModal('userImportPreviewModal'); await refreshApp();
     }
 
@@ -504,9 +512,11 @@ window.QLTSPageDashboard.init = async function () {
             const payload = { name: a.name, config: a.config, location: a.location, purchase_date: a.purchase_date || null, status: status, notes: a.notes, category_id: catObj?.id || null, user_id: userId };
             const { error } = await supabaseClient.from('assets').insert(payload); if (!error) successCount++;
         }
-        btn.textContent = 'Xác nhận Import'; btn.disabled = false;
+        btn.textContent = 'Xác nhận nhập'; btn.disabled = false;
         showInfoModal(`Đã import ${successCount} tài sản.`, "Hoàn tất"); safeCloseModal('importPreviewModal'); await refreshApp();
     }
+
+    const ADD_NEW_USER_VALUE = '__add_new_user__';
 
     function initChoices(elementId, instanceVar, data, selectedValue = null) {
         const el = document.getElementById(elementId); if (!el) return null;
@@ -523,10 +533,76 @@ window.QLTSPageDashboard.init = async function () {
             duplicateItemsAllowed: false
         });
         const choices = data.map(u => ({ value: u.name, label: u.name }));
+        const isUserDropdown = data === users;
+        if (isUserDropdown) choices.push({ value: ADD_NEW_USER_VALUE, label: '+ Thêm người dùng mới' });
         newInstance.setChoices(choices, 'value', 'label', true);
         if (selectedValue) newInstance.setChoiceByValue(selectedValue);
+        if (isUserDropdown) {
+            newInstance.passedElement.element.addEventListener('change', (e) => {
+                if (e.detail.value === ADD_NEW_USER_VALUE) {
+                    try {
+                        newInstance.removeActiveItems();
+                        if (selectedValue) newInstance.setChoiceByValue(selectedValue);
+                    } catch (err) {}
+                    openQuickAddUserModal(elementId);
+                }
+            });
+        }
         return newInstance;
     }
+
+    // Sau khi tạo 1 người dùng mới từ dropdown (không rebuild toàn bộ 5 dropdown
+    // để tránh làm mất lựa chọn hiện tại ở các dropdown khác đang mở).
+    function refreshSingleUserDropdown(elementId, selectedName) {
+        if (elementId === 'modal_assetUser') userChoicesInstance = initChoices('modal_assetUser', userChoicesInstance, users, selectedName);
+        else if (elementId === 'assignUserSelect') assignUserChoicesInstance = initChoices('assignUserSelect', assignUserChoicesInstance, users, selectedName);
+        else if (elementId === 'transferNewUserSelect') transferUserChoicesInstance = initChoices('transferNewUserSelect', transferUserChoicesInstance, users, selectedName);
+        else if (elementId === 'modal_licenseUser') licenseUserChoicesInstance = initChoices('modal_licenseUser', licenseUserChoicesInstance, users, selectedName);
+        else if (elementId === 'assignLicenseUserSelect') licenseAssignUserChoicesInstance = initChoices('assignLicenseUserSelect', licenseAssignUserChoicesInstance, users, selectedName);
+    }
+
+    let pendingUserDropdownElementId = null;
+
+    function openQuickAddUserModal(elementId) {
+        pendingUserDropdownElementId = elementId;
+        const input = document.getElementById('quickAddUserNameInput');
+        const err = document.getElementById('quickAddUserError');
+        if (input) input.value = '';
+        if (err) err.classList.add('hidden');
+        openModal('quickAddUserModal');
+        setTimeout(() => input?.focus(), 50);
+    }
+
+    document.getElementById('btnConfirmQuickAddUser')?.addEventListener('click', async () => {
+        const input = document.getElementById('quickAddUserNameInput');
+        const err = document.getElementById('quickAddUserError');
+        const name = (input?.value || '').trim();
+        const showError = (msg) => { if (err) { err.textContent = msg; err.classList.remove('hidden'); } };
+
+        if (!name) return showError('Vui lòng nhập tên người dùng.');
+        const normalize = (window.QLTSHelpers && window.QLTSHelpers.normalizeString) || (s => (s || '').toLowerCase().trim());
+        const isDuplicate = users.some(u => normalize(u.name) === normalize(name));
+        if (isDuplicate) return showError(`Tên "${name}" đã tồn tại. Vui lòng đổi sang tên khác.`);
+
+        const payload = {
+            name,
+            email: '',
+            department_id: null,
+            status: 'Active',
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+        };
+        const { data, error } = await supabaseClient.from('users').insert(payload);
+        if (error) return handleSupabaseError(error, 'thêm người dùng');
+        await addLog(data?.[0]?.id, 'USER', 'Thêm mới', name);
+        await refreshApp();
+
+        const elementId = pendingUserDropdownElementId;
+        pendingUserDropdownElementId = null;
+        if (elementId) refreshSingleUserDropdown(elementId, name);
+
+        safeCloseModal('quickAddUserModal');
+        showInfoModal(`Đã thêm người dùng mới: "${name}"!`, 'Thành công');
+    });
 
     function initAllUserDropdowns(selectedUser = null) {
         userChoicesInstance = initChoices('modal_assetUser', userChoicesInstance, users, selectedUser);
@@ -803,7 +879,13 @@ window.QLTSPageDashboard.init = async function () {
         });
         const fau = document.getElementById('filterAssetUser');
         if (filterAssetUserChoicesInstance) {
-            try { filterAssetUserChoicesInstance.removeActiveItems(); filterAssetUserChoicesInstance.clearInput(); } catch (err) {}
+            try {
+                const selectedValue = filterAssetUserChoicesInstance.getValue(true);
+                if (selectedValue) {
+                    filterAssetUserChoicesInstance.setChoiceByValue('');
+                }
+                filterAssetUserChoicesInstance.clearInput();
+            } catch (err) {}
         }
         if (fau) fau.value = '';
     }
@@ -815,7 +897,13 @@ window.QLTSPageDashboard.init = async function () {
         });
         const flu = document.getElementById('filterLicenseUser');
         if (filterLicenseUserChoicesInstance) {
-            try { filterLicenseUserChoicesInstance.removeActiveItems(); filterLicenseUserChoicesInstance.clearInput(); } catch (err) {}
+            try {
+                const selectedValue = filterLicenseUserChoicesInstance.getValue(true);
+                if (selectedValue) {
+                    filterLicenseUserChoicesInstance.setChoiceByValue('');
+                }
+                filterLicenseUserChoicesInstance.clearInput();
+            } catch (err) {}
         }
         if (flu) flu.value = '';
     }
@@ -880,8 +968,12 @@ window.QLTSPageDashboard.init = async function () {
         if (postAction) postAction(resData, isUpdate);
         // 1. Đóng form edit trước
         if (modalId) safeCloseModal(modalId);
-        // 2. Hiển thị modal thành công
-        showInfoModal("Lưu thành công!", "Thông báo");
+        // 2. Hiển thị modal thành công (thông báo cụ thể theo loại dữ liệu)
+        const TABLE_LABELS = { assets: 'tài sản', licenses: 'license', users: 'nhân viên', categories: 'danh mục', departments: 'phòng ban', license_types: 'loại key' };
+        const entityLabel = TABLE_LABELS[table] || 'dữ liệu';
+        const entityName = payload.name || payload.key_type || payload.email || '';
+        const actionWord = isUpdate ? 'Đã cập nhật' : 'Đã thêm mới';
+        showInfoModal(`${actionWord} ${entityLabel}${entityName ? ` "${entityName}"` : ''} thành công!`, "Thông báo");
         const modal = e.target.closest('.fixed.flex');
         if (modal) attemptCloseModal(modal.id);
         // 3. Tải lại dữ liệu ngầm, giữ nguyên filter/search
@@ -892,6 +984,43 @@ window.QLTSPageDashboard.init = async function () {
         if (document.getElementById('userTableBody')) applyUserFilters();
     }
 
-    // =================================================================
-    // 7. LISTENERS & EVENTS
+    if (document.getElementById('dashboardContent')) {
+        updateDashboard();
+    }
+
+    if (document.getElementById('filterAssetUser') || document.getElementById('filterLicenseUser') || document.getElementById('assetTableBody') || document.getElementById('licenseTableBody')) {
+        updateDropdowns();
+        if (document.getElementById('assetTableBody')) applyAssetFilters();
+        if (document.getElementById('licenseTableBody')) applyLicenseFilters();
+    }
+
+    window.handleAssetFileSelect = handleAssetFileSelect;
+    window.handleUserFileSelect = handleUserFileSelect;
+    window.renderTableAssets = renderTableAssets;
+    window.renderTableLicenses = renderTableLicenses;
+    window.renderTableUsers = renderTableUsers;
+    window.applyAssetFilters = applyAssetFilters;
+    window.applyLicenseFilters = applyLicenseFilters;
+    window.applyUserFilters = applyUserFilters;
+    window.resetAssetFilters = resetAssetFilters;
+    window.resetLicenseFilters = resetLicenseFilters;
+    window.resetUserFilters = resetUserFilters;
+    window.fetchAllData = fetchAllData;
+    window.isAssetFilterOrSearchActive = isAssetFilterOrSearchActive;
+    window.isLicenseFilterOrSearchActive = isLicenseFilterOrSearchActive;
+    window.isUserFilterOrSearchActive = isUserFilterOrSearchActive;
+    window.renderLists = renderLists;
+    window.initAllUserDropdowns = initAllUserDropdowns;
+    window.updateDropdowns = updateDropdowns;
+    window.updateDashboard = updateDashboard;
+    window.processUserImport = processUserImport;
+    window.processAssetImport = processAssetImport;
+    window.resolveExportData = resolveExportData;
+    window.handleFormSubmit = handleFormSubmit;
+    window.renderUserImportPreview = renderUserImportPreview;
+    window.renderAssetImportPreview = renderAssetImportPreview;
+    window.renderPagination = renderPagination;
+
+    return;
+};
 
