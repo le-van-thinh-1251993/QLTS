@@ -592,6 +592,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function readJSON(key) {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.readJSON === 'function') {
+            return window.SeatingHelpers.readJSON(key, []);
+        }
         try {
             const raw = localStorage.getItem(key);
             if (raw) { const p = JSON.parse(raw); if (Array.isArray(p)) return p; }
@@ -600,10 +603,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getDepartments() {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.getDepartments === 'function') {
+            return window.SeatingHelpers.getDepartments();
+        }
         return readJSON(DEPTS_KEY) || readJSON(DEPTS_KEY_LEGACY) || [];
     }
 
     function getUsers() {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.getUsers === 'function') {
+            return window.SeatingHelpers.getUsers();
+        }
         const depts = getDepartments();
         const deptMap = {};
         depts.forEach(d => { deptMap[d.id] = d.name; });
@@ -619,6 +628,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getPlacedNames() {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.getPlacedNames === 'function') {
+            return new Set(window.SeatingHelpers.getPlacedNames(cellData));
+        }
         const names = new Set();
         Object.values(cellData).forEach(d => {
             if (d && d.name) names.add(d.name.toLowerCase().trim());
@@ -1549,10 +1561,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========== UTILITIES ===========
-    function el(id) { return document.getElementById(id); }
-    function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function el(id) {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.el === 'function') {
+            return window.SeatingHelpers.el(id);
+        }
+        return document.getElementById(id);
+    }
+    function escHtml(s) {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.escHtml === 'function') {
+            return window.SeatingHelpers.escHtml(s);
+        }
+        const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+    }
 
     function toast(msg, type = 'info') {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.toast === 'function') {
+            return window.SeatingHelpers.toast(msg, type);
+        }
         const t = document.createElement('div');
         t.className = `toast-msg ${type}`;
         t.innerHTML = `<i class="fa-solid ${type === 'ok' ? 'fa-check-circle' : type === 'err' ? 'fa-exclamation-triangle' : 'fa-info-circle'}"></i>${escHtml(msg)}`;
@@ -1562,6 +1587,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showConfirm(msg, onOk) {
+        if (window.SeatingHelpers && typeof window.SeatingHelpers.showConfirm === 'function') {
+            return window.SeatingHelpers.showConfirm(msg, onOk);
+        }
         const modal = el('alertModal');
         el('alertTitle').textContent = 'Xác nhận';
         el('alertMessage').textContent = msg;

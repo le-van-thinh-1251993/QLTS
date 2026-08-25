@@ -1,0 +1,399 @@
+window.QLTSPageSettings = window.QLTSPageSettings || {};
+window.QLTSPageSettings.init = async function () {
+    // =================================================================
+    function renderSettingsPage() {
+        if (!document.getElementById('settingsContent') || !currentUserProfile) return;
+
+        // 1. Populate Profile Card
+        document.getElementById('profile-name').textContent = currentUserProfile.full_name || 'Chưa có tên';
+        document.getElementById('profile-email').textContent = currentUserProfile.email;
+        document.getElementById('profile-role').textContent = currentUserProfile.role;
+        const avatarImg = document.getElementById('profile-avatar');
+        if (currentUserProfile.avatar_url) {
+            avatarImg.src = currentUserProfile.avatar_url;
+        } else {
+            avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUserProfile.full_name || currentUserProfile.email)}&background=random`;
+        }
+
+        // 2. Populate My Assets & Licenses
+        const myAssets = assets.filter(a => a.user_id === currentUserProfile.id);
+        const myLicenses = licenses.filter(l => l.user_id === currentUserProfile.id);
+
+        const assetsTbody = document.getElementById('my-assets-table');
+        if (myAssets.length > 0) {
+            assetsTbody.innerHTML = myAssets.map(a => {
+                const statusInfo = STATUS_MAP[a.status] || { text: a.status, classes: 'bg-gray-100' };
+                return `<tr><td class="p-3">${a.name}</td><td class="p-3">${a.category}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
+            }).join('');
+        } else {
+            assetsTbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400 italic">Bạn chưa giữ thiết bị nào.</td></tr>';
+        }
+
+        const licensesTbody = document.getElementById('my-licenses-table');
+        if (myLicenses.length > 0) {
+            licensesTbody.innerHTML = myLicenses.map(l => `<tr><td class="p-3">${l.key_type}</td><td class="p-3">${l.package_type || 'N/A'}</td><td class="p-3">${l.expiration_date || 'Vĩnh viễn'}</td></tr>`).join('');
+        } else {
+            licensesTbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400 italic">Bạn chưa giữ license nào.</td></tr>';
+        }
+
+        const cfg = alertSettings[0] || {};
+        const warrantyInput = document.getElementById('alert-warranty-days');
+        const licenseInput = document.getElementById('alert-license-days');
+        const maintenanceInput = document.getElementById('alert-maintenance-days');
+        const emailsInput = document.getElementById('alert-emails');
+        if (warrantyInput) warrantyInput.value = cfg.warranty_threshold_days || 30;
+        if (licenseInput) licenseInput.value = cfg.license_threshold_days || 30;
+        if (maintenanceInput) maintenanceInput.value = cfg.maintenance_threshold_days || 7;
+        if (emailsInput) emailsInput.value = (cfg.emails || []).join(', ');
+    }
+
+    // Edit Profile Logic
+    document.getElementById('editProfileBtn')?.addEventListener('click', () => {
+        document.getElementById('profile-update-name').value = currentUserProfile.full_name || '';
+        document.getElementById('profile-update-avatar').value = currentUserProfile.avatar_url || '';
+        openModal('editProfileModal');
+    });
+
+    document.getElementById('profile-update-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newName = document.getElementById('profile-update-name').value;
+        const newAvatar = document.getElementById('profile-update-avatar').value;
+
+        const { error } = await supabaseClient
+            .from('profiles')
+            .update({ full_name: newName, avatar_url: newAvatar })
+            .eq('id', currentUserProfile.id);
+
+        if (error) {
+            handleSupabaseError(error, 'cập nhật profile');
+        } else {
+            showInfoModal('Cập nhật profile thành công!');
+            safeCloseModal('editProfileModal');
+            await refreshApp(); // Refresh để cập nhật lại thông tin
+        }
+    });
+
+    // Change Password Logic
+    document.getElementById('password-update-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+
+        if (newPassword.length < 6) {
+            return showInfoModal('Mật khẩu phải có ít nhất 6 ký tự.', 'Lỗi');
+        }
+        if (newPassword !== confirmPassword) {
+            return showInfoModal('Mật khẩu xác nhận không khớp.', 'Lỗi');
+        }
+
+        const { error } = await supabase_auth_client.auth.updateUser({ password: newPassword });
+
+        if (error) {
+            handleSupabaseError(error, 'cập nhật mật khẩu');
+        } else {
+            showInfoModal('Cập nhật mật khẩu thành công!');
+            e.target.reset();
+        }
+    });
+
+    // Dark Mode Logic
+    const darkModeToggle = document.getElementById('dark-mode-toggle');
+    const applyDarkMode = (isDark) => {
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+            if(darkModeToggle) darkModeToggle.checked = true;
+        } else {
+            document.documentElement.classList.remove('dark');
+            if(darkModeToggle) darkModeToggle.checked = false;
+        }
+    };
+
+    if (darkModeToggle) {
+        darkModeToggle.addEventListener('change', (e) => {
+            localStorage.setItem('darkMode', e.target.checked);
+            applyDarkMode(e.target.checked);
+        });
+    }
+    // Apply initial dark mode on load
+    applyDarkMode(localStorage.getItem('darkMode') === 'true');
+
+    document.getElementById('alert-settings-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            id: alertSettings[0]?.id,
+            warranty_threshold_days: parseInt(document.getElementById('alert-warranty-days').value, 10) || 30,
+            license_threshold_days: parseInt(document.getElementById('alert-license-days').value, 10) || 30,
+            maintenance_threshold_days: parseInt(document.getElementById('alert-maintenance-days').value, 10) || 7,
+            emails: (document.getElementById('alert-emails').value || '')
+                .split(',')
+                .map(e => e.trim())
+                .filter(Boolean)
+        };
+        const { error } = await supabaseClient.from('alert_settings').upsert(payload, { onConflict: 'id' });
+        if (error) return handleSupabaseError(error, 'lưu cấu hình cảnh báo');
+        showInfoModal('Đã lưu cấu hình cảnh báo.');
+        await refreshApp();
+    });
+
+    // Backup & Restore handlers
+    document.getElementById('btnBackupData')?.addEventListener('click', () => {
+        const data = LocalDB.downloadBackup();
+        const statusEl = document.getElementById('backupStatus');
+        if (statusEl) {
+            const counts = `${data.ASSETS?.length || 0} assets, ${data.LICENSES?.length || 0} licenses, ${data.USERS?.length || 0} users`;
+            statusEl.textContent = `✓ Đã xuất lúc ${new Date().toLocaleString('vi-VN')} — ${counts}`;
+            statusEl.classList.remove('hidden');
+        }
+    });
+
+    document.getElementById('restoreFileInput')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const statusEl = document.getElementById('backupStatus');
+        try {
+            const data = await LocalDB.restoreFromFile(file);
+            const counts = `${data.ASSETS?.length || 0} assets, ${data.LICENSES?.length || 0} licenses, ${data.USERS?.length || 0} users`;
+            if (statusEl) {
+                statusEl.textContent = `✓ Đã khôi phục từ backup ${data._exportedAt || ''} — ${counts}`;
+                statusEl.classList.remove('hidden');
+            }
+            showInfoModal(`Đã khôi phục dữ liệu thành công!\n${counts}`, 'Khôi phục thành công');
+            setTimeout(() => location.reload(), 1500);
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = `✗ Lỗi: ${err.message}`;
+                statusEl.classList.remove('hidden');
+            }
+            showInfoModal('File backup không hợp lệ.', 'Lỗi');
+        }
+        e.target.value = '';
+    });
+
+    document.getElementById('assetForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'assets', () => ({
+        id: document.getElementById('modal_assetId').value,
+        name: document.getElementById('modal_assetName').value,
+        config: document.getElementById('modal_assetConfig').value,
+        location: document.getElementById('modal_assetLocation').value,
+        purchase_date: document.getElementById('modal_assetPurchaseDate').value || null,
+        cost: parseFloat(document.getElementById('modal_assetCost').value) || 0,
+        salvage_value: parseFloat(document.getElementById('modal_assetSalvage').value) || 0,
+        useful_life_months: parseInt(document.getElementById('modal_assetLife').value, 10) || null,
+        depreciation_method: document.getElementById('modal_assetDepMethod').value || 'straight_line',
+        status: document.getElementById('modal_assetStatus').value,
+        notes: document.getElementById('modal_assetNotes').value,
+        category_id: parseInt(document.getElementById('modal_assetCategory').value),
+        user_id: users.find(u => u.name === userChoicesInstance?.getValue(true))?.id || null
+    }), 'assetModal', (data, isUpdate) => addLog(data.id, 'ASSET', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa tài sản' : 'Nhập kho')));
+
+    document.getElementById('licenseForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'licenses', () => ({
+        id: document.getElementById('modal_licenseId').value, key_type: document.getElementById('modal_licenseType').value, license_key: document.getElementById('modal_licenseKey').value, package_type: document.getElementById('modal_packageType').value, expiration_date: document.getElementById('modal_expirationDate').value || null, status: document.getElementById('modal_licenseStatus').value, notes: document.getElementById('modal_licenseNotes').value, user_id: users.find(u => u.name === licenseUserChoicesInstance?.getValue(true))?.id || null
+    }), 'licenseModal', (data, isUpdate) => addLog(data.id, 'LICENSE', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa license' : 'Nhập kho')));
+
+    document.getElementById('userForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'users', () => ({
+        id: document.getElementById('userId').value, name: document.getElementById('name').value, email: document.getElementById('email').value, department_id: document.getElementById('department').value || null, status: document.getElementById('status').value, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
+    }), 'addUserModal', (data, isUpdate) => addLog(data.id, 'USER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.email)));
+
+    document.getElementById('categoryForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'categories', () => ({ id: document.getElementById('categoryOldName').value, name: document.getElementById('categoryName').value }), 'categoryModal', renderLists));
+    document.getElementById('departmentForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'departments', () => ({ id: document.getElementById('deptId').value, name: document.getElementById('deptName').value }), 'departmentManagementModal', renderLists));
+    document.getElementById('licenseTypeForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'license_types', () => ({ id: document.getElementById('licenseTypeId').value, name: document.getElementById('licenseTypeName').value }), 'licenseTypeModal', renderLists));
+
+    document.getElementById('maintenanceForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const titleVal = document.getElementById('maintenance_title').value;
+        if (!titleVal) return showInfoModal('Nhập tiêu đề lịch bảo trì');
+        const payload = {
+            asset_id: parseInt(document.getElementById('maintenance_asset').value, 10) || null,
+            title: titleVal,
+            due_date: document.getElementById('maintenance_due').value || null,
+            status: 'open',
+            created_by: currentUserProfile?.id || null
+        };
+        // Ghi chú tổng hợp: ưu tiên + mô tả
+        const priorityVal = document.getElementById('maintenance_priority').value || 'normal';
+        const descVal = document.getElementById('maintenance_desc').value;
+        const parts = [priorityVal && `Ưu tiên: ${priorityVal}`, descVal];
+        const noteText = parts.filter(Boolean).join(' | ');
+        if (noteText) payload.note = noteText;
+        const { error } = await supabaseClient.from('maintenance_tasks').insert(payload);
+        if (error) return handleSupabaseError(error, 'tạo lịch bảo trì');
+        if (payload.asset_id) await addLog(payload.asset_id, 'MAINT', 'Tạo lịch', titleVal || 'Lịch bảo trì');
+        showInfoModal('Đã lưu lịch bảo trì');
+        safeCloseModal('maintenanceModal');
+        await refreshApp();
+    });
+
+    document.getElementById('stockCheckForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            status: 'open',
+            created_by: currentUserProfile?.id || null
+        };
+        const nameVal = document.getElementById('stockcheck_name').value;
+        const dateVal = document.getElementById('stockcheck_date').value;
+        const extraNote = document.getElementById('stockcheck_notes').value;
+        // map date -> started_at, name/notes -> note to match existing columns
+        if (dateVal) payload.started_at = dateVal;
+        const mergedNote = [nameVal && `Tên đợt: ${nameVal}`, extraNote].filter(Boolean).join(' | ');
+        if (mergedNote) payload.note = mergedNote;
+        const { error } = await supabaseClient.from('stock_checks').insert(payload);
+        if (error) return handleSupabaseError(error, 'tạo đợt kiểm kê');
+        showInfoModal('Đã tạo đợt kiểm kê');
+        safeCloseModal('stockCheckModal');
+        await refreshApp();
+    });
+
+    document.getElementById('btnConfirmAssign')?.addEventListener('click', async () => { const u = users.find(u => u.name === assignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); addLog(tempId, 'ASSET', 'Cấp phát', u.name); safeCloseModal('checkOutModal'); await refreshApp(); });
+    document.getElementById('btnConfirmAssignLicense')?.addEventListener('click', async () => { const u = users.find(u => u.name === licenseAssignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); await supabaseClient.from('licenses').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); addLog(tempId, 'LICENSE', 'Cấp phát', u.name); safeCloseModal('checkOutLicenseModal'); await refreshApp(); });
+    document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const { error } = await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); } });
+
+    async function refreshApp(resetFilters = false) {
+        await autoRestoreFromSupabaseIfNeeded();
+
+        // Preserve current filter state before refresh (only for assets page)
+        let preservedFilters = null;
+        if (document.getElementById('assetTableBody') && !resetFilters) {
+            preservedFilters = {
+                search: document.getElementById('searchInput')?.value || '',
+                status: document.getElementById('filterAssetStatus')?.value || '',
+                location: document.getElementById('filterAssetLocation')?.value || '',
+                category: document.getElementById('filterAssetCategory')?.value || '',
+                user: null
+            };
+            // Get user filter from Choices instance if available
+            if (filterAssetUserChoicesInstance) {
+                try {
+                    const selectedValue = filterAssetUserChoicesInstance.getValue(true);
+                    const normalizedSelectedValue = Array.isArray(selectedValue)
+                        ? (selectedValue[0] || '')
+                        : (selectedValue || '');
+                    if (normalizedSelectedValue) {
+                        preservedFilters.user = normalizedSelectedValue;
+                    }
+                } catch (e) {}
+            } else {
+                preservedFilters.user = document.getElementById('filterAssetUser')?.value || '';
+            }
+        }
+        
+        await fetchAllData();
+        updateDropdowns();
+        
+        if (document.getElementById('assetTableBody')) { 
+            if (resetFilters) {
+                resetAssetFilters(); 
+            } else if (preservedFilters) {
+                // Restore preserved filter values
+                if (preservedFilters.search) document.getElementById('searchInput').value = preservedFilters.search;
+                if (preservedFilters.status) document.getElementById('filterAssetStatus').value = preservedFilters.status;
+                if (preservedFilters.location) document.getElementById('filterAssetLocation').value = preservedFilters.location;
+                if (preservedFilters.category) document.getElementById('filterAssetCategory').value = preservedFilters.category;
+                if (preservedFilters.user && filterAssetUserChoicesInstance) {
+                    try {
+                        filterAssetUserChoicesInstance.setChoiceByValue(preservedFilters.user);
+                    } catch (e) {
+                        // Fallback to element value if Choices fails
+                        const fau = document.getElementById('filterAssetUser');
+                        if (fau) fau.value = preservedFilters.user;
+                    }
+                } else if (preservedFilters.user) {
+                    const fau = document.getElementById('filterAssetUser');
+                    if (fau) fau.value = preservedFilters.user;
+                }
+            }
+            applyAssetFilters(); 
+            renderMaintenanceList(); 
+            renderStockCheckList(); 
+        }
+        if (document.getElementById('licenseTableBody')) { 
+            if (resetFilters) resetLicenseFilters(); 
+            applyLicenseFilters(); 
+        }
+        if (document.getElementById('userTableBody')) { 
+            if (resetFilters) resetUserFilters(); 
+            applyUserFilters(); 
+        }
+        applyRoleBasedUI(); // [PHÂN QUYỀN] Áp dụng các thay đổi giao diện dựa trên vai trò
+        updateHeaderUserInfo(); // Cập nhật thông tin user trên header
+        if (document.getElementById('settingsContent')) renderSettingsPage(); // [SỬA LỖI] Gọi hàm render cho trang Cài đặt ở cuối để đảm bảo có đủ dữ liệu
+        checkAndDisplayNotifications(); // [KHÔI PHỤC] Kiểm tra và hiển thị thông báo
+        updateDashboard();
+    }
+
+    // Đóng tất cả dropdown Choices khi click bên ngoài
+    document.addEventListener('click', (e) => {
+        // Kiểm tra nếu click không phải vào Choices element
+        if (!e.target.closest('.choices')) {
+            // Đóng tất cả dropdown đang mở
+            [filterAssetUserChoicesInstance, filterLicenseUserChoicesInstance].forEach(instance => {
+                if (instance && instance.dropdown && instance.dropdown.isActive) {
+                    try {
+                        instance.hideDropdown();
+                    } catch (err) {}
+                }
+            });
+        }
+    });
+
+    // Auto-hide any accidentally-visible full-screen modals or overlays that block clicks
+    try {
+        // 1) Hide any explicit modal elements with both classes 'fixed' and 'inset-0' that are visible
+        const openModals = Array.from(document.querySelectorAll('.fixed.inset-0')).filter(m => !m.classList.contains('hidden'));
+        if (openModals.length) {
+            console.warn('Auto-hiding visible modals that may block interaction:', openModals.map(m => m.id || m.className));
+            openModals.forEach(m => { m.classList.add('hidden'); m.classList.remove('flex'); m.setAttribute('aria-hidden', 'true'); });
+        }
+
+        // 2) Broad detection: find any element that covers the viewport and is visible/fixed and likely to intercept clicks
+        const candidates = Array.from(document.querySelectorAll('body *')).filter(el => {
+            try {
+                const cs = window.getComputedStyle(el);
+                if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
+                const rect = el.getBoundingClientRect();
+                // Consider elements that cover most of viewport and are fixed/absolute
+                const covers = rect.width >= window.innerWidth - 2 && rect.height >= window.innerHeight - 2 && (cs.position === 'fixed' || cs.position === 'absolute');
+                const highZ = parseInt(cs.zIndex) >= 50 || (cs.zIndex !== 'auto' && cs.zIndex !== '' && !isNaN(parseInt(cs.zIndex)));
+                return covers && highZ;
+            } catch (e) { return false; }
+        });
+
+        if (candidates.length) {
+            console.warn('Found blocking overlay candidates; hiding them:', candidates.map(c => ({ id: c.id, classes: c.className }))); 
+            candidates.forEach(c => {
+                // disable pointer events and hide visually but avoid removing from layout drastically
+                try { c.dataset._prePointer = c.style.pointerEvents || ''; c.style.pointerEvents = 'none'; } catch (e) {}
+                try { c.dataset._preVisibility = c.style.visibility || ''; c.style.visibility = 'hidden'; } catch (e) {}
+            });
+        }
+
+        // 3) Ensure mobile sidebar backdrop is hidden
+        const sb = document.getElementById('sidebar-backdrop'); if (sb) sb.classList.add('hidden');
+    } catch (err) { console.error('Error during startup modal/overlay cleanup', err); }
+
+    // Load trang lần đầu - reset filter để đảm bảo trạng thái sạch
+    refreshApp(true);
+});
+
+addTaiSan = () => {
+    const location = [
+      "Hà Nội","TP. Hồ Chí Minh","Hải Phòng","Đà Nẵng","Cần Thơ",
+      "An Giang","Bà Rịa - Vũng Tàu","Bắc Giang","Bắc Kạn","Bạc Liêu",
+      "Bắc Ninh","Bến Tre","Bình Định","Bình Dương","Bình Phước",
+      "Bình Thuận","Cà Mau","Cao Bằng","Đắk Lắk","Đắk Nông",
+      "Điện Biên","Đồng Nai","Đồng Tháp","Gia Lai","Hà Giang",
+      "Hà Nam","Hà Tĩnh","Hải Dương","Hậu Giang","Hòa Bình",
+      "Hưng Yên","Khánh Hòa","Kiên Giang","Kon Tum","Lai Châu",
+      "Lâm Đồng","Lạng Sơn","Lào Cai","Long An","Nam Định",
+      "Nghệ An","Ninh Bình","Ninh Thuận","Phú Thọ","Phú Yên",
+      "Quảng Bình","Quảng Nam","Quảng Ngãi","Quảng Ninh","Quảng Trị",
+      "Sóc Trăng","Sơn La","Tây Ninh","Thái Bình","Thái Nguyên",
+      "Thanh Hóa","Thừa Thiên Huế","Tiền Giang","Trà Vinh","Tuyên Quang",
+      "Vĩnh Long","Vĩnh Phúc","Yên Bái"
+    ];
+
+    const locationElement = document.getElementById('modal_assetLocation');
+    const defaultLocation = `<option value="">-- Chọn vị trí --</option>`;
+    locationElement.innerHTML = defaultLocation + location
+        .map(p => `<option value="${p}">${p}</option>`)
+        .join("");
+}
+

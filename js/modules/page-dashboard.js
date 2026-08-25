@@ -1,0 +1,897 @@
+window.QLTSPageDashboard = window.QLTSPageDashboard || {};
+window.QLTSPageDashboard.init = async function () {
+    // =================================================================
+
+    function showDrillDown(title, items, type = 'asset') {
+        const modalTitle = document.getElementById('drillDownModalTitle');
+        const tbody = document.getElementById('drillDownModalTableBody');
+        if (!modalTitle || !tbody) return;
+
+        modalTitle.textContent = title;
+
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">Không có dữ liệu chi tiết.</td></tr>';
+        } else {
+            tbody.innerHTML = items.map(item => {
+                if (type === 'asset') {
+                    const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.name}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.config || '-'}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || '-'}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
+                } else {
+                    const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.key_type}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.license_key || '-'}</td><td class="p-3 text-sm">${item.expiration_date || 'Vĩnh viễn'}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || '-'}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
+                }
+            }).join('');
+        }
+        openModal('drillDownModal');
+    }
+
+    const currencyVN = (val) => {
+        if (val === null || val === undefined || isNaN(val)) return '-';
+        return Number(val).toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
+    };
+
+    const safeDate = (val) => {
+        if (!val) return null;
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+    };
+
+    function updateDashboard() {
+        if (!document.getElementById('dashboardContent')) return;
+
+        if (document.getElementById('totalAssets')) document.getElementById('totalAssets').textContent = assets.length;
+        if (document.getElementById('assetsInUse')) document.getElementById('assetsInUse').textContent = assets.filter(a => a.status === 'Active').length;
+        if (document.getElementById('assetsInStock')) document.getElementById('assetsInStock').textContent = assets.filter(a => a.status === 'Stock').length;
+        if (document.getElementById('assetsInRepair')) document.getElementById('assetsInRepair').textContent = assets.filter(a => ['Repair', 'Broken'].includes(a.status)).length;
+
+        const backlogTasks = maintenanceTasks.filter(t => (t.status || '').toLowerCase() !== 'done');
+        const nextDue = backlogTasks
+            .map(t => safeDate(t.next_due_date || t.due_date || t.scheduled_for))
+            .filter(Boolean)
+            .sort((a, b) => a - b)[0];
+        const monthlyDep = assets.reduce((sum, a) => {
+            const cost = Number(a.cost) || 0;
+            const salvage = Number(a.salvage_value) || 0;
+            const life = Number(a.useful_life_months) || 0;
+            if (cost > 0 && life > 0) {
+                return sum + Math.max(0, cost - salvage) / life;
+            }
+            return sum;
+        }, 0);
+        const openStock = stockChecks.filter(c => (c.status || '').toLowerCase() !== 'closed').length;
+
+        const alertCfg = alertSettings[0] || {};
+        const warrantyThreshold = alertCfg.warranty_threshold_days || 30;
+        const licenseThreshold = alertCfg.license_threshold_days || 30;
+        const maintenanceThreshold = alertCfg.maintenance_threshold_days || 7;
+        const nowAlerts = new Date();
+        const calcDaysLeft = (d) => Math.ceil((d - nowAlerts) / (1000 * 60 * 60 * 24));
+        const assetWarrantyAlerts = assets.filter(a => {
+            const d = safeDate(a.warranty_expiration_date);
+            if (!d) return false;
+            const daysLeft = calcDaysLeft(d);
+            return daysLeft >= 0 && daysLeft <= warrantyThreshold;
+        }).length;
+        const licenseExpiryAlerts = licenses.filter(l => {
+            const d = safeDate(l.expiration_date);
+            if (!d) return false;
+            const daysLeft = calcDaysLeft(d);
+            return daysLeft >= 0 && daysLeft <= licenseThreshold;
+        }).length;
+        const maintenanceAlerts = backlogTasks.filter(t => {
+            const d = safeDate(t.next_due_date || t.due_date || t.scheduled_for);
+            if (!d) return false;
+            const daysLeft = calcDaysLeft(d);
+            return daysLeft >= 0 && daysLeft <= maintenanceThreshold;
+        }).length;
+        const totalAlerts = assetWarrantyAlerts + licenseExpiryAlerts + maintenanceAlerts;
+
+        const nextMaintenanceEl = document.getElementById('nextMaintenance');
+        if (nextMaintenanceEl) nextMaintenanceEl.textContent = nextDue ? nextDue.toLocaleDateString('vi-VN') : 'Không lịch';
+
+        const maintenanceBacklogEl = document.getElementById('maintenanceBacklog');
+        if (maintenanceBacklogEl) maintenanceBacklogEl.textContent = backlogTasks.length;
+
+        const stockCheckEl = document.getElementById('openStockChecks');
+        if (stockCheckEl) stockCheckEl.textContent = openStock;
+
+        const monthlyDepEl = document.getElementById('monthlyDep');
+        if (monthlyDepEl) monthlyDepEl.textContent = currencyVN(monthlyDep || 0);
+
+        const alertCountEl = document.getElementById('alertCount');
+        if (alertCountEl) alertCountEl.textContent = totalAlerts;
+
+        const drawChart = (id, instance, type, labels, data, colors, label = 'Dữ liệu', onClickCallback = null) => {
+            const ctx = document.getElementById(id);
+            if (!ctx || typeof Chart === 'undefined') return null;
+            if (instance) instance.destroy();
+            return new Chart(ctx, {
+                type: type,
+                data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: colors || ['#3b82f6', '#22c55e', '#eab308', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'], borderWidth: 1 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    onClick: (evt, elements) => { if (elements.length > 0 && onClickCallback) { const index = elements[0].index; onClickCallback(labels[index], index); } },
+                    plugins: { legend: { display: type !== 'bar' } }
+                }
+            });
+        };
+
+        const sRaw = assets.reduce((acc, a) => { acc[a.status] = (acc[a.status] || 0) + 1; return acc; }, {});
+        const sKeys = Object.keys(sRaw);
+        const sLabels = sKeys.map(k => STATUS_MAP[k]?.text || k);
+        chartAssetHealth = drawChart('assetHealthChart', chartAssetHealth, 'doughnut', sLabels, Object.values(sRaw), ['#22c55e', '#0ea5e9', '#eab308', '#ef4444', '#6b7280'], 'Số lượng', (clickedLabel, index) => {
+            showDrillDown(`Chi tiết: ${clickedLabel}`, assets.filter(a => a.status === sKeys[index]), 'asset');
+        });
+
+        const cData = assets.reduce((acc, a) => { acc[a.category] = (acc[a.category] || 0) + 1; return acc; }, {});
+        chartCategory = drawChart('categoryChart', chartCategory, 'bar', Object.keys(cData), Object.values(cData), '#3b82f6', 'Số lượng', (clickedLabel) => {
+            showDrillDown(`Danh mục: ${clickedLabel}`, assets.filter(a => a.category === clickedLabel), 'asset');
+        });
+
+        const lData = assets.reduce((acc, a) => { const loc = a.location || 'Chưa xác định'; acc[loc] = (acc[loc] || 0) + 1; return acc; }, {});
+        chartLocation = drawChart('locationAssetChart', chartLocation, 'pie', Object.keys(lData), Object.values(lData), null, 'Số lượng', (clickedLabel) => {
+            showDrillDown(`Vị trí: ${clickedLabel}`, assets.filter(a => (a.location || 'Chưa xác định') === clickedLabel), 'asset');
+        });
+
+        const licData = licenses.reduce((acc, l) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc; }, {});
+        const licKeys = Object.keys(licData);
+        const licLabels = licKeys.map(k => STATUS_MAP[k]?.text || k);
+        chartLicenseStatus = drawChart('licenseStatusChart', chartLicenseStatus, 'pie', licLabels, Object.values(licData), null, 'License', (clickedLabel, index) => {
+            showDrillDown(`License trạng thái: ${clickedLabel}`, licenses.filter(l => l.status === licKeys[index]), 'license');
+        });
+
+        // --- [MỚI] Biểu đồ Hạn sử dụng License trên Dashboard chính ---
+        const now = new Date();
+        const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const expirationStatus = { 'Hết hạn': 0, 'Sắp hết hạn (30 ngày)': 0, 'Còn hạn': 0, 'Vĩnh viễn': 0 };
+        licenses.forEach(lic => {
+            if (!lic.expiration_date) {
+                expirationStatus['Vĩnh viễn']++;
+            } else {
+                const expDate = new Date(lic.expiration_date);
+                if (expDate < now) {
+                    expirationStatus['Hết hạn']++;
+                } else if (expDate <= thirtyDaysFromNow) {
+                    expirationStatus['Sắp hết hạn (30 ngày)']++;
+                } else {
+                    expirationStatus['Còn hạn']++;
+                }
+            }
+        });
+        const expLabels = Object.keys(expirationStatus);
+        chartLicenseExpiration = drawChart('licenseExpirationChartDashboard', chartLicenseExpiration, 'doughnut', expLabels, Object.values(expirationStatus), ['#ef4444', '#f59e0b', '#22c55e', '#6b7280'], 'License', (clickedLabel, index) => {
+            const filteredLicenses = licenses.filter(lic => {
+                if (clickedLabel === 'Vĩnh viễn') return !lic.expiration_date;
+                if (!lic.expiration_date) return false;
+                const expDate = new Date(lic.expiration_date);
+                if (clickedLabel === 'Hết hạn') return expDate < now;
+                if (clickedLabel === 'Sắp hết hạn (30 ngày)') return expDate >= now && expDate <= thirtyDaysFromNow;
+                if (clickedLabel === 'Còn hạn') return expDate > thirtyDaysFromNow;
+                return false;
+            });
+            showDrillDown(`License: ${clickedLabel}`, filteredLicenses, 'license');
+        });
+
+        const deptData = {};
+        assets.forEach(a => {
+            let dName = 'Kho';
+            if (a.user_id) { const u = users.find(user => user.id === a.user_id); dName = u ? u.department : 'Chưa phân bổ'; }
+            deptData[dName] = (deptData[dName] || 0) + 1;
+        });
+        chartDepartment = drawChart('departmentAssetChart', chartDepartment, 'bar', Object.keys(deptData), Object.values(deptData), '#8b5cf6', 'Thiết bị', (clickedLabel) => {
+            let filtered = clickedLabel === 'Kho' ? assets.filter(a => !a.user_id) : assets.filter(a => { const u = users.find(user => user.id === a.user_id); return u && u.department === clickedLabel; });
+            showDrillDown(`Phòng ban: ${clickedLabel}`, filtered, 'asset');
+        });
+
+        const uAssetCounts = users.map(u => ({ name: u.name, count: assets.filter(a => a.user_id === u.id).length })).filter(u => u.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
+        chartUserAsset = drawChart('userAssetChart', chartUserAsset, 'bar', uAssetCounts.map(u => u.name), uAssetCounts.map(u => u.count), '#f59e0b', 'Thiết bị', (clickedLabel) => {
+            const u = users.find(user => user.name === clickedLabel);
+            if (u) showDrillDown(`Tài sản của: ${u.name}`, assets.filter(a => a.user_id === u.id), 'asset');
+        });
+
+        const last7Days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().split('T')[0]; }).reverse();
+        const actData = last7Days.map(date => assetHistory.filter(h => (h.created_at || '').startsWith(date)).length);
+        const ctxTrend = document.getElementById('activityTrendChart');
+        if (ctxTrend && typeof Chart !== 'undefined') {
+            if (chartActivity) chartActivity.destroy();
+            chartActivity = new Chart(ctxTrend, { type: 'line', data: { labels: last7Days, datasets: [{ label: 'Số hoạt động', data: actData, borderColor: '#0ea5e9', tension: 0.3, fill: true, backgroundColor: 'rgba(14, 165, 233, 0.1)' }] }, options: { responsive: true, maintainAspectRatio: false } });
+        }
+
+        const uLicCounts = users.map(u => ({ name: u.name, count: licenses.filter(l => l.user_id === u.id).length })).filter(u => u.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
+        chartUserLicense = drawChart('userLicenseChart', chartUserLicense, 'bar', uLicCounts.map(u => u.name), uLicCounts.map(u => u.count), '#ec4899', 'License', (clickedLabel) => {
+            const u = users.find(user => user.name === clickedLabel);
+            if (u) showDrillDown(`License của: ${u.name}`, licenses.filter(l => l.user_id === u.id), 'license');
+        });
+    }
+
+    // =================================================================
+    // 5. CÁC HÀM TABLE & PAGINATION (ĐÃ SỬA LỖI UI)
+    // =================================================================
+
+    function normalizeAssetStatus(val) {
+        if (!val) return 'Stock';
+        const v = val.toString().toLowerCase().trim();
+        if (v.includes('dùng') || v.includes('hoạt động') || v === 'active') return 'Active';
+        if (v.includes('sửa') || v === 'repair') return 'Repair';
+        if (v.includes('hỏng') || v.includes('lỗi') || v === 'broken') return 'Broken';
+        return 'Stock';
+    }
+
+    function renderPagination(containerId, currentPage, totalItems, itemsPerPage, tableType) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // --- 1. TÍNH COLSPAN (Để ô phân trang trải dài hết bảng) ---
+        let colCount = 10;
+        if (tableType === 'assets') colCount = 10;
+        if (tableType === 'licenses') colCount = 8;
+        if (tableType === 'users') colCount = 5;
+
+        // Tìm thẻ TD cha và set colSpan
+        const parentTd = container.closest('td') || (container.tagName === 'TD' ? container : null);
+        if (parentTd) { parentTd.colSpan = colCount; }
+
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+        // --- 2. THUẬT TOÁN "SMART PAGINATION" (Hiện 1 ... 4 5 6 ... 58) ---
+        // Logic: Chỉ hiện trang đầu, trang cuối, và +/- 1 trang xung quanh trang hiện tại
+        let range = [];
+        const delta = 1;
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - delta && i <= currentPage + delta)) {
+                range.push(i);
+            }
+        }
+
+        let rangeWithDots = [];
+        let l;
+        for (let i of range) {
+            if (l) {
+                if (i - l === 2) {
+                    rangeWithDots.push(l + 1); // Nếu cách nhau 1 trang thì hiện nốt
+                } else if (i - l !== 1) {
+                    rangeWithDots.push('...'); // Nếu cách xa thì hiện dấu ...
+                }
+            }
+            rangeWithDots.push(i);
+            l = i;
+        }
+
+        // --- 3. RENDER HTML ---
+        let html = '<ul class="flex items-center justify-end -space-x-px h-8 text-sm">';
+
+        // Nút Trước
+        const prevDisabled = currentPage === 1;
+        const prevClass = prevDisabled ? 'pointer-events-none opacity-50 bg-gray-100 text-gray-400' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700';
+        html += `<li><a href="javascript:void(0)" data-page="${currentPage - 1}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 ml-0 leading-tight border border-slate-300 rounded-l-lg ${prevClass}">Trước</a></li>`;
+
+        // Các nút số trang (Dùng danh sách rút gọn)
+        rangeWithDots.forEach(page => {
+            if (page === '...') {
+                html += `<li><span class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-slate-300">...</span></li>`;
+            } else {
+                const active = (page === currentPage) ? 'z-10 text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700';
+                html += `<li><a href="javascript:void(0)" data-page="${page}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 leading-tight border border-slate-300 ${active}">${page}</a></li>`;
+            }
+        });
+
+        // Nút Sau
+        const nextDisabled = currentPage === totalPages;
+        const nextClass = nextDisabled ? 'pointer-events-none opacity-50 bg-gray-100 text-gray-400' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700';
+        html += `<li><a href="javascript:void(0)" data-page="${currentPage + 1}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 leading-tight border border-slate-300 rounded-r-lg ${nextClass}">Sau</a></li></ul>`;
+
+        container.innerHTML = html;
+    }
+
+    function renderTableAssets(data) {
+        const tbody = document.getElementById('assetTableBody'); if (!tbody) return;
+        document.getElementById('assetTotalCount').textContent = data.length;
+        document.getElementById('assetTotalCount').classList.remove('hidden');
+        const start = (assetCurrentPage - 1) * ITEMS_PER_PAGE;
+        const pageData = data.slice(start, start + ITEMS_PER_PAGE);
+        if (pageData.length === 0) { tbody.innerHTML = `<tr><td colspan="10" class="p-8 text-center text-slate-400">Không có dữ liệu.</td></tr>`; renderPagination('assetPagination', 1, 0, ITEMS_PER_PAGE, 'assets'); return; }
+        tbody.innerHTML = pageData.map(item => {
+            const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+            const isAdmin = currentUserProfile.role === 'admin';
+            let btns = '';
+            const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
+
+            if (isAdmin) {
+                if (item.status === 'Stock') {
+                    btns = `<div class="tooltip"><button data-action="checkout-asset" data-id="${item.id}" class="${btnClasses} bg-blue-600 text-white hover:bg-blue-700"><i class="fa-solid fa-hand-holding-hand"></i></button><span class="tooltiptext">Cấp phát</span></div>`;
+                } else if (item.status === 'Active') {
+                    btns = `<div class="tooltip"><button data-action="checkin-asset" data-id="${item.id}" class="${btnClasses} bg-yellow-500 text-white hover:bg-yellow-600"><i class="fa-solid fa-rotate-left"></i></button><span class="tooltiptext">Thu hồi</span></div>
+                            <div class="tooltip"><button data-action="transfer" data-id="${item.id}" class="${btnClasses} text-blue-600 bg-blue-100 hover:bg-blue-200"><i class="fa-solid fa-right-left"></i></button><span class="tooltiptext">Chuyển đổi</span></div>`;
+                }
+            }
+
+            return `<tr class="border-b hover:bg-slate-50 group asset-row" data-id="${item.id}">
+                <td class="p-4 font-semibold text-slate-700">${item.name}</td>
+                <td class="p-4 text-xs text-slate-500 font-mono whitespace-pre-wrap">${item.config || ''}</td>
+                <td class="p-4">${item.category}</td><td class="p-4 text-sm">${item.location || '-'}</td>
+                <td class="p-4 text-sm">${formatDateDisplay(item.purchase_date)}</td>
+                <td class="p-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${status.classes}">${status.text}</span></td>
+                <td class="p-4 text-sm font-medium text-blue-600">${item.user || '-'}</td>
+                <td class="p-4 text-sm italic text-slate-400">-</td>
+                <td class="p-4 text-xs text-slate-500 max-w-xs truncate">${item.notes || ''}</td>
+                <td class="p-4 flex gap-2 items-center">
+                    ${btns}
+                    <div class="tooltip"><button data-action="history-asset" data-id="${item.id}" class="${btnClasses} text-slate-400 hover:bg-slate-200 hover:text-blue-600"><i class="fa-solid fa-clock-rotate-left"></i></button><span class="tooltiptext">Xem lịch sử</span></div>
+                    ${isAdmin ? `
+                        <div class="tooltip"><button data-action="edit-asset" data-id="${item.id}" class="${btnClasses} text-green-600 hover:bg-green-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div>
+                        <div class="tooltip"><button data-action="delete-asset" data-id="${item.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div>
+                    ` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+        renderPagination('assetPagination', assetCurrentPage, data.length, ITEMS_PER_PAGE, 'assets');
+    }
+
+    function renderTableLicenses(data) {
+        const tbody = document.getElementById('licenseTableBody');
+        if (!tbody) return;
+        document.getElementById('licenseTotalCount').textContent = data.length;
+        document.getElementById('licenseTotalCount').classList.remove('hidden');
+
+        const start = (licenseCurrentPage - 1) * ITEMS_PER_PAGE;
+        const pageData = data.slice(start, start + ITEMS_PER_PAGE);
+
+        tbody.innerHTML = pageData.map(item => {
+            const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+            const isAdmin = currentUserProfile.role === 'admin';
+
+            // --- CẬP NHẬT PHẦN NÚT BẤM (ACTIONS) ---
+            let btns = '';
+            const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
+
+            if (isAdmin) {
+                if (item.status === 'Stock') {
+                    // Nút Cấp phát (Checkout)
+                    btns += `<div class="tooltip"><button data-action="checkout-license" data-id="${item.id}" class="${btnClasses} bg-blue-600 text-white hover:bg-blue-700"><i class="fa-solid fa-hand-holding-hand"></i></button><span class="tooltiptext">Cấp phát</span></div>`;
+                } else if (item.status === 'Active') {
+                    // Nút Thu hồi (Checkin)
+                    btns += `<div class="tooltip"><button data-action="checkin-license" data-id="${item.id}" class="${btnClasses} bg-yellow-500 text-white hover:bg-yellow-600"><i class="fa-solid fa-rotate-left"></i></button><span class="tooltiptext">Thu hồi</span></div>`;
+                    // Nút Chuyển đổi (Transfer) - Mới thêm
+                    btns += `<div class="tooltip"><button data-action="transfer-license" data-id="${item.id}" class="${btnClasses} bg-indigo-100 text-indigo-600 hover:bg-indigo-200"><i class="fa-solid fa-right-left"></i></button><span class="tooltiptext">Chuyển đổi</span></div>`;
+                }
+            }
+
+            // Nút Lịch sử (History) - Luôn hiện - Mới thêm
+            const historyBtn = `<button data-action="history-license" data-id="${item.id}" class="${btnClasses} text-slate-400 hover:bg-slate-200 hover:text-blue-600"><i class="fa-solid fa-clock-rotate-left"></i></button>`;
+
+            let adminActions = '';
+            if (isAdmin) {
+                adminActions = `
+                    <div class="tooltip"><button data-action="edit-license" data-id="${item.id}" class="${btnClasses} text-green-600 hover:bg-green-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa license</span></div>
+                    <div class="tooltip"><button data-action="delete-license" data-id="${item.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa license</span></div>
+                `;
+            }
+
+            return `<tr class="border-b hover:bg-slate-50 license-row cursor-pointer" data-id="${item.id}">
+                <td class="p-4 font-semibold text-slate-700">${item.key_type}</td>
+                <td class="p-4 font-mono text-xs text-slate-500">${isAdmin ? (item.license_key || '') : '******'}</td>
+                <td class="p-4 text-sm">${item.package_type || '-'}</td>
+                <td class="p-4 text-sm">${item.expiration_date || 'Vĩnh viễn'}</td>
+                <td class="p-4 text-sm font-medium text-blue-600">${item.user || '-'}</td>
+                <td class="p-4"><span class="px-2 py-1 rounded-full text-xs font-bold ${status.classes}">${status.text}</span></td>
+                <td class="p-4 text-xs text-slate-500 max-w-xs truncate">${item.notes || ''}</td>
+                <td class="p-4 flex items-center gap-2 justify-end">
+                    ${btns}
+                    <div class="tooltip">${historyBtn}<span class="tooltiptext">Xem lịch sử</span></div>
+                    ${adminActions}
+                </td>
+            </tr>`;
+        }).join('');
+        renderPagination('licensePagination', licenseCurrentPage, data.length, ITEMS_PER_PAGE, 'licenses');
+    }
+
+    function renderTableUsers(data) {
+        const tbody = document.getElementById('userTableBody'); if (!tbody) return;
+        document.getElementById('userTotalCount').textContent = data.length;
+        document.getElementById('userTotalCount').classList.remove('hidden'); 
+        const start = (userCurrentPage - 1) * ITEMS_PER_PAGE;
+        const pageData = data.slice(start, start + ITEMS_PER_PAGE);
+        if (pageData.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">Không có dữ liệu.</td></tr>`; renderPagination('userPagination', 1, 0, ITEMS_PER_PAGE, 'users'); return; }
+        tbody.innerHTML = pageData.map(u => {
+            const uAssets = assets.filter(a => a.user_id === u.id).length;
+            const uLicenses = licenses.filter(l => l.user_id === u.id).length;
+            const holdingInfo = [uAssets > 0 ? `${uAssets} Thiết bị` : '', uLicenses > 0 ? `${uLicenses} License` : ''].filter(Boolean).join(', ') || 'Trống';
+            const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
+            const isAdmin = currentUserProfile.role === 'admin';
+            let adminActions = '';
+            if (isAdmin) {
+                adminActions = `
+                    <div class="tooltip"><button data-action="edit-user" data-id="${u.id}" class="${btnClasses} text-green-600 hover:bg-green-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div>
+                    <div class="tooltip"><button data-action="delete-user" data-id="${u.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div>
+                `;
+            }
+            return `<tr class="border-b hover:bg-slate-50 user-row cursor-pointer" data-id="${u.id}">
+                <td class="p-4 flex items-center gap-3"><img src="${u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email || 'User')}&background=random`}" class="w-9 h-9 rounded-full"><div><p class="font-bold text-slate-700">${u.name}</p><p class="text-xs text-slate-500">${u.email}</p></div></td>
+                <td class="p-4 text-slate-600">${u.department}</td>
+                <td class="p-4 text-sm text-slate-500"><span class="bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded text-xs font-bold">${holdingInfo}</span></td>
+                <td class="p-4 font-bold text-sm ${u.status === 'Đang hoạt động' ? 'text-green-600' : 'text-slate-400'}">${u.status}</td>
+                <td class="p-4 flex gap-2">
+                    ${adminActions}
+                </td>
+            </tr>`;
+        }).join('');
+        renderPagination('userPagination', userCurrentPage, data.length, ITEMS_PER_PAGE, 'users');
+    }
+
+    function renderLists() {
+        const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
+        const cl = document.getElementById('categoryListContainer'); if (cl) cl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + categories.map(c => `<li class="p-3 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-700"><span class="font-medium text-slate-700 dark:text-gray-200">${c.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-cat" data-id="${c.id}" data-name="${c.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-cat" data-id="${c.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
+        const dl = document.getElementById('departmentListContainer'); if (dl) dl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + departments.map(d => `<li class="p-3 border-b flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-700"><span class="dark:text-gray-200">${d.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-dept" data-id="${d.id}" data-name="${d.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-dept" data-id="${d.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
+        const ltl = document.getElementById('licenseTypeListContainer'); if (ltl) ltl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + licenseTypes.map(t => `<li class="p-3 flex justify-between hover:bg-slate-50 dark:hover:bg-slate-700"><span class="font-medium text-slate-700 dark:text-gray-200">${t.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-lic-type" data-id="${t.id}" data-name="${t.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-lic-type" data-id="${t.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
+    }
+
+    function handleUserFileSelect(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+            tempImportedUsers = jsonData.map(row => ({
+                name: (row['Nhân viên'] || row['Họ tên'] || row['Tên'] || '').trim(),
+                email: (row['Email'] || '').trim(),
+                department: (row['Phòng ban'] || 'Khác').trim(),
+                status: (row['Trạng thái'] || 'Đang hoạt động').trim()
+            })).filter(u => u.name);
+            renderUserImportPreview(); openModal('userImportPreviewModal');
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function handleAssetFileSelect(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+            tempImportedAssets = jsonData.map(row => ({
+                name: row['Tên'] || row['Tên thiết bị'] || '',
+                config: row['Cấu hình'] || '',
+                category: row['Loại'] || 'Khác',
+                location: row['Vị trí'] || '',
+                purchase_date: parseDateToISO(row['Ngày nhập'] || row['Ngày nhập kho'] || row['Purchase Date'] || row['Import Date'] || ''),
+                status: normalizeAssetStatus(row['Trạng thái'] || row['Status']),
+                user: row['Người dùng'] || '',
+                notes: row['Ghi chú'] || ''
+            })).filter(a => a.name);
+            renderAssetImportPreview(); openModal('importPreviewModal');
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function renderUserImportPreview() {
+        const tbody = document.getElementById('userImportPreviewTableBody'); if (!tbody) return;
+        if (tempImportedUsers.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">Không có dữ liệu hợp lệ.</td></tr>'; return; }
+        tbody.innerHTML = tempImportedUsers.map((u, idx) => `<tr class="border-b hover:bg-slate-50"><td class="p-3 text-center"><input type="checkbox" class="import-check" data-idx="${idx}"></td><td class="p-3 font-medium">${u.name}</td><td class="p-3 text-sm">${u.email || '-'}</td><td class="p-3 text-sm">${u.department || '-'}</td><td class="p-3 text-sm">${u.status}</td></tr>`).join('');
+    }
+
+    function renderAssetImportPreview() {
+        const tbody = document.getElementById('importPreviewTableBody'); if (!tbody) return;
+        if (tempImportedAssets.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-400">Không có dữ liệu hợp lệ.</td></tr>'; return; }
+        tbody.innerHTML = tempImportedAssets.map((a, idx) => `<tr class="border-b hover:bg-slate-50"><td class="p-3 text-center"><input type="checkbox" class="import-check-asset" data-idx="${idx}"></td><td class="p-3 font-medium">${a.name}</td><td class="p-3 text-sm truncate max-w-[150px]">${a.config || '-'}</td><td class="p-3 text-sm">${a.category || '-'}</td><td class="p-3 text-sm">${a.location || '-'}</td><td class="p-3 text-sm">${formatDateDisplay(a.purchase_date)}</td><td class="p-3 text-sm">${a.status || '-'}</td><td class="p-3 text-sm font-bold text-blue-600">${a.user || '-'}</td><td class="p-3 text-xs truncate max-w-[100px]">${a.notes || ''}</td></tr>`).join('');
+    }
+
+    async function processUserImport() {
+        if (tempImportedUsers.length === 0) return;
+        const btn = document.getElementById('btnConfirmUserImport'); btn.textContent = 'Đang xử lý...'; btn.disabled = true;
+        let successCount = 0;
+        for (const u of tempImportedUsers) {
+            const deptObj = departments.find(d => normalizeString(d.name) === normalizeString(u.department));
+            const payload = { name: u.name, email: u.email, department_id: deptObj?.id || null, status: u.status, avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email || 'User')}&background=random` };
+            const { error } = await supabaseClient.from('users').insert(payload); if (!error) successCount++;
+        }
+        btn.textContent = 'Xác nhận Import'; btn.disabled = false;
+        showInfoModal(`Đã import ${successCount} nhân viên.`, "Hoàn tất"); safeCloseModal('userImportPreviewModal'); await refreshApp();
+    }
+
+    async function processAssetImport() {
+        if (tempImportedAssets.length === 0) return;
+        const btn = document.getElementById('btnConfirmImport'); btn.textContent = 'Đang xử lý...'; btn.disabled = true;
+        let successCount = 0;
+        for (const a of tempImportedAssets) {
+            const catObj = categories.find(c => normalizeString(c.name) === normalizeString(a.category));
+            const userObj = users.find(u => normalizeString(u.name) === normalizeString(a.user));
+            const userId = userObj?.id || null;
+            const status = userId ? 'Active' : a.status;
+            const payload = { name: a.name, config: a.config, location: a.location, purchase_date: a.purchase_date || null, status: status, notes: a.notes, category_id: catObj?.id || null, user_id: userId };
+            const { error } = await supabaseClient.from('assets').insert(payload); if (!error) successCount++;
+        }
+        btn.textContent = 'Xác nhận Import'; btn.disabled = false;
+        showInfoModal(`Đã import ${successCount} tài sản.`, "Hoàn tất"); safeCloseModal('importPreviewModal'); await refreshApp();
+    }
+
+    function initChoices(elementId, instanceVar, data, selectedValue = null) {
+        const el = document.getElementById(elementId); if (!el) return null;
+        if (instanceVar) { try { instanceVar.destroy(); } catch (e) { } }
+        const newInstance = new Choices(el, {
+            removeItemButton: false,
+            placeholder: true,
+            placeholderValue: 'Chọn...',
+            searchPlaceholderValue: 'Tìm kiếm...',
+            shouldSort: false,
+            searchEnabled: true,
+            itemSelectText: '',
+            position: 'bottom',
+            duplicateItemsAllowed: false
+        });
+        const choices = data.map(u => ({ value: u.name, label: u.name }));
+        newInstance.setChoices(choices, 'value', 'label', true);
+        if (selectedValue) newInstance.setChoiceByValue(selectedValue);
+        return newInstance;
+    }
+
+    function initAllUserDropdowns(selectedUser = null) {
+        userChoicesInstance = initChoices('modal_assetUser', userChoicesInstance, users, selectedUser);
+        assignUserChoicesInstance = initChoices('assignUserSelect', assignUserChoicesInstance, users, null);
+        transferUserChoicesInstance = initChoices('transferNewUserSelect', transferUserChoicesInstance, users, null);
+        licenseUserChoicesInstance = initChoices('modal_licenseUser', licenseUserChoicesInstance, users, selectedUser);
+        licenseAssignUserChoicesInstance = initChoices('assignLicenseUserSelect', licenseAssignUserChoicesInstance, users, null);
+    }
+
+    function updateDropdowns() {
+        const catDropdown = document.getElementById('modal_assetCategory');
+        if (catDropdown) { const cur = catDropdown.value; catDropdown.innerHTML = '<option value="">-- Chọn loại --</option>' + categories.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); catDropdown.value = cur; }
+        const licTypeDropdown = document.getElementById('modal_licenseType');
+        if (licTypeDropdown) { const cur = licTypeDropdown.value; licTypeDropdown.innerHTML = '<option value="">-- Chọn loại Key --</option>' + licenseTypes.map(t => `<option value="${t.name}">${t.name}</option>`).join(''); licTypeDropdown.value = cur; }
+        const filterLicType = document.getElementById('filterLicenseType');
+        if (filterLicType) { const cur = filterLicType.value; filterLicType.innerHTML = '<option value="">Tất cả loại Key</option>' + licenseTypes.map(t => `<option value="${t.name}">${t.name}</option>`).join(''); filterLicType.value = cur; }
+        ['department', 'filterDepartment'].forEach(id => { const el = document.getElementById(id); if (el) { const cur = el.value; el.innerHTML = (id === 'filterDepartment' ? '<option value="">Tất cả phòng ban</option>' : '<option value="">-- Chọn phòng ban --</option>') + departments.map(d => `<option value="${d.id}">${d.name}</option>`).join(''); el.value = cur; } });
+
+        // [MỚI] Populate dropdown cho "Loại gói"
+        const filterPackageType = document.getElementById('filterPackageType');
+        if (filterPackageType) {
+            const uniquePackages = [...new Set(licenses.map(l => l.package_type ? l.package_type.trim() : '').filter(Boolean))];
+            const cur = filterPackageType.value;
+            filterPackageType.innerHTML = '<option value="">Tất cả loại gói</option>' + uniquePackages.map(p => `<option value="${p}">${p}</option>`).join('');
+            filterPackageType.value = cur;
+        }
+
+        // Populate asset filters: status, location, category, user
+        const filterAssetStatus = document.getElementById('filterAssetStatus');
+        if (filterAssetStatus) {
+            const statuses = [...new Set(assets.map(a => a.status || '').filter(Boolean))];
+            const cur = filterAssetStatus.value;
+            // Preserve current value even if it's not in the new list
+            const statusSet = new Set(statuses);
+            if (cur && !statusSet.has(cur)) {
+                statuses.push(cur);
+            }
+            filterAssetStatus.innerHTML = '<option value="">Tất cả trạng thái</option>' + statuses.map(s => `<option value="${s}">${(STATUS_MAP[s] && STATUS_MAP[s].text) || s}</option>`).join('');
+            if (cur) filterAssetStatus.value = cur;
+        }
+        const filterAssetLocation = document.getElementById('filterAssetLocation');
+        if (filterAssetLocation) {
+            const locs = [...new Set(assets.map(a => (a.location || '').toString().trim()).filter(Boolean))];
+            const cur = filterAssetLocation.value;
+            // Preserve current value even if it's not in the new list
+            const locSet = new Set(locs);
+            if (cur && !locSet.has(cur)) {
+                locs.push(cur);
+            }
+            filterAssetLocation.innerHTML = '<option value="">Tất cả vị trí</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
+            if (cur) filterAssetLocation.value = cur;
+        }
+        const filterAssetCategory = document.getElementById('filterAssetCategory');
+        if (filterAssetCategory) {
+            const cur = filterAssetCategory.value;
+            const categoryNames = categories.map(c => c.name);
+            // Preserve current value even if it's not in the new list
+            const catSet = new Set(categoryNames);
+            if (cur && !catSet.has(cur)) {
+                categoryNames.push(cur);
+            }
+            filterAssetCategory.innerHTML = '<option value="">Tất cả loại</option>' + categoryNames.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (cur) filterAssetCategory.value = cur;
+        }
+        const filterAssetUser = document.getElementById('filterAssetUser');
+        if (filterAssetUser) {
+            try {
+                const currentSelectedValue = getSingleChoiceValue(filterAssetUserChoicesInstance, 'filterAssetUser');
+                if (filterAssetUserChoicesInstance) { try { filterAssetUserChoicesInstance.destroy(); } catch (e) { } }
+                filterAssetUserChoicesInstance = new Choices(filterAssetUser, {
+                    removeItemButton: false,
+                    placeholder: true,
+                    placeholderValue: 'Tất cả người dùng',
+                    searchPlaceholderValue: 'Tìm người dùng...',
+                    shouldSort: false,
+                    searchEnabled: true,
+                    itemSelectText: '',
+                    position: 'bottom',
+                    duplicateItemsAllowed: false
+                });
+                const choices = [{ value: '', label: 'Tất cả người dùng' }, ...users.map(u => ({ value: u.name, label: u.name }))];
+                filterAssetUserChoicesInstance.setChoices(choices, 'value', 'label', true);
+                if (currentSelectedValue) {
+                    filterAssetUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                } else {
+                    filterAssetUserChoicesInstance.setChoiceByValue('');
+                }
+                pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('change', () => {
+                    pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
+                    applyAssetFilters();
+                });
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('removeItem', () => {
+                    pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
+                    applyAssetFilters();
+                });
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('addItem', function() {
+                    window.setTimeout(() => {
+                        pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
+                        applyAssetFilters();
+                    }, 100);
+                });
+            } catch (e) {
+                const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(assets.map(a => a.user || '').filter(Boolean))];
+                const cur = filterAssetUser.value;
+                filterAssetUser.innerHTML = '<option value="">Tất cả người dùng</option>' + usersList.map(u => `<option value="${u}">${u}</option>`).join('');
+                filterAssetUser.value = cur;
+            }
+        }
+
+        const maintenanceAssetSelect = document.getElementById('maintenance_asset');
+        if (maintenanceAssetSelect) {
+            const cur = maintenanceAssetSelect.value;
+            maintenanceAssetSelect.innerHTML = '<option value="">-- Chọn thiết bị --</option>' + assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+            maintenanceAssetSelect.value = cur;
+            try {
+                maintenanceAssetChoices?.destroy();
+            } catch (e) {}
+            try {
+                maintenanceAssetChoices = new Choices(maintenanceAssetSelect, { 
+                    searchPlaceholderValue: 'Tìm thiết bị...', 
+                    shouldSort: false, 
+                    removeItemButton: false, 
+                    allowHTML: true,
+                    itemSelectText: '',
+                    position: 'bottom'
+                });
+            } catch (e) {}
+        }
+
+        // Populate license filters: user and status
+        const filterLicenseUser = document.getElementById('filterLicenseUser');
+        if (filterLicenseUser) {
+            try {
+                // Preserve the current selected value before reinitializing
+                const currentSelectedValue = getSingleChoiceValue(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                const el = filterLicenseUser;
+                if (filterLicenseUserChoicesInstance) { try { filterLicenseUserChoicesInstance.destroy(); } catch (e) { } }
+                filterLicenseUserChoicesInstance = new Choices(el, {
+                    removeItemButton: false,
+                    placeholder: true,
+                    placeholderValue: 'Tất cả người dùng',
+                    searchPlaceholderValue: 'Tìm người dùng...',
+                    shouldSort: false,
+                    searchEnabled: true,
+                    itemSelectText: '',
+                    position: 'bottom',
+                    duplicateItemsAllowed: false
+                });
+                const choices = [{ value: '', label: 'Tất cả người dùng' }, ...users.map(u => ({ value: u.name, label: u.name }))];
+                filterLicenseUserChoicesInstance.setChoices(choices, 'value', 'label', true);
+                if (currentSelectedValue) {
+                    filterLicenseUserChoicesInstance.setChoiceByValue(currentSelectedValue);
+                } else {
+                    filterLicenseUserChoicesInstance.setChoiceByValue('');
+                }
+                pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                
+                // Thêm event listener để trigger filter khi thay đổi
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('change', () => {
+                    pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                    applyLicenseFilters();
+                });
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('removeItem', () => {
+                    pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                    applyLicenseFilters();
+                });
+                
+                // Thêm callback cho Choices.js để trigger filter khi chọn item
+                filterLicenseUserChoicesInstance.passedElement.element.addEventListener('addItem', function(event) {
+                    setTimeout(() => {
+                        pinSingleChoiceRemoveButton(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+                        applyLicenseFilters();
+                    }, 100); // Delay nhỏ để đảm bảo value đã được set
+                });
+                
+            } catch (e) {
+                const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(licenses.map(l => l.user || '').filter(Boolean))];
+                const cur = filterLicenseUser.value;
+                filterLicenseUser.innerHTML = '<option value="">Tất cả người dùng</option>' + usersList.map(u => `<option value="${u}">${u}</option>`).join('');
+                filterLicenseUser.value = cur;
+            }
+        }
+        const filterLicenseStatus = document.getElementById('filterLicenseStatus');
+        if (filterLicenseStatus) {
+            const statuses = [...new Set(licenses.map(l => l.status || '').filter(Boolean))];
+            const cur = filterLicenseStatus.value;
+            filterLicenseStatus.innerHTML = '<option value="">Tất cả trạng thái</option>' + statuses.map(s => `<option value="${s}">${(STATUS_MAP[s] && STATUS_MAP[s].text) || s}</option>`).join('');
+            filterLicenseStatus.value = cur;
+        }
+    }
+
+    function applyAssetFilters() {
+        const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
+        const normalizedTerm = normalizeString(term);
+        const statusFilter = document.getElementById('filterAssetStatus')?.value || '';
+        const locationFilter = document.getElementById('filterAssetLocation')?.value || '';
+        const categoryFilter = document.getElementById('filterAssetCategory')?.value || '';
+        const userInput = getSingleChoiceValue(filterAssetUserChoicesInstance, 'filterAssetUser');
+        const normalizedUserFilter = normalizeString(userInput);
+
+        console.debug('applyAssetFilters: term=', term, 'status=', statusFilter, 'location=', locationFilter, 'category=', categoryFilter, 'user=', userInput, 'assetsCount=', assets.length);
+
+        currentFilteredAssets = assets
+            .filter(a => {
+                if (!normalizedTerm) return true;
+                const searchPool = [a.name, a.config, a.category, a.location].map(v => normalizeString(v)).join(' ');
+                return searchPool.includes(normalizedTerm);
+            })
+            .filter(a => {
+                if (statusFilter && String(a.status || '') !== String(statusFilter)) return false;
+                if (locationFilter && String((a.location || '').trim()) !== String(locationFilter)) return false;
+                if (categoryFilter && String((a.category || a.category_name || '')).trim() !== String(categoryFilter).trim()) return false;
+                if (normalizedUserFilter) {
+                    if (normalizeString(a.user || '') !== normalizedUserFilter) return false;
+                }
+                return true;
+            })
+            .sort((a, b) => {
+                if (assetSort.column === 'purchase_date') {
+                    const da = a.purchase_date ? new Date(a.purchase_date).getTime() : 0;
+                    const db = b.purchase_date ? new Date(b.purchase_date).getTime() : 0;
+                    return (da - db) * (assetSort.direction === 'asc' ? 1 : -1);
+                }
+                return ('' + (a[assetSort.column] || '')).localeCompare('' + (b[assetSort.column] || '')) * (assetSort.direction === 'asc' ? 1 : -1);
+            });
+
+        console.debug('applyAssetFilters: filteredCount=', currentFilteredAssets.length);
+        renderTableAssets(currentFilteredAssets);
+    }
+
+    function applyLicenseFilters() {
+        const term = document.getElementById('searchInput')?.value.toLowerCase() || '';
+        const normalizedTerm = normalizeString(term);
+        const typeFilter = document.getElementById('filterLicenseType')?.value || '';
+        const packageFilter = document.getElementById('filterPackageType')?.value || '';
+        const statusFilter = document.getElementById('filterLicenseStatus')?.value || '';
+        const userInput = getSingleChoiceValue(filterLicenseUserChoicesInstance, 'filterLicenseUser');
+        const normalizedUserFilter = normalizeString(userInput);
+
+        console.debug('applyLicenseFilters: term=', term, 'type=', typeFilter, 'package=', packageFilter, 'status=', statusFilter, 'user=', userInput, 'licensesCount=', licenses.length);
+
+        currentFilteredLicenses = licenses
+            .filter(l => {
+                if (!normalizedTerm) return true;
+                const searchPool = [l.key_type, l.package_type, l.license_key, l.notes].map(v => normalizeString(v)).join(' ');
+                return searchPool.includes(normalizedTerm);
+            })
+            .filter(l => (typeFilter === '' || l.key_type === typeFilter) && (packageFilter === '' || l.package_type === packageFilter))
+            .filter(l => {
+                if (statusFilter && String((l.status || '')).trim() !== String(statusFilter).trim()) return false;
+                if (normalizedUserFilter) {
+                    if (normalizeString(l.user || '') !== normalizedUserFilter) return false;
+                }
+                return true;
+            })
+            .sort((a, b) => ('' + (a[licenseSort.column] || '')).localeCompare('' + (b[licenseSort.column] || '')) * (licenseSort.direction === 'asc' ? 1 : -1));
+
+        renderTableLicenses(currentFilteredLicenses);
+    }
+
+    function applyUserFilters() {
+        const term = document.getElementById('searchUserInput')?.value.toLowerCase() || '';
+        const deptId = document.getElementById('filterDepartment')?.value || '';
+        currentFilteredUsers = users.filter(u => u.name.toLowerCase().includes(term) && (deptId === '' || u.department_id == deptId))
+            .sort((a, b) => (a[userSort.column] || '').localeCompare(b[userSort.column] || '') * (userSort.direction === 'asc' ? 1 : -1));
+        renderTableUsers(currentFilteredUsers);
+    }
+
+    function resetAssetFilters() {
+        ['searchInput', 'filterAssetStatus', 'filterAssetLocation', 'filterAssetCategory'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const fau = document.getElementById('filterAssetUser');
+        if (filterAssetUserChoicesInstance) {
+            try { filterAssetUserChoicesInstance.removeActiveItems(); filterAssetUserChoicesInstance.clearInput(); } catch (err) {}
+        }
+        if (fau) fau.value = '';
+    }
+
+    function resetLicenseFilters() {
+        ['searchInput', 'filterLicenseType', 'filterPackageType', 'filterLicenseStatus'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const flu = document.getElementById('filterLicenseUser');
+        if (filterLicenseUserChoicesInstance) {
+            try { filterLicenseUserChoicesInstance.removeActiveItems(); filterLicenseUserChoicesInstance.clearInput(); } catch (err) {}
+        }
+        if (flu) flu.value = '';
+    }
+
+    function resetUserFilters() {
+        const su = document.getElementById('searchUserInput');
+        const fd = document.getElementById('filterDepartment');
+        if (su) su.value = '';
+        if (fd) fd.value = '';
+    }
+
+    function isAssetFilterOrSearchActive() {
+        const term = (document.getElementById('searchInput')?.value || '').trim();
+        const status = document.getElementById('filterAssetStatus')?.value || '';
+        const location = document.getElementById('filterAssetLocation')?.value || '';
+        const category = document.getElementById('filterAssetCategory')?.value || '';
+        const user = (getSingleChoiceValue(filterAssetUserChoicesInstance, 'filterAssetUser') || '').trim();
+        return !!(term || status || location || category || user);
+    }
+
+    function isLicenseFilterOrSearchActive() {
+        const term = (document.getElementById('searchInput')?.value || '').trim();
+        const type = document.getElementById('filterLicenseType')?.value || '';
+        const packageType = document.getElementById('filterPackageType')?.value || '';
+        const status = document.getElementById('filterLicenseStatus')?.value || '';
+        const user = (getSingleChoiceValue(filterLicenseUserChoicesInstance, 'filterLicenseUser') || '').trim();
+        return !!(term || type || packageType || status || user);
+    }
+
+    function isUserFilterOrSearchActive() {
+        const term = (document.getElementById('searchUserInput')?.value || '').trim();
+        const deptId = document.getElementById('filterDepartment')?.value || '';
+        return !!(term || deptId);
+    }
+
+    function resolveExportData(filteredRows, fullRows, activeFilter) {
+        if (!activeFilter && (!filteredRows || filteredRows.length === 0) && (fullRows || []).length > 0) {
+            return fullRows;
+        }
+        return filteredRows || [];
+    }
+
+    async function handleFormSubmit(e, table, payloadBuilder, modalId, postAction) {
+        e.preventDefault();
+        const payload = payloadBuilder();
+        const id = payload.id; delete payload.id;
+        const isUpdate = !!id;
+        let error;
+        let resData = null;
+        if (isUpdate) {
+            const res = await supabaseClient.from(table).update(payload).eq('id', id);
+            error = res.error; resData = res.data?.[0] || { id, ...payload };
+        } else {
+            const res = await supabaseClient.from(table).insert(payload);
+            error = res.error; resData = res.data?.[0];
+        }
+        if (error) { 
+            showInfoModal("Lỗi: " + error.message); 
+            return; 
+        }
+        // Post-action (e.g. add log)
+        if (postAction) postAction(resData, isUpdate);
+        // 1. Đóng form edit trước
+        if (modalId) safeCloseModal(modalId);
+        // 2. Hiển thị modal thành công
+        showInfoModal("Lưu thành công!", "Thông báo");
+        const modal = e.target.closest('.fixed.flex');
+        if (modal) attemptCloseModal(modal.id);
+        // 3. Tải lại dữ liệu ngầm, giữ nguyên filter/search
+        await fetchAllData();
+        // 4. Chỉ render lại bảng hiện tại, KHÔNG reload filter/dropdown
+        if (document.getElementById('assetTableBody')) applyAssetFilters();
+        if (document.getElementById('licenseTableBody')) applyLicenseFilters();
+        if (document.getElementById('userTableBody')) applyUserFilters();
+    }
+
+    // =================================================================
+    // 7. LISTENERS & EVENTS
+
