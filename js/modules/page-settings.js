@@ -1,6 +1,27 @@
 window.QLTSPageSettings = window.QLTSPageSettings || {};
 window.QLTSPageSettings.init = async function () {
     // =================================================================
+
+    // Không cho phép chọn/nhập ngày trong quá khứ ở các ô ngày mang tính "dự kiến/còn hiệu lực"
+    // (hạn dùng license, ngày dự kiến bảo trì, ngày dự kiến kiểm kê). So sánh dạng chuỗi YYYY-MM-DD
+    // để tránh lệch múi giờ khi dùng đối tượng Date.
+    function getTodayDateStr() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    function isPastDateStr(dateStr) {
+        return !!dateStr && dateStr < getTodayDateStr();
+    }
+    // Lưu ý: không set thuộc tính "min" cho modal_expirationDate - form Sửa License dùng lại
+    // đúng input này, và trình duyệt sẽ tự chặn submit (không bắn cả sự kiện 'submit') nếu value
+    // hiện tại < min, kể cả khi giá trị đó vốn đã có sẵn từ trước (license cũ đã hết hạn thật).
+    // Validate hoàn toàn bằng JS (xem isPastDateStr ở dưới) để có thể phân biệt "giữ nguyên ngày cũ"
+    // và "chọn ngày quá khứ mới".
+    ['maintenance_due', 'stockcheck_date'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.min = getTodayDateStr();
+    });
+
     function renderSettingsPage() {
         if (!document.getElementById('settingsContent') || !currentUserProfile) return;
 
@@ -271,7 +292,16 @@ window.QLTSPageSettings.init = async function () {
         return payload;
     }, 'assetModal', (data, isUpdate) => addLog(data.id, 'ASSET', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa tài sản' : 'Nhập kho')));
 
-    document.getElementById('licenseForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'licenses', () => {
+    document.getElementById('licenseForm')?.addEventListener('submit', (e) => {
+        const expDateInput = document.getElementById('modal_expirationDate');
+        const expDateVal = expDateInput.value;
+        // Chỉ chặn khi NGƯỜI DÙNG chọn 1 ngày quá khứ mới (không chặn license cũ vốn đã hết hạn
+        // sẵn từ trước khi mở form sửa - nếu không sẽ không sửa được các trường khác của nó).
+        if (expDateVal !== (expDateInput.dataset.originalValue || '') && isPastDateStr(expDateVal)) {
+            e.preventDefault();
+            return showInfoModal('Ngày hết hạn không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ');
+        }
+        return handleFormSubmit(e, 'licenses', () => {
         const isNew = !document.getElementById('modal_licenseId').value;
         const keyType = document.getElementById('modal_licenseType').value;
         const assignedUser = users.find(u => u.name === licenseUserChoicesInstance?.getValue(true));
@@ -290,7 +320,8 @@ window.QLTSPageSettings.init = async function () {
             payload.license_code = window.QLTSHelpers.buildLicenseCode(keyType, deptName, licenses.map(l => l.license_code).filter(Boolean));
         }
         return payload;
-    }, 'licenseModal', (data, isUpdate) => addLog(data.id, 'LICENSE', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa license' : 'Nhập kho')));
+        }, 'licenseModal', (data, isUpdate) => addLog(data.id, 'LICENSE', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa license' : 'Nhập kho'));
+    });
 
     document.getElementById('userForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'users', () => ({
         id: document.getElementById('userId').value, name: document.getElementById('name').value, email: document.getElementById('email').value, department_id: document.getElementById('department').value || null, status: document.getElementById('status').value, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
@@ -304,10 +335,12 @@ window.QLTSPageSettings.init = async function () {
         e.preventDefault();
         const titleVal = document.getElementById('maintenance_title').value;
         if (!titleVal) return showInfoModal('Nhập tiêu đề lịch bảo trì');
+        const dueDateVal = document.getElementById('maintenance_due').value;
+        if (isPastDateStr(dueDateVal)) return showInfoModal('Ngày dự kiến không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ');
         const payload = {
             asset_id: parseInt(document.getElementById('maintenance_asset').value, 10) || null,
             title: titleVal,
-            due_date: document.getElementById('maintenance_due').value || null,
+            due_date: dueDateVal || null,
             status: 'Chưa xử lý',
             created_by: currentUserProfile?.id || null
         };
@@ -327,12 +360,13 @@ window.QLTSPageSettings.init = async function () {
 
     document.getElementById('stockCheckForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const dateVal = document.getElementById('stockcheck_date').value;
+        if (isPastDateStr(dateVal)) return showInfoModal('Ngày dự kiến không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ');
         const payload = {
             status: 'Đang mở',
             created_by: currentUserProfile?.id || null
         };
         const nameVal = document.getElementById('stockcheck_name').value;
-        const dateVal = document.getElementById('stockcheck_date').value;
         const extraNote = document.getElementById('stockcheck_notes').value;
         // map date -> started_at, name/notes -> note to match existing columns
         if (dateVal) payload.started_at = dateVal;
