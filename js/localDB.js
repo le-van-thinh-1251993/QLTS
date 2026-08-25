@@ -19,6 +19,21 @@ const LocalDB = {
         COUNTER: 'qlts_id_counter'
     },
 
+    buildUserAvatar(name) {
+        const label = (name || 'User').toString().trim() || 'User';
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(label)}&background=random`;
+    },
+
+    normalizeUserRecord(user) {
+        if (!user || typeof user !== 'object') return user;
+        const normalized = { ...user };
+        const fallbackName = normalized.full_name || normalized.name || normalized.email || 'User';
+        if (!normalized.avatar || normalized.avatar === 'undefined') {
+            normalized.avatar = this.buildUserAvatar(fallbackName);
+        }
+        return normalized;
+    },
+
     LEGACY_KEYS: {
         ASSETS: 'it_assets_final',
         LICENSES: 'it_licenses_final',
@@ -481,8 +496,8 @@ const LocalDB = {
                 { id: 3, name: 'Adobe', created_at: now }
             ],
             users: [
-                { id: 1, name: 'Nguyễn Văn A', email: 'a@company.com', department_id: 1, status: 'Đang hoạt động', created_at: now },
-                { id: 2, name: 'Trần Thị B', email: 'b@company.com', department_id: 2, status: 'Đang hoạt động', created_at: now }
+                { id: 1, name: 'Nguyễn Văn A', email: 'a@company.com', department_id: 1, status: 'Đang hoạt động', avatar: this.buildUserAvatar('Nguyễn Văn A'), created_at: now },
+                { id: 2, name: 'Trần Thị B', email: 'b@company.com', department_id: 2, status: 'Đang hoạt động', avatar: this.buildUserAvatar('Trần Thị B'), created_at: now }
             ],
             assets: [],
             licenses: [
@@ -556,14 +571,18 @@ const LocalDB = {
             async select(columns = '*') {
                 try {
                     const data = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    const normalizedData = tableName.toLowerCase() === 'users' ? data.map(item => self.normalizeUserRecord(item)) : data;
+                    if (tableName.toLowerCase() === 'users' && JSON.stringify(normalizedData) !== JSON.stringify(data)) {
+                        localStorage.setItem(storageKey, JSON.stringify(normalizedData));
+                    }
                     
                     // Handle join syntax (simplified)
                     if (columns.includes(':')) {
                         // For now, return data as-is and handle joins in fetchAllData
-                        return { data, error: null };
+                        return { data: normalizedData, error: null };
                     }
                     
-                    return { data, error: null };
+                    return { data: normalizedData, error: null };
                 } catch (error) {
                     console.error(`LocalDB select error on ${tableName}:`, error);
                     return { data: null, error };
@@ -577,11 +596,14 @@ const LocalDB = {
                     const isArray = Array.isArray(payload);
                     const items = isArray ? payload : [payload];
                     
-                    const newItems = items.map(item => ({
-                        ...item,
-                        id: item.id || self.getNextId(tableName),
-                        created_at: item.created_at || new Date().toISOString()
-                    }));
+                    const newItems = items.map(item => {
+                        const normalizedItem = tableName.toLowerCase() === 'users' ? self.normalizeUserRecord(item) : item;
+                        return {
+                            ...normalizedItem,
+                            id: normalizedItem.id || self.getNextId(tableName),
+                            created_at: normalizedItem.created_at || new Date().toISOString()
+                        };
+                    });
                     
                     data.push(...newItems);
                     localStorage.setItem(storageKey, JSON.stringify(data));
@@ -628,7 +650,8 @@ const LocalDB = {
                                 const data = JSON.parse(localStorage.getItem(_storageKey) || '[]');
                                 const index = data.findIndex(item => isEqualValue(item[column], value));
                                 if (index !== -1) {
-                                    data[index] = { ...data[index], ..._payload };
+                                    const payload = tableName.toLowerCase() === 'users' ? self.normalizeUserRecord(_payload) : _payload;
+                                    data[index] = { ...data[index], ...payload };
                                     localStorage.setItem(_storageKey, JSON.stringify(data));
                                     _resultData = [data[index]];
                                     _error = null;

@@ -64,41 +64,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =================================================================
     // --- HELPER FUNCTIONS (ĐẶT Ở ĐẦU ĐỂ TRÁNH LỖI SCOPE) ---
 
-    function showInfoModal(message, title = "Thông báo") {
+    const core = window.QLTSCore || {};
+
+    const showInfoModal = core.showInfoModal || function (message, title = 'Thông báo') {
         const titleEl = document.getElementById('infoModalTitle');
         const msgEl = document.getElementById('infoModalMessage');
         if (titleEl && msgEl) {
             titleEl.textContent = title;
-            // Kiểm tra nếu message chứa HTML tags thì dùng innerHTML, nếu không thì dùng textContent
             if (typeof message === 'string' && /<[^>]+>/.test(message)) {
                 msgEl.innerHTML = message;
             } else {
                 msgEl.textContent = message;
             }
-            openModal('infoModal');
-        } else {
-            // [FIX] Chỉ alert nếu không phải đang unload trang (đơn giản hóa: check visibility)
-            if (document.visibilityState === 'visible') {
-                 alert(`${title}: ${message.replace(/<[^>]*>?/gm, '')}`);
-            } else {
-                 console.warn('Supressed alert due to background/unload:', title, message);
+            if (typeof window.openModal === 'function') {
+                window.openModal('infoModal');
             }
+        } else if (document.visibilityState === 'visible') {
+            alert(`${title}: ${String(message).replace(/<[^>]*>?/gm, '')}`);
         }
-    }
+    };
 
-    function handleSupabaseError(error, context) {
+    const handleSupabaseError = core.handleSupabaseError || function (error, context) {
         console.error(`Lỗi ${context}:`, error);
-        // Kiểm tra kỹ biến error để tránh lỗi 'message of undefined'
         const msg = (error && error.message) ? error.message : JSON.stringify(error);
 
-        // [FIX] Bỏ qua lỗi mạng khi chuyển trang (Failed to fetch)
         if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Aborted')) {
             console.warn('Supressed network error (likely due to navigation):', msg);
             return;
         }
 
         showInfoModal(`Chi tiết: ${msg}`, `Lỗi khi ${context}`);
-    }
+    };
 
     function getRemoteSupabaseClient() {
         if (remoteSupabaseClient) return remoteSupabaseClient;
@@ -121,14 +117,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    function safeArrayParse(raw) {
+    const safeArrayParse = core.safeArrayParse || function (raw) {
         try {
             const parsed = JSON.parse(raw || '[]');
             return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
             return [];
         }
-    }
+    };
 
     function isLikelyDemoDataSnapshot(assetRows, userRows) {
         if (!Array.isArray(assetRows) || !Array.isArray(userRows)) return false;
@@ -638,6 +634,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Hàm xử lý ngày tháng
     function parseDateToISO(dateStr) {
+        if (window.QLTSHelpers && typeof window.QLTSHelpers.parseDateToISO === 'function') {
+            return window.QLTSHelpers.parseDateToISO(dateStr);
+        }
         if (!dateStr) return null;
         if (typeof dateStr === 'number') {
             const date = new Date(Math.ceil((dateStr - 25569) * 86400 * 1000));
@@ -655,6 +654,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Hiển thị ngày ở định dạng dd/mm/yyyy
     function formatDateDisplay(isoDate) {
+        if (window.QLTSHelpers && typeof window.QLTSHelpers.formatDateDisplay === 'function') {
+            const formatted = window.QLTSHelpers.formatDateDisplay(isoDate);
+            return formatted === '<span class="text-slate-400 italic">Vĩnh viễn</span>' ? '-' : formatted;
+        }
         if (!isoDate) return '-';
         const d = new Date(isoDate);
         return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('vi-VN');
@@ -721,6 +724,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Xuất CSV nhanh (không phụ thuộc XLSX)
     function exportToCSV(rows, filename) {
+        if (window.QLTSHelpers && typeof window.QLTSHelpers.exportToCSV === 'function') {
+            return window.QLTSHelpers.exportToCSV(rows, filename);
+        }
         if (!rows || rows.length === 0) return showInfoModal('Không có dữ liệu để xuất');
         const headers = Object.keys(rows[0]);
         const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => {
@@ -913,6 +919,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Helper: Chuẩn hóa chuỗi để so sánh (Fix lỗi thiếu hàm này khi import)
     function normalizeString(str) {
+        if (window.QLTSHelpers && typeof window.QLTSHelpers.normalizeString === 'function') {
+            return window.QLTSHelpers.normalizeString(str);
+        }
         return str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
     }
 
@@ -941,28 +950,56 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!choicesInstance) return;
         try {
             const sourceElement = document.getElementById(elementId);
-            const choicesContainer = sourceElement?.nextElementSibling;
-            if (!choicesContainer || !choicesContainer.classList.contains('choices')) return;
+            const choicesContainer = sourceElement?.closest('.choices') || sourceElement?.parentElement;
+            if (!choicesContainer) return;
 
             const applyPosition = () => {
                 const selectedItem = choicesContainer.querySelector('.choices__list--single .choices__item');
                 const removeButton = choicesContainer.querySelector('.choices__list--single .choices__item .choices__button');
+                const inner = choicesContainer.querySelector('.choices__inner');
+
+                if (inner) {
+                    inner.style.display = 'flex';
+                    inner.style.alignItems = 'center';
+                    inner.style.justifyContent = 'flex-start';
+                    inner.style.minHeight = '2.75rem';
+                    inner.style.paddingRight = '2.5rem';
+                    inner.style.lineHeight = '1.2';
+                }
 
                 if (selectedItem) {
                     selectedItem.style.position = 'relative';
                     selectedItem.style.width = '100%';
+                    selectedItem.style.display = 'flex';
+                    selectedItem.style.alignItems = 'center';
                     selectedItem.style.paddingRight = '2.2rem';
                     selectedItem.style.overflow = 'visible';
+                    selectedItem.style.minHeight = '1.5rem';
+                    selectedItem.style.lineHeight = '1.2';
                 }
 
                 if (removeButton) {
-                    removeButton.style.position = 'absolute';
-                    removeButton.style.top = '50%';
-                    removeButton.style.right = '-0.25rem';
-                    removeButton.style.left = 'auto';
-                    removeButton.style.marginLeft = '0';
-                    removeButton.style.transform = 'translateY(-50%)';
-                    removeButton.style.zIndex = '3';
+                    removeButton.style.setProperty('position', 'absolute', 'important');
+                    removeButton.style.setProperty('top', '50%', 'important');
+                    removeButton.style.setProperty('right', '-0.25rem', 'important');
+                    removeButton.style.setProperty('left', 'auto', 'important');
+                    removeButton.style.setProperty('margin-left', '0', 'important');
+                    removeButton.style.setProperty('transform', 'translateY(-50%)', 'important');
+                    removeButton.style.setProperty('z-index', '3', 'important');
+                    removeButton.style.setProperty('width', '1.1rem', 'important');
+                    removeButton.style.setProperty('height', '1.1rem', 'important');
+                    removeButton.style.setProperty('min-width', '1.1rem', 'important');
+                    removeButton.style.setProperty('min-height', '1.1rem', 'important');
+                    removeButton.style.setProperty('padding', '0', 'important');
+                    removeButton.style.setProperty('border-radius', '9999px', 'important');
+                    removeButton.style.setProperty('display', 'inline-flex', 'important');
+                    removeButton.style.setProperty('align-items', 'center', 'important');
+                    removeButton.style.setProperty('justify-content', 'center', 'important');
+                    removeButton.style.setProperty('font-size', '0', 'important');
+                    removeButton.style.setProperty('line-height', '1', 'important');
+                    removeButton.style.setProperty('background', '#f1f5f9', 'important');
+                    removeButton.style.setProperty('border', '1px solid #cbd5e1', 'important');
+                    removeButton.style.setProperty('color', '#64748b', 'important');
                 }
             };
 
@@ -1406,7 +1443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
             }
             return `<tr class="border-b hover:bg-slate-50 user-row cursor-pointer" data-id="${u.id}">
-                <td class="p-4 flex items-center gap-3"><img src="${u.avatar}" class="w-9 h-9 rounded-full"><div><p class="font-bold text-slate-700">${u.name}</p><p class="text-xs text-slate-500">${u.email}</p></div></td>
+                <td class="p-4 flex items-center gap-3"><img src="${u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email || 'User')}&background=random`}" class="w-9 h-9 rounded-full"><div><p class="font-bold text-slate-700">${u.name}</p><p class="text-xs text-slate-500">${u.email}</p></div></td>
                 <td class="p-4 text-slate-600">${u.department}</td>
                 <td class="p-4 text-sm text-slate-500"><span class="bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded text-xs font-bold">${holdingInfo}</span></td>
                 <td class="p-4 font-bold text-sm ${u.status === 'Đang hoạt động' ? 'text-green-600' : 'text-slate-400'}">${u.status}</td>
@@ -1483,7 +1520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let successCount = 0;
         for (const u of tempImportedUsers) {
             const deptObj = departments.find(d => normalizeString(d.name) === normalizeString(u.department));
-            const payload = { name: u.name, email: u.email, department_id: deptObj?.id || null, status: u.status, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}` };
+            const payload = { name: u.name, email: u.email, department_id: deptObj?.id || null, status: u.status, avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email || 'User')}&background=random` };
             const { error } = await supabaseClient.from('users').insert(payload); if (!error) successCount++;
         }
         btn.textContent = 'Xác nhận Import'; btn.disabled = false;
@@ -1510,15 +1547,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const el = document.getElementById(elementId); if (!el) return null;
         if (instanceVar) { try { instanceVar.destroy(); } catch (e) { } }
         const newInstance = new Choices(el, {
-            removeItemButton: true,
-            maxItemCount: 1,
+            removeItemButton: false,
             placeholder: true,
             placeholderValue: 'Chọn...',
             searchPlaceholderValue: 'Tìm kiếm...',
             shouldSort: false,
             searchEnabled: true,
             itemSelectText: '',
-            position: 'bottom'
+            position: 'bottom',
+            duplicateItemsAllowed: false
         });
         const choices = data.map(u => ({ value: u.name, label: u.name }));
         newInstance.setChoices(choices, 'value', 'label', true);
@@ -1591,23 +1628,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         const filterAssetUser = document.getElementById('filterAssetUser');
         if (filterAssetUser) {
-            // Try to initialize Choices for a compact, scrollable dropdown
             try {
-                // Preserve the current selected value before reinitializing
                 const currentSelectedValue = getSingleChoiceValue(filterAssetUserChoicesInstance, 'filterAssetUser');
-                const el = filterAssetUser;
                 if (filterAssetUserChoicesInstance) { try { filterAssetUserChoicesInstance.destroy(); } catch (e) { } }
-                filterAssetUserChoicesInstance = new Choices(el, { 
-                    removeItemButton: true,
-                    maxItemCount: 1, 
-                    placeholder: true, 
-                    placeholderValue: 'Tất cả người dùng', 
-                    searchPlaceholderValue: 'Tìm người dùng...', 
+                filterAssetUserChoicesInstance = new Choices(filterAssetUser, {
+                    removeItemButton: false,
+                    placeholder: true,
+                    placeholderValue: 'Tất cả người dùng',
+                    searchPlaceholderValue: 'Tìm người dùng...',
                     shouldSort: false,
                     searchEnabled: true,
                     itemSelectText: '',
-                    callbackOnInit: function() {
-                    }
+                    position: 'bottom',
+                    duplicateItemsAllowed: false
                 });
                 const choices = [{ value: '', label: 'Tất cả người dùng' }, ...users.map(u => ({ value: u.name, label: u.name }))];
                 filterAssetUserChoicesInstance.setChoices(choices, 'value', 'label', true);
@@ -1617,8 +1650,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     filterAssetUserChoicesInstance.setChoiceByValue('');
                 }
                 pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
-                
-                // Thêm event listener để trigger filter khi thay đổi
                 filterAssetUserChoicesInstance.passedElement.element.addEventListener('change', () => {
                     pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
                     applyAssetFilters();
@@ -1627,16 +1658,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
                     applyAssetFilters();
                 });
-                
-                // Thêm callback cho Choices.js để trigger filter khi chọn item
-                filterAssetUserChoicesInstance.passedElement.element.addEventListener('addItem', function(event) {
-                    setTimeout(() => {
+                filterAssetUserChoicesInstance.passedElement.element.addEventListener('addItem', function() {
+                    window.setTimeout(() => {
                         pinSingleChoiceRemoveButton(filterAssetUserChoicesInstance, 'filterAssetUser');
                         applyAssetFilters();
-                    }, 100); // Delay nhỏ để đảm bảo value đã được set
+                    }, 100);
                 });
             } catch (e) {
-                // Fallback: populate plain <option> list from users encountered in assets
                 const usersList = users.length > 0 ? users.map(u => u.name) : [...new Set(assets.map(a => a.user || '').filter(Boolean))];
                 const cur = filterAssetUser.value;
                 filterAssetUser.innerHTML = '<option value="">Tất cả người dùng</option>' + usersList.map(u => `<option value="${u}">${u}</option>`).join('');
@@ -1673,15 +1701,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const el = filterLicenseUser;
                 if (filterLicenseUserChoicesInstance) { try { filterLicenseUserChoicesInstance.destroy(); } catch (e) { } }
                 filterLicenseUserChoicesInstance = new Choices(el, {
-                    removeItemButton: true,
-                    maxItemCount: 1,
+                    removeItemButton: false,
                     placeholder: true,
                     placeholderValue: 'Tất cả người dùng',
                     searchPlaceholderValue: 'Tìm người dùng...',
                     shouldSort: false,
                     searchEnabled: true,
                     itemSelectText: '',
-                    position: 'bottom'
+                    position: 'bottom',
+                    duplicateItemsAllowed: false
                 });
                 const choices = [{ value: '', label: 'Tất cả người dùng' }, ...users.map(u => ({ value: u.name, label: u.name }))];
                 filterLicenseUserChoicesInstance.setChoices(choices, 'value', 'label', true);

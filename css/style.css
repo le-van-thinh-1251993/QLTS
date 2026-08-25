@@ -1,9 +1,65 @@
 /* css/style.css */
 
 /* Custom styles để bổ trợ cho Tailwind */
+html, body {
+    overflow-x: hidden;
+}
+
 body {
     background-color: #f1f5f9; /* slate-100 */
 }
+
+/* Base form styling for consistent controls across pages */
+input,
+textarea,
+select,
+button {
+    font: inherit;
+}
+
+input,
+textarea,
+select {
+    width: 100%;
+    min-height: 2.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    background-color: #ffffff;
+    color: #0f172a;
+    padding: 0.625rem 0.75rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: 2px solid rgba(59, 130, 246, 0.25);
+    outline-offset: 1px;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+    background-color: #1e293b;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+    color: #94a3b8;
+}
+
 .sidebar-icon {
     width: 1.75rem; /* Tương đương w-7 */
     text-align: center;
@@ -109,6 +165,54 @@ select option {
     .filters-row .filter-control input[type="text"], .filters-row .filter-control select { max-width: 18rem; }
 }
 
+@media (max-width: 768px) {
+    header {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    main {
+        padding: 1rem !important;
+        overflow-x: auto !important;
+    }
+
+    input,
+    textarea,
+    select {
+        font-size: 16px;
+    }
+
+    .filters-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filters-row .filter-control {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filters-row .filter-control label {
+        white-space: normal;
+        margin-bottom: 0.25rem;
+    }
+
+    .filters-row .filter-control input[type="text"],
+    .filters-row .filter-control select,
+    .filters-row .filter-control .datalist-input {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .choices,
+    .choices__inner,
+    .choices__list--dropdown {
+        width: 100% !important;
+    }
+}
+
 /* Truncate long values inside the asset table user column */
 #assetTable td:nth-child(6), #licenseTable td:nth-child(5) {
     max-width: 12rem; /* limit width */
@@ -140,16 +244,24 @@ select option {
     overflow: hidden;
 }
 
-/* Allow dropdown to expand horizontally to fit longest item but not exceed viewport */
+/* Allow dropdown to expand horizontally to fit longer item names without clipping */
 .choices__list--dropdown {
     width: auto !important;
-    min-width: 100% !important; /* at least input width */
-    max-width: 92vw !important; /* avoid overflowing the viewport */
+    min-width: max(100%, 18rem) !important; /* keep enough room for full names */
+    max-width: min(40rem, 92vw) !important; /* avoid overflowing the viewport */
 }
 
-/* Make dropdown items use their full width when possible */
+/* Make dropdown items use their full width and preserve long labels */
+.choices__list--dropdown .choices__item--choice {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    word-break: break-word !important;
+}
+
 .choices__list--dropdown .choices__item--choice .choices__inner {
-    white-space: nowrap;
+    white-space: normal !important;
+    overflow: visible !important;
 }
 
 /* Ensure the dropdown floats above other page items */
@@ -189,22 +301,36 @@ select option {
     border-color: #3b82f6 !important;
 }
 
-/* Đảm bảo mũi tên dropdown của Choices.js không đè lên text */
+/* Đảm bảo mũi tên dropdown của Choices.js căn giữa đúng với text */
 .choices[data-type*="select-one"]::after {
     right: 0.75rem !important;
+    top: 50% !important;
+    margin-top: 0 !important;
+    transform: translateY(-50%) !important;
     pointer-events: none;
     z-index: 1;
 }
 
-/* Đảm bảo text trong Choices.js có đủ padding để không bị đè bởi mũi tên */
+/* Đảm bảo text trong Choices.js có đủ padding để không bị đè bởi mũi tên và căn giữa theo chiều dọc */
 .choices__inner {
+    display: flex !important;
+    align-items: center !important;
+    min-height: 2.75rem;
     padding-right: 2.5rem !important;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
+.choices__list--single .choices__item {
+    display: flex !important;
+    align-items: center !important;
+    min-height: 1.5rem;
+    line-height: 1.2;
+}
+
 .choices__input {
     padding-right: 0.5rem !important;
+    line-height: 1.2 !important;
 }
 
 /* Standard HTML select dropdown styling */

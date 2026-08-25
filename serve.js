@@ -1,9 +1,11 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const rootDir = __dirname;
-const port = Number(process.env.PORT || 8080);
+const port = Number(process.env.PORT || 9000);
+const host = '127.0.0.1';
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -23,9 +25,46 @@ const mimeTypes = {
   '.txt': 'text/plain; charset=utf-8'
 };
 
-function sendFile(filePath, response) {
+const cacheControl = {
+  html: 'no-cache, no-store, must-revalidate',
+  css: 'public, max-age=31536000, immutable',
+  js: 'public, max-age=31536000, immutable',
+  json: 'public, max-age=86400',
+  image: 'public, max-age=86400',
+  font: 'public, max-age=31536000, immutable',
+  default: 'public, max-age=86400'
+};
+
+function getCacheHeader(extension) {
+  switch (extension) {
+    case '.html':
+      return cacheControl.html;
+    case '.css':
+      return cacheControl.css;
+    case '.js':
+      return cacheControl.js;
+    case '.json':
+      return cacheControl.json;
+    case '.png':
+    case '.jpg':
+    case '.jpeg':
+    case '.gif':
+    case '.svg':
+    case '.webp':
+      return cacheControl.image;
+    case '.woff':
+    case '.woff2':
+    case '.ttf':
+      return cacheControl.font;
+    default:
+      return cacheControl.default;
+  }
+}
+
+function sendFile(filePath, response, requestHeaders = {}) {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = mimeTypes[ext] || 'application/octet-stream';
+  const acceptEncoding = requestHeaders['accept-encoding'] || '';
 
   fs.readFile(filePath, (error, data) => {
     if (error) {
@@ -34,7 +73,32 @@ function sendFile(filePath, response) {
       return;
     }
 
-    response.writeHead(200, { 'Content-Type': contentType });
+    const cacheHeaders = {
+      'Cache-Control': getCacheHeader(ext),
+      'Content-Type': contentType
+    };
+
+    if (acceptEncoding.includes('gzip') && ['.html', '.css', '.js', '.json', '.svg', '.txt'].includes(ext)) {
+      response.writeHead(200, {
+        ...cacheHeaders,
+        'Content-Encoding': 'gzip',
+        'Vary': 'Accept-Encoding'
+      });
+      response.end(zlib.gzipSync(data));
+      return;
+    }
+
+    if (acceptEncoding.includes('br') && ['.html', '.css', '.js', '.json', '.svg', '.txt'].includes(ext)) {
+      response.writeHead(200, {
+        ...cacheHeaders,
+        'Content-Encoding': 'br',
+        'Vary': 'Accept-Encoding'
+      });
+      response.end(zlib.brotliCompressSync(data));
+      return;
+    }
+
+    response.writeHead(200, cacheHeaders);
     response.end(data);
   });
 }
@@ -67,7 +131,7 @@ const server = http.createServer((request, response) => {
           return;
         }
 
-        sendFile(indexPath, response);
+        sendFile(indexPath, response, request.headers);
       });
       return;
     }
@@ -78,10 +142,10 @@ const server = http.createServer((request, response) => {
       return;
     }
 
-    sendFile(filePath, response);
+    sendFile(filePath, response, request.headers);
   });
 });
 
-server.listen(port, () => {
-  console.log(`QLTS web is running at http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`QLTS web is running at http://${host}:${port}`);
 });

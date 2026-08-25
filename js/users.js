@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         data.forEach(user => {
+            const safeAvatar = user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email || 'User')}&background=random`;
             // Đếm số thiết bị mà người dùng này đang sở hữu từ danh sách tài sản
             const deviceCount = assets.filter(asset => asset.user === user.name && asset.status === 'Active').length;
 
@@ -138,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.insertAdjacentHTML('beforeend', `
                 <td class="p-4">
                     <div class="flex items-center">
-                        <img src="${user.avatar}" alt="${user.name}" class="h-10 w-10 rounded-full border border-slate-200 object-cover">
+                        <img src="${safeAvatar}" alt="${user.name}" class="h-10 w-10 rounded-full border border-slate-200 object-cover">
                         <div class="ml-3">
                             <p class="font-semibold text-slate-800">${user.name}</p>
                             <p class="text-sm text-slate-500">${user.email}</p>
