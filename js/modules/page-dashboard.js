@@ -532,8 +532,13 @@ window.QLTSPageDashboard.init = async function () {
             position: 'bottom',
             duplicateItemsAllowed: false
         });
-        const choices = data.map(u => ({ value: u.name, label: u.name }));
         const isUserDropdown = data === users;
+        // Không cho gán tài sản/license mới cho nhân viên "Đã nghỉ việc" - vẫn giữ hiển thị nếu
+        // đây là người đang được gán sẵn (đã chọn từ trước), chỉ ẩn khỏi danh sách để chọn mới.
+        const filteredData = isUserDropdown
+            ? data.filter(u => u.status !== 'Đã nghỉ việc' || u.name === selectedValue)
+            : data;
+        const choices = filteredData.map(u => ({ value: u.name, label: u.name }));
         if (isUserDropdown) choices.push({ value: ADD_NEW_USER_VALUE, label: '+ Thêm người dùng mới' });
         newInstance.setChoices(choices, 'value', 'label', true);
         if (selectedValue) newInstance.setChoiceByValue(selectedValue);

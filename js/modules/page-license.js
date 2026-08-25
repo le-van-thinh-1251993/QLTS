@@ -467,9 +467,21 @@ window.QLTSPageLicense.init = async function () {
             else if (action === 'delete-user') { if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal("Xóa nhân viên?", async () => { await supabaseClient.from('users').delete().eq('id', id); await addLog(id, 'USER', 'Xóa', 'Xóa nhân viên'); await refreshApp(); }); }
             else if (action === 'edit-user') { const u = users.find(x => x.id === id); if (u) { document.getElementById('userId').value = u.id; document.getElementById('name').value = u.name; document.getElementById('email').value = u.email; document.getElementById('status').value = u.status; updateDropdowns(); document.getElementById('department').value = departments.find(d => d.name === u.department)?.id || ''; openModal('addUserModal'); } }
 
-            else if (action === 'delete-cat') { const catName = categories.find(c => c.id === id)?.name || ''; showConfirmationModal("Xóa danh mục?", async () => { await supabaseClient.from('categories').delete().eq('id', id); await addLog(id, 'CATEGORY', 'Xóa', catName); await refreshApp(); renderLists(); }); }
+            else if (action === 'delete-cat') {
+                const catName = categories.find(c => c.id === id)?.name || '';
+                if (assets.some(a => a.category_id === id)) {
+                    return showInfoModal(`Không thể xóa danh mục "${catName}" vì vẫn còn tài sản đang sử dụng danh mục này.`, 'Không thể xóa');
+                }
+                showConfirmationModal("Xóa danh mục?", async () => { await supabaseClient.from('categories').delete().eq('id', id); await addLog(id, 'CATEGORY', 'Xóa', catName); await refreshApp(); renderLists(); });
+            }
             else if (action === 'edit-cat') { document.getElementById('categoryName').value = actionBtn.dataset.name; document.getElementById('categoryOldName').value = id; document.getElementById('btnCancelCategoryEdit').classList.remove('hidden'); document.getElementById('categoryName').focus(); }
-            else if (action === 'delete-dept') { const deptName = departments.find(d => d.id === id)?.name || ''; showConfirmationModal("Xóa phòng ban?", async () => { await supabaseClient.from('departments').delete().eq('id', id); await addLog(id, 'DEPARTMENT', 'Xóa', deptName); await refreshApp(); renderLists(); }); }
+            else if (action === 'delete-dept') {
+                const deptName = departments.find(d => d.id === id)?.name || '';
+                if (users.some(u => u.department_id === id)) {
+                    return showInfoModal(`Không thể xóa phòng ban "${deptName}" vì vẫn còn nhân viên thuộc phòng ban này.`, 'Không thể xóa');
+                }
+                showConfirmationModal("Xóa phòng ban?", async () => { await supabaseClient.from('departments').delete().eq('id', id); await addLog(id, 'DEPARTMENT', 'Xóa', deptName); await refreshApp(); renderLists(); });
+            }
             else if (action === 'edit-dept') { document.getElementById('deptName').value = actionBtn.dataset.name; document.getElementById('deptId').value = id; document.getElementById('cancelDeptEdit').classList.remove('hidden'); }
             else if (action === 'delete-lic-type') { const typeName = licenseTypes.find(t => t.id === id)?.name || ''; showConfirmationModal("Xóa loại key?", async () => { await supabaseClient.from('license_types').delete().eq('id', id); await addLog(id, 'LICENSE_TYPE', 'Xóa', typeName); await refreshApp(); renderLists(); }); }
             else if (action === 'edit-lic-type') { document.getElementById('licenseTypeName').value = actionBtn.dataset.name; document.getElementById('licenseTypeId').value = id; document.getElementById('btnCancelLicenseTypeEdit').classList.remove('hidden'); }

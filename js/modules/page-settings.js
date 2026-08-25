@@ -265,7 +265,19 @@ window.QLTSPageSettings.init = async function () {
         e.target.value = '';
     });
 
-    document.getElementById('assetForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'assets', () => {
+    document.getElementById('assetForm')?.addEventListener('submit', (e) => {
+        const categoryValRaw = document.getElementById('modal_assetCategory').value;
+        if (!categoryValRaw) {
+            e.preventDefault();
+            return showInfoModal('Vui lòng chọn loại tài sản.', 'Thiếu thông tin');
+        }
+        const costVal = parseFloat(document.getElementById('modal_assetCost').value) || 0;
+        const salvageVal = parseFloat(document.getElementById('modal_assetSalvage').value) || 0;
+        if (salvageVal > costVal) {
+            e.preventDefault();
+            return showInfoModal('Giá trị thu hồi không được lớn hơn giá trị mua.', 'Dữ liệu không hợp lệ');
+        }
+        return handleFormSubmit(e, 'assets', () => {
         const isNew = !document.getElementById('modal_assetId').value;
         const categoryId = parseInt(document.getElementById('modal_assetCategory').value);
         const assignedUser = users.find(u => u.name === userChoicesInstance?.getValue(true));
@@ -290,9 +302,21 @@ window.QLTSPageSettings.init = async function () {
             payload.asset_code = window.QLTSHelpers.buildAssetCode(categoryName, deptName, assets.map(a => a.asset_code).filter(Boolean));
         }
         return payload;
-    }, 'assetModal', (data, isUpdate) => addLog(data.id, 'ASSET', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa tài sản' : 'Nhập kho')));
+        }, 'assetModal', (data, isUpdate) => addLog(data.id, 'ASSET', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa tài sản' : 'Nhập kho'));
+    });
 
     document.getElementById('licenseForm')?.addEventListener('submit', (e) => {
+        const licenseIdVal = document.getElementById('modal_licenseId').value;
+        const licenseKeyVal = document.getElementById('modal_licenseKey').value.trim();
+        if (!licenseKeyVal) {
+            e.preventDefault();
+            return showInfoModal('Vui lòng nhập mã Key.', 'Thiếu thông tin');
+        }
+        const duplicateKey = licenses.some(l => l.license_key === licenseKeyVal && String(l.id) !== licenseIdVal);
+        if (duplicateKey) {
+            e.preventDefault();
+            return showInfoModal(`Mã Key "${licenseKeyVal}" đã tồn tại trên 1 license khác.`, 'Trùng mã Key');
+        }
         const expDateInput = document.getElementById('modal_expirationDate');
         const expDateVal = expDateInput.value;
         // Chỉ chặn khi NGƯỜI DÙNG chọn 1 ngày quá khứ mới (không chặn license cũ vốn đã hết hạn
@@ -323,9 +347,27 @@ window.QLTSPageSettings.init = async function () {
         }, 'licenseModal', (data, isUpdate) => addLog(data.id, 'LICENSE', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa license' : 'Nhập kho'));
     });
 
-    document.getElementById('userForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'users', () => ({
-        id: document.getElementById('userId').value, name: document.getElementById('name').value, email: document.getElementById('email').value, department_id: document.getElementById('department').value || null, status: document.getElementById('status').value, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
-    }), 'addUserModal', (data, isUpdate) => addLog(data.id, 'USER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.email)));
+    document.getElementById('userForm')?.addEventListener('submit', (e) => {
+        const userIdVal = document.getElementById('userId').value;
+        const emailVal = document.getElementById('email').value.trim();
+        const duplicateEmail = users.some(u => (u.email || '').toLowerCase() === emailVal.toLowerCase() && String(u.id) !== userIdVal);
+        if (duplicateEmail) {
+            e.preventDefault();
+            return showInfoModal(`Email "${emailVal}" đã được dùng bởi 1 nhân viên khác.`, 'Trùng email');
+        }
+        const newStatus = document.getElementById('status').value;
+        if (userIdVal && newStatus === 'Đã nghỉ việc') {
+            const id = parseInt(userIdVal, 10);
+            const stillHolding = assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id);
+            if (stillHolding) {
+                e.preventDefault();
+                return showInfoModal('Nhân viên này đang giữ tài sản/license. Vui lòng thu hồi trước khi chuyển sang trạng thái "Đã nghỉ việc".', 'Không thể cập nhật');
+            }
+        }
+        return handleFormSubmit(e, 'users', () => ({
+            id: userIdVal, name: document.getElementById('name').value, email: emailVal, department_id: document.getElementById('department').value || null, status: newStatus, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
+        }), 'addUserModal', (data, isUpdate) => addLog(data.id, 'USER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.email));
+    });
 
     document.getElementById('categoryForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'categories', () => ({ id: document.getElementById('categoryOldName').value, name: document.getElementById('categoryName').value }), 'categoryModal', (data, isUpdate) => { addLog(data.id, 'CATEGORY', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name); renderLists(); }));
     document.getElementById('departmentForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'departments', () => ({ id: document.getElementById('deptId').value, name: document.getElementById('deptName').value }), 'departmentManagementModal', (data, isUpdate) => { addLog(data.id, 'DEPARTMENT', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name); renderLists(); }));
