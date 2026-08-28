@@ -30,6 +30,8 @@
     <!-- SheetJS (xlsx) library for Excel processing -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- QR Code cho tính năng "Scan" thông tin nhân viên -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 </head>
 <body class="font-sans text-slate-800 bg-slate-100 dark:bg-slate-900 dark:text-slate-100">
 <style>
@@ -113,6 +115,9 @@
                     <input type="text" id="searchUserInput" placeholder="Tìm kiếm nhân viên..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400">
                 </div>
                 <div class="flex items-center">
+                    <button id="globalSearchBtn" title="Tìm kiếm toàn cục" class="text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 mr-4">
+                        <i class="fa-solid fa-magnifying-glass text-xl"></i>
+                    </button>
                     <div class="relative">
                         <button id="notification-button" class="text-slate-600 hover:text-blue-600">
                             <i class="fa-regular fa-bell text-xl"></i>
@@ -169,7 +174,7 @@
                             <span class="tooltiptext">Export ra Excel</span>
                         </div>
                         <div class="tooltip">
-                            <button id="manageDeptsBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                            <button id="manageDeptsBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all dark:bg-slate-700 dark:hover:bg-slate-600 dark:border-slate-600 dark:text-gray-200">
                                 <i class="fa-solid fa-sitemap"></i>
                             </button>
                             <span class="tooltiptext">Quản lý Phòng ban</span>
@@ -222,6 +227,10 @@
                     <label class="block text-sm font-medium text-slate-700 dark:text-gray-200 mb-1">Email</label>
                     <input type="email" id="email" name="email" required class="w-full border rounded px-3 py-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400">
                 </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-gray-200 mb-1">Số điện thoại</label>
+                    <input type="tel" id="phone" name="phone" class="w-full border rounded px-3 py-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400">
+                </div>
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-gray-200 mb-1">Phòng ban</label>
@@ -269,6 +278,19 @@
         </div>
     </div>
 
+    <!-- QR Code nhân viên (Scan) -->
+    <div id="userQrModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6 relative border dark:border-slate-700">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-4 dark:text-gray-200">Mã QR nhân viên</h3>
+            <div id="userQrCode" class="flex justify-center mb-4"></div>
+            <div id="userQrInfo" class="text-sm text-slate-600 dark:text-gray-300 space-y-1 border-t pt-3 dark:border-slate-700"></div>
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t dark:border-slate-700">
+                <button class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600">Đóng</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Department Management Modal -->
     <div id="departmentManagementModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full items-center justify-center z-50">
         <div class="relative mx-auto p-6 border w-full max-w-md shadow-lg rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700">
@@ -286,7 +308,7 @@
                     <input type="hidden" id="deptId">
                     <input type="text" id="deptName" placeholder="Tên phòng ban" class="flex-grow border-slate-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-slate-700 dark:border-slate-600 dark:text-white" required>
                     <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Lưu</button>
-                    <button type="button" id="cancelDeptEdit" class="px-4 py-2 text-sm font-medium bg-slate-200 rounded-lg hover:bg-slate-300 hidden">Hủy</button>
+                    <button type="button" id="cancelDeptEdit" class="px-4 py-2 text-sm font-medium bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 hidden dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600">Hủy</button>
                 </form>
                 
                 <!-- List of departments -->
@@ -322,7 +344,7 @@
             <div class="mt-6 pt-4 border-t flex justify-between items-center">
                 <button id="btnDeleteSelectedUserImportRows" class="px-4 py-2 text-red-600 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"><i class="fa-solid fa-trash-can mr-2"></i>Xóa dòng đã chọn</button>
                 <div class="flex gap-3">
-                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg">Hủy</button><button id="btnConfirmUserImport" class="px-5 py-2 bg-blue-600 text-white rounded-lg disabled:bg-blue-300 disabled:cursor-not-allowed" title="Chỉ import các dòng hợp lệ và không được chọn để xóa">Xác nhận nhập</button>
+                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600">Hủy</button><button id="btnConfirmUserImport" class="px-5 py-2 bg-blue-600 text-white rounded-lg disabled:bg-blue-300 disabled:cursor-not-allowed" title="Chỉ import các dòng hợp lệ và không được chọn để xóa">Xác nhận nhập</button>
                 </div>
             </div>
         </div>
@@ -345,7 +367,7 @@
                     <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-24 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">
                         Xóa
                     </button>
-                    <button id="cancelDeleteBtn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-24 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                    <button id="cancelDeleteBtn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-24 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600">
                         Hủy
                     </button>
                 </div>
@@ -376,6 +398,18 @@
             </div>
         </div>
     </div>
+    <!-- Modal: Tìm kiếm toàn cục -->
+    <div id="globalSearchModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[90] flex justify-center items-start pt-24 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-xl p-4 relative border dark:border-slate-700">
+            <div class="relative mb-3">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="globalSearchInput" placeholder="Tìm tài sản, license, nhân viên..." class="w-full pl-10 pr-10 py-2.5 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" autocomplete="off">
+                <button class="close-modal absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div id="globalSearchResults" class="max-h-[60vh] overflow-y-auto"><p class="text-sm text-slate-400 text-center p-4">Nhập từ khóa để tìm kiếm...</p></div>
+        </div>
+    </div>
+
     <!-- LocalDB for local storage operations -->
     <!-- <script src="config.js"></script> -->
     <script src="js/localDB.js?v=20260825-1"></script>

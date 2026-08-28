@@ -8,6 +8,13 @@ if (typeof window.applyUserFilters !== 'function') window.applyUserFilters = fun
 
 window.QLTSPageLicense.init = async function () {
     // =================================================================
+
+    // Ngày hôm nay dạng YYYY-MM-DD theo giờ local (dùng để ghi "ngày cấp phát"),
+    // tránh lệch ngày do new Date().toISOString() quy về UTC.
+    function todayDateStrLocal() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
     // filterAssetUser / filterLicenseUser Choices.js instances are already
     // created and kept up to date by page-dashboard.js's updateDropdowns().
     // Re-initializing them here caused "multiple instances of Choices" errors.
@@ -107,6 +114,11 @@ window.QLTSPageLicense.init = async function () {
 
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = Array.from(document.querySelectorAll('.fixed.flex:not(.hidden)')); if (m.length > 0) safeCloseModal(m[m.length - 1].id); } });
 
+    // [MỚI] Tìm kiếm toàn cục: render kết quả khi gõ
+    document.getElementById('globalSearchInput')?.addEventListener('input', (e) => {
+        if (typeof renderGlobalSearchResults === 'function') renderGlobalSearchResults(e.target.value);
+    });
+
     // --- MAIN CLICK HANDLER ---
     document.body.addEventListener('click', async (e) => {
         const t = e.target;
@@ -115,7 +127,17 @@ window.QLTSPageLicense.init = async function () {
         // Logout Button
         if (t.closest('#logout-button')) {
             e.preventDefault();
-            handleLogout();
+            // [LOCAL-ONLY] handleLogout() chỉ tồn tại khi js/auth.js được tải (login.html);
+            // app đang chạy local-only nên bỏ qua thay vì báo lỗi ReferenceError.
+            if (typeof handleLogout === 'function') handleLogout();
+        }
+
+        // [MỚI] Mở modal Tìm kiếm toàn cục
+        if (t.closest('#globalSearchBtn')) {
+            openModal('globalSearchModal');
+            const input = document.getElementById('globalSearchInput');
+            if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+            if (typeof renderGlobalSearchResults === 'function') renderGlobalSearchResults('');
         }
 
         // [KHÔI PHỤC] Xử lý click vào nút chuông thông báo
@@ -145,13 +167,26 @@ window.QLTSPageLicense.init = async function () {
             if (item) {
                 // Thay vì mở modal sửa, chúng ta sẽ format thông tin và hiển thị bằng infoModal
                 const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+                // [MỚI] Ngày cấp phát: chỉ có ý nghĩa khi thiết bị đang được sử dụng
+                const assignedDateHtml = (item.status === 'Active' && item.assigned_date)
+                    ? `<p><strong>Ngày cấp phát:</strong> ${formatDateDisplay(item.assigned_date)}</p>`
+                    : '';
+                const disposedHtml = (item.status === 'Disposed')
+                    ? `<p><strong>Ngày thanh lý:</strong> ${formatDateDisplay(item.disposed_date)}</p><p><strong>Lý do thanh lý:</strong> ${item.disposed_reason || 'Không có'}</p>`
+                    : '';
+                const supplierHtml = (item.supplier || item.invoice_number)
+                    ? `<p><strong>Nhà cung cấp:</strong> ${item.supplier || 'N/A'}${item.invoice_number ? ` <span class="text-slate-400">(HĐ: ${item.invoice_number})</span>` : ''}</p>`
+                    : '';
                 const detailsHtml = `
                     <div class="text-left space-y-2 text-sm">
                         <p><strong>Tên thiết bị:</strong> ${item.name}</p>
                         <p><strong>Loại:</strong> ${item.category || 'N/A'}</p>
                         <p><strong>Trạng thái:</strong> <span class="px-2 py-0.5 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></p>
                         <p><strong>Người dùng:</strong> <span class="font-semibold text-blue-600">${item.user || 'Chưa cấp phát'}</span></p>
+                        ${assignedDateHtml}
+                        ${disposedHtml}
                         <p><strong>Vị trí:</strong> ${item.location || 'N/A'}</p>
+                        ${supplierHtml}
                         <p><strong>Ghi chú:</strong> ${item.notes || 'Không có'}</p>
                         <div class="mt-2 pt-2 border-t"><strong>Cấu hình:</strong><pre class="text-xs bg-slate-50 p-2 rounded-md mt-1 font-mono whitespace-pre-wrap">${item.config || 'Không có thông tin'}</pre></div>
                     </div>
@@ -204,6 +239,11 @@ window.QLTSPageLicense.init = async function () {
 
                             <strong class="col-span-1 text-slate-500">Người dùng:</strong>
                             <span class="col-span-2 font-semibold text-blue-600">${item.user || 'Chưa cấp phát'}</span>
+
+                            ${(item.status === 'Active' && item.assigned_date) ? `
+                            <strong class="col-span-1 text-slate-500">Ngày cấp phát:</strong>
+                            <span class="col-span-2">${formatDateDisplay(item.assigned_date)}</span>
+                            ` : ''}
 
                             <strong class="col-span-1 text-slate-500">Ghi chú:</strong>
                             <span class="col-span-2">${item.notes || 'Không có'}</span>
@@ -258,6 +298,38 @@ window.QLTSPageLicense.init = async function () {
         }
 
         // =================================================================
+        // [MỚI] LOGIC CLICK VÀO HÀNG (ROW) LỊCH BẢO TRÌ / KIỂM KÊ ĐỂ XEM CHI TIẾT
+        // =================================================================
+        const maintRow = t.closest('.maintenance-row');
+        if (maintRow && !t.closest('button') && !t.closest('input') && !t.closest('a')) {
+            const id = parseInt(maintRow.dataset.id);
+            const task = maintenanceTasks.find(m => m.id === id);
+            if (task) {
+                const assetName = assets.find(a => a.id === task.asset_id)?.name || 'N/A';
+                const creator = users.find(u => u.id === task.created_by)?.name || 'Admin';
+                const detailsHtml = `
+                    <div class="text-left space-y-2 text-sm">
+                        <p><strong>Tiêu đề:</strong> ${task.title || '-'}</p>
+                        <p><strong>Thiết bị:</strong> ${assetName}</p>
+                        <p><strong>Ngày dự kiến:</strong> ${formatDateDisplay(task.due_date)}</p>
+                        <p><strong>Trạng thái:</strong> ${task.status || '-'}</p>
+                        <p><strong>Ghi chú:</strong> ${task.note || 'Không có'}</p>
+                        <p><strong>Người tạo:</strong> ${creator}</p>
+                    </div>
+                `;
+                showInfoModal(detailsHtml, `Chi tiết lịch bảo trì`);
+            }
+            return;
+        }
+
+        const stockRow = t.closest('.stock-row');
+        if (stockRow && !t.closest('button') && !t.closest('input') && !t.closest('a')) {
+            const id = parseInt(stockRow.dataset.id);
+            await openStockCheckDetail(id);
+            return;
+        }
+
+        // =================================================================
         // CÁC LOGIC KHÁC (Button, Close, Page...)
         // =================================================================
         if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#btnConfirmClose') || t.closest('#cancelAddUser') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex'); if (modal) attemptCloseModal(modal.id); return; }
@@ -306,12 +378,122 @@ window.QLTSPageLicense.init = async function () {
         if (t.closest('#manageDeptsBtn')) { renderLists(); document.getElementById('departmentForm').reset(); openModal('departmentManagementModal'); return; }
         if (t.closest('#manageLicenseTypesBtn')) { renderLists(); document.getElementById('licenseTypeForm').reset(); document.getElementById('btnCancelLicenseTypeEdit').classList.add('hidden'); openModal('licenseTypeModal'); return; }
         if (t.closest('#btnCancelLicenseTypeEdit')) { document.getElementById('licenseTypeForm').reset(); document.getElementById('licenseTypeId').value = ''; t.closest('#btnCancelLicenseTypeEdit').classList.add('hidden'); return; }
+        if (t.closest('#manageSuppliersBtn')) { renderLists(); document.getElementById('supplierForm').reset(); document.getElementById('supplierId').value = ''; document.getElementById('btnCancelSupplierEdit').classList.add('hidden'); openModal('supplierModal'); return; }
+        if (t.closest('#openDepreciationReportBtn')) { if (typeof renderDepreciationReport === 'function') renderDepreciationReport(); openModal('depreciationReportModal'); return; }
+        if (t.closest('#exportDepreciationBtn')) {
+            const rows = assets.filter(a => a.status !== 'Disposed').map(a => {
+                const dep = computeDepreciation(a);
+                return {
+                    'Tên tài sản': a.name,
+                    'Ngày mua': formatDateDisplay(a.purchase_date),
+                    'Nguyên giá': a.cost || 0,
+                    'Giá trị thu hồi': a.salvage_value || 0,
+                    'Phương pháp': a.depreciation_method === 'declining_balance' ? 'Số dư giảm dần' : 'Đường thẳng',
+                    'Số tháng đã dùng': dep.monthsElapsed,
+                    'Khấu hao lũy kế': Math.round(dep.accumulated),
+                    'Giá trị còn lại': Math.round(dep.bookValue)
+                };
+            });
+            exportToExcel(rows, 'BaoCaoKhauHao.xlsx');
+            return;
+        }
+
+        if (t.closest('#openQrScannerBtn')) { activeStockCheckIdForScan = null; openModal('qrScannerModal'); startQrScanner(); return; }
+
+        if (t.closest('#btnStockCheckScan')) {
+            const scId = parseInt(t.closest('#btnStockCheckScan').dataset.stockCheckId, 10);
+            const checkForScan = stockChecks.find(s => s.id === scId);
+            if (checkForScan && checkForScan.status === 'Hoàn thành') {
+                return showInfoModal('Đợt kiểm kê này đã đóng (Hoàn thành). Vui lòng "Mở lại" đợt kiểm kê trước khi quét.', 'Không thể quét');
+            }
+            activeStockCheckIdForScan = scId || null;
+            openModal('qrScannerModal');
+            startQrScanner();
+            return;
+        }
+
+        if (t.closest('#btnStockCheckExport')) {
+            const scId = parseInt(document.getElementById('btnStockCheckScan')?.dataset.stockCheckId, 10);
+            const items = stockCheckItems.filter(i => i.stock_check_id === scId);
+            const data = items.map(i => {
+                const a = assets.find(x => x.id === i.asset_id);
+                return { 'Tài sản': a?.name || `#${i.asset_id}`, 'Vị trí': a?.location || '', 'Trạng thái': i.status === 'matched' ? 'Đã kiểm' : 'Còn thiếu' };
+            });
+            if (!data.length) return showInfoModal('Chưa có dữ liệu kiểm kê để xuất.');
+            exportToExcel(data, `KiemKe_${scId}.xlsx`);
+            return;
+        }
+
+        if (t.closest('#qrActionMarkChecked')) {
+            if (lastQrScanResult?.item && activeStockCheckIdForScan) {
+                const parentCheckForMark = stockChecks.find(s => s.id === activeStockCheckIdForScan);
+                if (parentCheckForMark && parentCheckForMark.status === 'Hoàn thành') {
+                    safeCloseModal('qrScanResultModal');
+                    return showInfoModal('Đợt kiểm kê này đã đóng (Hoàn thành). Vui lòng "Mở lại" đợt kiểm kê trước khi đánh dấu.', 'Không thể thao tác');
+                }
+                const stockItem = stockCheckItems.find(i => i.stock_check_id === activeStockCheckIdForScan && i.asset_id === lastQrScanResult.item.id);
+                if (stockItem) {
+                    await supabaseClient.from('stock_check_items').update({ status: 'matched', checked_at: new Date().toISOString() }).eq('id', stockItem.id);
+                    stockItem.status = 'matched';
+                    showInfoModal(`Đã đánh dấu "${lastQrScanResult.item.name}" là đã kiểm kê. Tiếp tục quét mã tiếp theo...`, 'Đã kiểm kê');
+                } else {
+                    showInfoModal('Tài sản này không có trong danh sách kiểm kê của đợt hiện tại.', 'Không thuộc đợt kiểm kê');
+                }
+                safeCloseModal('qrScanResultModal');
+                renderStockCheckDetail(activeStockCheckIdForScan);
+            }
+            return;
+        }
+        if (t.closest('#qrActionCheckout')) {
+            const item = lastQrScanResult?.item;
+            if (item) {
+                safeCloseModal('qrScanResultModal');
+                if (!document.getElementById('checkOutModal')) { showInfoModal('Vui lòng mở trang "Kho tài sản" để cấp phát tài sản này.', 'Sai trang'); return; }
+                tempId = item.id; document.getElementById('assignAssetName').textContent = item.name; initAllUserDropdowns(); openModal('checkOutModal');
+            }
+            return;
+        }
+        if (t.closest('#qrActionCheckin')) {
+            const item = lastQrScanResult?.item;
+            if (item) {
+                safeCloseModal('qrScanResultModal');
+                showConfirmationModal(`Thu hồi tài sản từ ${item.user || 'Không rõ'}?`, async () => {
+                    await supabaseClient.from('assets').update({ status: 'Stock', user_id: null, assigned_date: null }).eq('id', item.id);
+                    await addLog(item.id, 'ASSET', 'Thu hồi', `Từ người dùng: ${item.user || 'Không rõ'}`);
+                    await refreshApp();
+                    showInfoModal(`Đã thu hồi "${item.name}"!`, 'Thu hồi thành công');
+                });
+            }
+            return;
+        }
+        if (t.closest('#qrActionCheckoutLicense')) {
+            const item = lastQrScanResult?.item;
+            if (item) {
+                safeCloseModal('qrScanResultModal');
+                if (!document.getElementById('checkOutLicenseModal')) { showInfoModal('Vui lòng mở trang "Quản lý License" để cấp phát license này.', 'Sai trang'); return; }
+                tempId = item.id; document.getElementById('assignLicenseName').textContent = item.key_type; initAllUserDropdowns(); openModal('checkOutLicenseModal');
+            }
+            return;
+        }
+        if (t.closest('#qrActionCheckinLicense')) {
+            const item = lastQrScanResult?.item;
+            if (item) {
+                safeCloseModal('qrScanResultModal');
+                showConfirmationModal(`Thu hồi license từ ${item.user || 'Không rõ'}?`, async () => {
+                    await supabaseClient.from('licenses').update({ status: 'Stock', user_id: null, assigned_date: null }).eq('id', item.id);
+                    await addLog(item.id, 'LICENSE', 'Thu hồi', `Từ người dùng: ${item.user || 'Không rõ'}`);
+                    await refreshApp();
+                    showInfoModal(`Đã thu hồi "${item.key_type}"!`, 'Thu hồi thành công');
+                });
+            }
+            return;
+        }
 
         if (t.closest('#clear-read-notifications-btn')) { showConfirmationModal("Bạn có muốn xem lại tất cả thông báo đã đọc không?", () => { localStorage.removeItem('readNotifications'); checkAndDisplayNotifications(); }); return; }
 
-        if (t.closest('#addAssetBtn')) { document.getElementById('assetForm').reset(); document.getElementById('modal_assetId').value = ''; document.getElementById('modalTitle').textContent = 'Thêm tài sản mới'; initAllUserDropdowns(); openModal('assetModal'); return; }
-        if (t.closest('#openMaintenanceModalBtn')) { document.getElementById('maintenanceForm')?.reset(); updateDropdowns(); openModal('maintenanceModal'); return; }
-        if (t.closest('#openStockCheckModalBtn')) { document.getElementById('stockCheckForm')?.reset(); openModal('stockCheckModal'); return; }
+        if (t.closest('#addAssetBtn')) { document.getElementById('assetForm').reset(); document.getElementById('modal_assetId').value = ''; document.getElementById('assetDisposedFields').classList.add('hidden'); document.getElementById('modalTitle').textContent = 'Thêm tài sản mới'; updateDropdowns(); initAllUserDropdowns(); openModal('assetModal'); return; }
+        if (t.closest('#openMaintenanceModalBtn')) { document.getElementById('maintenanceForm')?.reset(); document.getElementById('maintenance_id').value = ''; document.getElementById('maintenanceModalTitle').textContent = 'Thêm lịch bảo trì'; updateDropdowns(); openModal('maintenanceModal'); return; }
+        if (t.closest('#openStockCheckModalBtn')) { document.getElementById('stockCheckForm')?.reset(); document.getElementById('stockcheck_id').value = ''; document.getElementById('stockCheckModalTitle').textContent = 'Tạo đợt kiểm kê'; openModal('stockCheckModal'); return; }
         if (t.closest('#addLicenseBtn')) { document.getElementById('licenseForm').reset(); document.getElementById('modal_licenseId').value = ''; document.getElementById('modal_expirationDate').dataset.originalValue = ''; document.getElementById('licenseModalTitle').textContent = 'Thêm License mới'; initAllUserDropdowns(); openModal('licenseModal'); return; }
         if (t.closest('#addUserBtn')) { safeCloseModal('addUserModal'); updateDropdowns(); openModal('addUserModal'); return; }
 
@@ -346,6 +528,27 @@ window.QLTSPageLicense.init = async function () {
             const sourceRows = resolveExportData(currentFilteredUsers, users, activeFilter);
             const data = sourceRows.map(u => ({ "Tên": u.name, "Email": u.email, "Phòng ban": u.department, "Trạng thái": u.status }));
             exportToExcel(data, 'Users.xlsx');
+            return;
+        }
+
+        if (t.closest('#exportMaintenanceBtn')) {
+            const data = maintenanceTasks.map(task => ({
+                'Tiêu đề': task.title || '',
+                'Thiết bị': assets.find(a => a.id === task.asset_id)?.name || 'N/A',
+                'Ngày dự kiến': formatDateDisplay(task.due_date),
+                'Trạng thái': task.status || '',
+                'Ghi chú': task.note || ''
+            }));
+            exportToExcel(data, 'LichBaoTri.xlsx');
+            return;
+        }
+        if (t.closest('#exportStockCheckBtn')) {
+            const data = stockChecks.map(item => ({
+                'Tên/Ghi chú': item.note || '',
+                'Ngày bắt đầu': formatDateDisplay(item.started_at),
+                'Trạng thái': item.status || ''
+            }));
+            exportToExcel(data, 'DotKiemKe.xlsx');
             return;
         }
 
@@ -417,14 +620,20 @@ window.QLTSPageLicense.init = async function () {
                 const assetName = assetToDelete?.name || 'tài sản';
                 showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'ASSET', 'Xóa', `Xóa tài sản: ${assetName}`); await refreshApp(); showInfoModal(`Đã xóa "${assetName}"!`, 'Xóa thành công'); } });
             }
-            else if (action === 'edit-asset') { const item = assets.find(a => a.id === id); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); document.getElementById('modal_assetPurchaseDate').value = item.purchase_date ? item.purchase_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetCost').value = item.cost || 0; document.getElementById('modal_assetSalvage').value = item.salvage_value || 0; document.getElementById('modal_assetLife').value = item.useful_life_months || ''; document.getElementById('modal_assetDepMethod').value = item.depreciation_method || 'straight_line'; updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
-            else if (action === 'checkout-asset') { tempId = id; document.getElementById('assignAssetName').textContent = assets.find(a => a.id === id)?.name; initAllUserDropdowns(); openModal('checkOutModal'); }
+            else if (action === 'edit-asset') { const item = assets.find(a => a.id === id); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); document.getElementById('modal_assetPurchaseDate').value = item.purchase_date ? item.purchase_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetCost').value = item.cost || 0; document.getElementById('modal_assetSalvage').value = item.salvage_value || 0; document.getElementById('modal_assetLife').value = item.useful_life_months || ''; document.getElementById('modal_assetDepMethod').value = item.depreciation_method || 'straight_line'; document.getElementById('modal_assetInvoiceNumber').value = item.invoice_number || ''; document.getElementById('modal_assetDisposedDate').value = item.disposed_date ? item.disposed_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetDisposedReason').value = item.disposed_reason || ''; document.getElementById('assetDisposedFields').classList.toggle('hidden', item.status !== 'Disposed'); updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modal_assetSupplier').value = item.supplier_id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
+            else if (action === 'checkout-asset') {
+                const assetToAssign = assets.find(a => a.id === id);
+                if (assetToAssign && ['Repair', 'Broken'].includes(assetToAssign.status)) {
+                    return showInfoModal('Thiết bị đang ở trạng thái "Sửa chữa"/"Hỏng" nên không thể cấp phát. Vui lòng cập nhật lại trạng thái trước.', 'Không thể cấp phát');
+                }
+                tempId = id; document.getElementById('assignAssetName').textContent = assetToAssign?.name; initAllUserDropdowns(); openModal('checkOutModal');
+            }
             else if (action === 'checkin-asset') {
                 const assetToCheckIn = assets.find(a => a.id === id);
                 const fromUser = assetToCheckIn?.user || 'Không rõ';
                 const assetName = assetToCheckIn?.name || 'tài sản';
                 showConfirmationModal(`Thu hồi tài sản từ ${fromUser}?`, async () => {
-                    await supabaseClient.from('assets').update({ status: 'Stock', user_id: null }).eq('id', id);
+                    await supabaseClient.from('assets').update({ status: 'Stock', user_id: null, assigned_date: null }).eq('id', id);
                     // SỬA LỖI: Thêm tên người dùng vào log để lịch sử chi tiết hơn
                     await addLog(id, 'ASSET', 'Thu hồi', `Từ người dùng: ${fromUser}`);
                     await refreshApp();
@@ -451,13 +660,19 @@ window.QLTSPageLicense.init = async function () {
                 showConfirmationModal("Xóa License?", async () => { const { error } = await supabaseClient.from('licenses').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'LICENSE', 'Xóa', `Xóa license: ${licenseName}`); await refreshApp(); showInfoModal(`Đã xóa "${licenseName}"!`, 'Xóa thành công'); } });
             }
             else if (action === 'edit-license') { const item = licenses.find(l => l.id === id); if (item) { document.getElementById('modal_licenseId').value = item.id;['modal_licenseKey', 'modal_packageType', 'modal_expirationDate', 'modal_licenseStatus', 'modal_licenseNotes'].forEach(k => { let val = item[k.replace('modal_', '').replace('expirationDate', 'expiration_date').replace('licenseKey', 'license_key').replace('packageType', 'package_type').replace('licenseStatus', 'status').replace('licenseNotes', 'notes')]; document.getElementById(k).value = val || ''; }); document.getElementById('modal_expirationDate').dataset.originalValue = item.expiration_date || ''; updateDropdowns(); document.getElementById('modal_licenseType').value = item.key_type; document.getElementById('licenseModalTitle').textContent = 'Sửa License'; initAllUserDropdowns(item.user); openModal('licenseModal'); } }
-            else if (action === 'checkout-license') { tempId = id; document.getElementById('assignLicenseName').textContent = licenses.find(l => l.id === id)?.key_type; initAllUserDropdowns(); openModal('checkOutLicenseModal'); }
+            else if (action === 'checkout-license') {
+                const licenseToAssign = licenses.find(l => l.id === id);
+                if (licenseToAssign && licenseToAssign.status === 'Expired') {
+                    return showInfoModal('License đã hết hạn nên không thể cấp phát. Vui lòng gia hạn trước.', 'Không thể cấp phát');
+                }
+                tempId = id; document.getElementById('assignLicenseName').textContent = licenseToAssign?.key_type; initAllUserDropdowns(); openModal('checkOutLicenseModal');
+            }
             else if (action === 'checkin-license') {
                 const licenseToCheckIn = licenses.find(l => l.id === id);
                 const fromUser = licenseToCheckIn?.user || 'Không rõ';
                 const licenseName = licenseToCheckIn?.key_type || 'license';
                 showConfirmationModal(`Thu hồi license từ ${fromUser}?`, async () => {
-                    await supabaseClient.from('licenses').update({ status: 'Stock', user_id: null }).eq('id', id);
+                    await supabaseClient.from('licenses').update({ status: 'Stock', user_id: null, assigned_date: null }).eq('id', id);
                     await addLog(id, 'LICENSE', 'Thu hồi', `Từ người dùng: ${fromUser}`);
                     await refreshApp();
                     showInfoModal(`Đã thu hồi "${licenseName}" từ ${fromUser}!`, 'Thu hồi thành công');
@@ -465,7 +680,51 @@ window.QLTSPageLicense.init = async function () {
             }
 
             else if (action === 'delete-user') { if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal("Xóa nhân viên?", async () => { await supabaseClient.from('users').delete().eq('id', id); await addLog(id, 'USER', 'Xóa', 'Xóa nhân viên'); await refreshApp(); }); }
-            else if (action === 'edit-user') { const u = users.find(x => x.id === id); if (u) { document.getElementById('userId').value = u.id; document.getElementById('name').value = u.name; document.getElementById('email').value = u.email; document.getElementById('status').value = u.status; updateDropdowns(); document.getElementById('department').value = departments.find(d => d.name === u.department)?.id || ''; openModal('addUserModal'); } }
+            else if (action === 'edit-user') { const u = users.find(x => x.id === id); if (u) { document.getElementById('userId').value = u.id; document.getElementById('name').value = u.name; document.getElementById('email').value = u.email; document.getElementById('phone').value = u.phone || ''; document.getElementById('status').value = u.status; updateDropdowns(); document.getElementById('department').value = departments.find(d => d.name === u.department)?.id || ''; openModal('addUserModal'); } }
+            else if (action === 'scan-user') {
+                const u = users.find(x => x.id === id);
+                if (!u) return;
+                const uAssets = assets.filter(a => a.user_id === id);
+                const uLicenses = licenses.filter(l => l.user_id === id);
+                const assetsText = uAssets.length ? uAssets.map(a => a.name).join(', ') : 'Không có';
+                const licensesText = uLicenses.length ? uLicenses.map(l => `${l.key_type}${l.package_type ? ` (${l.package_type})` : ''}`).join(', ') : 'Không có';
+                const qrInfo = [
+                    `Tên: ${u.name || ''}`,
+                    `Email: ${u.email || ''}`,
+                    `SĐT: ${u.phone || ''}`,
+                    `Phòng ban: ${u.department || ''}`,
+                    `Tài sản đang giữ: ${assetsText}`,
+                    `License đang giữ: ${licensesText}`
+                ].join('\n');
+
+                const qrContainer = document.getElementById('userQrCode');
+                if (qrContainer) {
+                    qrContainer.innerHTML = '';
+                    try {
+                        if (typeof window.qrcode === 'function') {
+                            if (window.qrcode.stringToBytesFuncs && window.qrcode.stringToBytesFuncs['UTF-8']) {
+                                window.qrcode.stringToBytes = window.qrcode.stringToBytesFuncs['UTF-8'];
+                            }
+                            const qr = window.qrcode(0, 'M');
+                            qr.addData(qrInfo);
+                            qr.make();
+                            qrContainer.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2 });
+                        }
+                    } catch (err) { console.warn('QRCode render failed', err); }
+                }
+                const infoEl = document.getElementById('userQrInfo');
+                if (infoEl) {
+                    infoEl.innerHTML = `
+                        <p><strong>Tên:</strong> ${u.name || ''}</p>
+                        <p><strong>Email:</strong> ${u.email || ''}</p>
+                        <p><strong>SĐT:</strong> ${u.phone || 'Chưa có'}</p>
+                        <p><strong>Phòng ban:</strong> ${u.department || ''}</p>
+                        <p><strong>Tài sản đang giữ:</strong> ${assetsText}</p>
+                        <p><strong>License đang giữ:</strong> ${licensesText}</p>
+                    `;
+                }
+                openModal('userQrModal');
+            }
 
             else if (action === 'delete-cat') {
                 const catName = categories.find(c => c.id === id)?.name || '';
@@ -485,6 +744,61 @@ window.QLTSPageLicense.init = async function () {
             else if (action === 'edit-dept') { document.getElementById('deptName').value = actionBtn.dataset.name; document.getElementById('deptId').value = id; document.getElementById('cancelDeptEdit').classList.remove('hidden'); }
             else if (action === 'delete-lic-type') { const typeName = licenseTypes.find(t => t.id === id)?.name || ''; showConfirmationModal("Xóa loại key?", async () => { await supabaseClient.from('license_types').delete().eq('id', id); await addLog(id, 'LICENSE_TYPE', 'Xóa', typeName); await refreshApp(); renderLists(); }); }
             else if (action === 'edit-lic-type') { document.getElementById('licenseTypeName').value = actionBtn.dataset.name; document.getElementById('licenseTypeId').value = id; document.getElementById('btnCancelLicenseTypeEdit').classList.remove('hidden'); }
+            else if (action === 'delete-supplier') {
+                const supplierName = suppliers.find(s => s.id === id)?.name || '';
+                if (assets.some(a => a.supplier_id === id)) {
+                    return showInfoModal(`Không thể xóa nhà cung cấp "${supplierName}" vì vẫn còn tài sản liên kết.`, 'Không thể xóa');
+                }
+                showConfirmationModal("Xóa nhà cung cấp?", async () => { await supabaseClient.from('suppliers').delete().eq('id', id); await addLog(id, 'SUPPLIER', 'Xóa', supplierName); await refreshApp(); renderLists(); updateDropdowns(); });
+            }
+            else if (action === 'edit-supplier') {
+                const s = suppliers.find(x => x.id === id);
+                if (s) {
+                    document.getElementById('supplierId').value = s.id;
+                    document.getElementById('supplierName').value = s.name || '';
+                    document.getElementById('supplierContact').value = s.contact_person || '';
+                    document.getElementById('supplierPhone').value = s.phone || '';
+                    document.getElementById('supplierEmail').value = s.email || '';
+                    document.getElementById('supplierAddress').value = s.address || '';
+                    document.getElementById('supplierNotes').value = s.notes || '';
+                    document.getElementById('btnCancelSupplierEdit').classList.remove('hidden');
+                }
+            }
+            else if (action === 'edit-maint') {
+                const task = maintenanceTasks.find(m => m.id === id);
+                if (task && task.status === 'Hoàn thành' && currentUserProfile.role !== 'admin') {
+                    return showInfoModal('Lịch bảo trì đã hoàn thành, chỉ admin mới được sửa. Vui lòng "Mở lại" trước nếu cần chỉnh sửa.', 'Không thể sửa');
+                }
+                if (task) {
+                    document.getElementById('maintenance_id').value = task.id;
+                    document.getElementById('maintenance_asset').value = task.asset_id || '';
+                    document.getElementById('maintenance_title').value = task.title || '';
+                    document.getElementById('maintenance_due').value = task.due_date ? task.due_date.toString().substring(0, 10) : '';
+                    const noteRaw = task.note || '';
+                    const priorityMatch = /^Ưu tiên:\s*(\w+)\s*\|?\s*/.exec(noteRaw);
+                    document.getElementById('maintenance_priority').value = priorityMatch ? priorityMatch[1] : 'normal';
+                    document.getElementById('maintenance_desc').value = priorityMatch ? noteRaw.slice(priorityMatch[0].length) : noteRaw;
+                    updateDropdowns();
+                    document.getElementById('maintenanceModalTitle').textContent = 'Sửa lịch bảo trì';
+                    openModal('maintenanceModal');
+                }
+            }
+            else if (action === 'edit-stock') {
+                const item = stockChecks.find(s => s.id === id);
+                if (item && item.status === 'Hoàn thành' && currentUserProfile.role !== 'admin') {
+                    return showInfoModal('Đợt kiểm kê đã hoàn thành, chỉ admin mới được sửa. Vui lòng "Mở lại" trước nếu cần chỉnh sửa.', 'Không thể sửa');
+                }
+                if (item) {
+                    document.getElementById('stockcheck_id').value = item.id;
+                    document.getElementById('stockcheck_date').value = item.started_at ? item.started_at.toString().substring(0, 10) : '';
+                    const noteRaw = item.note || '';
+                    const nameMatch = /^Tên đợt:\s*([^|]*?)\s*(\||$)/.exec(noteRaw);
+                    document.getElementById('stockcheck_name').value = nameMatch ? nameMatch[1] : '';
+                    document.getElementById('stockcheck_notes').value = nameMatch ? noteRaw.slice(nameMatch[0].length).trim() : noteRaw;
+                    document.getElementById('stockCheckModalTitle').textContent = 'Sửa đợt kiểm kê';
+                    openModal('stockCheckModal');
+                }
+            }
             else if (action === 'delete-maint') {
                 const task = maintenanceTasks.find(t => t.id === id);
                 if (task && task.status === 'Hoàn thành' && currentUserProfile.role !== 'admin') {
@@ -508,6 +822,17 @@ window.QLTSPageLicense.init = async function () {
                     showInfoModal(`Đã đánh dấu "${task?.title || 'lịch bảo trì'}" hoàn thành!`, 'Cập nhật thành công');
                 });
             }
+            else if (action === 'reopen-maint') {
+                if (currentUserProfile.role !== 'admin') return showInfoModal('Chỉ admin mới được mở lại lịch bảo trì đã hoàn thành.', 'Không có quyền');
+                const task = maintenanceTasks.find(t => t.id === id);
+                showConfirmationModal("Mở lại lịch bảo trì này (chuyển về Chưa xử lý)?", async () => {
+                    const { error } = await supabaseClient.from('maintenance_tasks').update({ status: 'Chưa xử lý' }).eq('id', id);
+                    if (error) return handleSupabaseError(error, 'mở lại lịch bảo trì');
+                    if (task?.asset_id) await addLog(task.asset_id, 'MAINT', 'Mở lại', `Mở lại lịch bảo trì: ${task.title || ''}`);
+                    await refreshApp();
+                    showInfoModal('Đã mở lại lịch bảo trì!', 'Cập nhật thành công');
+                });
+            }
             else if (action === 'delete-stock') {
                 const stockCheck = stockChecks.find(s => s.id === id);
                 if (stockCheck && stockCheck.status === 'Hoàn thành' && currentUserProfile.role !== 'admin') {
@@ -516,6 +841,8 @@ window.QLTSPageLicense.init = async function () {
                 showConfirmationModal("Xóa đợt kiểm kê này?", async () => {
                     const { error } = await supabaseClient.from('stock_checks').delete().eq('id', id);
                     if (error) return handleSupabaseError(error, 'xóa đợt kiểm kê');
+                    // Dọn luôn checklist con để không để lại dữ liệu mồ côi trỏ tới đợt kiểm kê đã xóa
+                    await supabaseClient.from('stock_check_items').delete().eq('stock_check_id', id);
                     await addLog(id, 'STOCK_CHECK', 'Xóa', stockCheck?.note || '');
                     await refreshApp();
                     showInfoModal('Đã xóa đợt kiểm kê!', 'Xóa thành công');
@@ -531,8 +858,35 @@ window.QLTSPageLicense.init = async function () {
                     showInfoModal('Đã đánh dấu đợt kiểm kê hoàn thành!', 'Cập nhật thành công');
                 });
             }
+            else if (action === 'reopen-stock') {
+                if (currentUserProfile.role !== 'admin') return showInfoModal('Chỉ admin mới được mở lại đợt kiểm kê đã hoàn thành.', 'Không có quyền');
+                const stockCheck = stockChecks.find(s => s.id === id);
+                showConfirmationModal("Mở lại đợt kiểm kê này (chuyển về Đang mở)?", async () => {
+                    const { error } = await supabaseClient.from('stock_checks').update({ status: 'Đang mở' }).eq('id', id);
+                    if (error) return handleSupabaseError(error, 'mở lại đợt kiểm kê');
+                    await addLog(id, 'STOCK_CHECK', 'Mở lại', stockCheck?.note || '');
+                    await refreshApp();
+                    showInfoModal('Đã mở lại đợt kiểm kê!', 'Cập nhật thành công');
+                });
+            }
             else if (action === 'print-asset-label') openPrintLabelModal('asset', [id]);
             else if (action === 'print-license-label') openPrintLabelModal('license', [id]);
+            else if (action === 'toggle-stockcheck-item') {
+                const itemId = parseInt(actionBtn.dataset.itemId, 10);
+                const item = stockCheckItems.find(i => i.id === itemId);
+                if (item) {
+                    // [RÀNG BUỘC] Đợt kiểm kê đã "Hoàn thành" (đóng) thì không được tick/sửa checklist nữa -
+                    // phải "Mở lại" đợt kiểm kê (chỉ admin) trước khi thao tác tiếp.
+                    const parentCheck = stockChecks.find(s => s.id === item.stock_check_id);
+                    if (parentCheck && parentCheck.status === 'Hoàn thành') {
+                        return showInfoModal('Đợt kiểm kê này đã đóng (Hoàn thành). Vui lòng "Mở lại" đợt kiểm kê trước khi thao tác.', 'Không thể thao tác');
+                    }
+                    const newStatus = item.status === 'matched' ? 'missing' : 'matched';
+                    await supabaseClient.from('stock_check_items').update({ status: newStatus, checked_at: new Date().toISOString() }).eq('id', itemId);
+                    item.status = newStatus;
+                    renderStockCheckDetail(item.stock_check_id);
+                }
+            }
         }
     });
 
@@ -644,6 +998,188 @@ window.QLTSPageLicense.init = async function () {
     }
 
     document.getElementById('btnDoPrintLabels')?.addEventListener('click', () => window.print());
+
+    // =================================================================
+    // [MỚI] QUÉT MÃ QR BẰNG CAMERA - cấp phát/thu hồi nhanh & kiểm kê
+    // =================================================================
+    let html5QrCodeInstance = null;
+    let activeStockCheckIdForScan = null; // != null khi đang quét trong phiên kiểm kê
+    let lastQrScanResult = null; // { type: 'asset'|'license', item }
+
+    async function stopQrScanner() {
+        if (html5QrCodeInstance) {
+            try { await html5QrCodeInstance.stop(); html5QrCodeInstance.clear(); } catch (e) { /* đã dừng sẵn */ }
+            html5QrCodeInstance = null;
+        }
+    }
+
+    function parseQrContent(text) {
+        const assetMatch = /Mã tài sản:\s*([^\n\r]+)/.exec(text || '');
+        if (assetMatch) return { type: 'asset', code: assetMatch[1].trim() };
+        const licenseMatch = /Mã license:\s*([^\n\r]+)/.exec(text || '');
+        if (licenseMatch) return { type: 'license', code: licenseMatch[1].trim() };
+        return null;
+    }
+
+    async function handleQrDecoded(text) {
+        const parsed = parseQrContent(text);
+        await stopQrScanner();
+        safeCloseModal('qrScannerModal');
+        if (!parsed) {
+            showInfoModal('Không nhận dạng được nội dung mã QR (không phải mã tài sản/license do hệ thống tạo). Có thể dùng ô dán nội dung để tra cứu thủ công.', 'Không nhận dạng được');
+            return;
+        }
+        showQrScanResult(parsed);
+    }
+
+    async function startQrScanner() {
+        const statusEl = document.getElementById('qrScannerStatus');
+        if (typeof Html5Qrcode === 'undefined') {
+            if (statusEl) statusEl.textContent = 'Không tải được thư viện quét QR (cần kết nối internet). Dùng ô dán nội dung bên dưới.';
+            return;
+        }
+        await stopQrScanner();
+        try {
+            html5QrCodeInstance = new Html5Qrcode('qrReaderContainer');
+            await html5QrCodeInstance.start(
+                { facingMode: 'environment' },
+                { fps: 10, qrbox: 220 },
+                (decodedText) => { handleQrDecoded(decodedText); },
+                () => { /* bỏ qua lỗi decode từng khung hình */ }
+            );
+            if (statusEl) statusEl.textContent = 'Đưa mã QR vào khung hình để quét...';
+        } catch (err) {
+            console.warn('Không thể khởi động camera:', err);
+            if (statusEl) statusEl.textContent = 'Không truy cập được camera. Vui lòng dùng ô dán nội dung bên dưới.';
+        }
+    }
+
+    function showQrScanResult(parsed) {
+        const item = parsed.type === 'asset' ? assets.find(a => a.asset_code === parsed.code) : licenses.find(l => l.license_code === parsed.code);
+        if (!item) {
+            showInfoModal(`Không tìm thấy ${parsed.type === 'asset' ? 'tài sản' : 'license'} với mã "${parsed.code}" trong hệ thống.`, 'Không tìm thấy');
+            return;
+        }
+        lastQrScanResult = { type: parsed.type, item };
+        const titleEl = document.getElementById('qrScanResultTitle');
+        const statusEl = document.getElementById('qrScanResultStatus');
+        const userEl = document.getElementById('qrScanResultUser');
+        const actionsEl = document.getElementById('qrScanResultActions');
+        const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: '' };
+        if (titleEl) titleEl.textContent = parsed.type === 'asset' ? item.name : item.key_type;
+        if (statusEl) statusEl.innerHTML = `Mã: <b>${parsed.code}</b> &middot; <span class="px-2 py-0.5 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span>`;
+        if (userEl) userEl.textContent = item.user ? `Đang giữ bởi: ${item.user}` : '';
+
+        const btnClass = "w-full px-4 py-2.5 rounded-lg font-semibold text-white transition-all";
+        let actionsHtml = '';
+
+        if (activeStockCheckIdForScan && parsed.type === 'asset') {
+            actionsHtml = `<button id="qrActionMarkChecked" class="${btnClass} bg-green-600 hover:bg-green-700"><i class="fa-solid fa-check mr-1"></i>Đánh dấu đã kiểm kê</button>`;
+        } else if (parsed.type === 'asset') {
+            if (item.status === 'Stock') {
+                actionsHtml = `<button id="qrActionCheckout" class="${btnClass} bg-blue-600 hover:bg-blue-700"><i class="fa-solid fa-hand-holding-hand mr-1"></i>Cấp phát</button>`;
+            } else if (item.status === 'Active') {
+                actionsHtml = `<button id="qrActionCheckin" class="${btnClass} bg-yellow-500 hover:bg-yellow-600"><i class="fa-solid fa-rotate-left mr-1"></i>Thu hồi</button>`;
+            } else if (['Repair', 'Broken', 'Disposed'].includes(item.status)) {
+                actionsHtml = `<p class="text-xs text-red-500">Thiết bị đang ở trạng thái "${statusInfo.text}", không thể cấp phát.</p>`;
+            }
+        } else if (parsed.type === 'license') {
+            if (item.status === 'Stock') {
+                actionsHtml = `<button id="qrActionCheckoutLicense" class="${btnClass} bg-blue-600 hover:bg-blue-700"><i class="fa-solid fa-hand-holding-hand mr-1"></i>Cấp phát</button>`;
+            } else if (item.status === 'Active') {
+                actionsHtml = `<button id="qrActionCheckinLicense" class="${btnClass} bg-yellow-500 hover:bg-yellow-600"><i class="fa-solid fa-rotate-left mr-1"></i>Thu hồi</button>`;
+            } else if (item.status === 'Expired') {
+                actionsHtml = `<p class="text-xs text-red-500">License đã hết hạn, không thể cấp phát.</p>`;
+            }
+        }
+        if (actionsEl) actionsEl.innerHTML = actionsHtml || '<p class="text-xs text-slate-400">Không có hành động khả dụng.</p>';
+        openModal('qrScanResultModal');
+    }
+
+    document.getElementById('btnQrManualLookup')?.addEventListener('click', () => {
+        const text = document.getElementById('qrManualInput')?.value || '';
+        if (!text.trim()) return showInfoModal('Vui lòng dán nội dung mã QR trước.', 'Thiếu dữ liệu');
+        handleQrDecoded(text);
+        const manualInput = document.getElementById('qrManualInput');
+        if (manualInput) manualInput.value = '';
+    });
+
+    // Dừng camera khi đóng modal quét QR (đóng qua nút X / click nền / phím Escape)
+    document.getElementById('qrScannerModal')?.addEventListener('click', (e) => {
+        if (e.target.closest('.close-modal') || e.target === document.getElementById('qrScannerModal')) stopQrScanner();
+    });
+
+    // =================================================================
+    // [MỚI] KIỂM KÊ CHI TIẾT (checklist tài sản + quét QR)
+    // =================================================================
+    async function ensureStockCheckItemsGenerated(stockCheckId) {
+        const existing = stockCheckItems.filter(i => i.stock_check_id === stockCheckId);
+        if (existing.length > 0) return;
+        const eligibleAssets = assets.filter(a => a.status !== 'Disposed');
+        if (!eligibleAssets.length) return;
+        const now = new Date().toISOString();
+        const inserts = eligibleAssets.map(a => ({ stock_check_id: stockCheckId, asset_id: a.id, status: 'pending', created_at: now }));
+        await supabaseClient.from('stock_check_items').insert(inserts);
+        const res = await supabaseClient.from('stock_check_items').select('*');
+        stockCheckItems = res.data || [];
+    }
+
+    function renderStockCheckDetail(stockCheckId) {
+        const check = stockChecks.find(s => s.id === stockCheckId);
+        if (!check) return;
+        // [RÀNG BUỘC] Đợt kiểm kê "Hoàn thành" (đóng) thì khóa toàn bộ checklist (không tick/quét được
+        // nữa) - phải "Mở lại" (chỉ admin) trước khi thao tác tiếp.
+        const isClosed = check.status === 'Hoàn thành';
+        const titleEl = document.getElementById('stockCheckDetailTitle');
+        if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-clipboard-check mr-2"></i>${check.note || 'Đợt kiểm kê'}${isClosed ? ' <span class="ml-2 align-middle px-2 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"><i class="fa-solid fa-lock mr-1"></i>Đã đóng</span>' : ''}`;
+        const scanBtn = document.getElementById('btnStockCheckScan');
+        if (scanBtn) {
+            scanBtn.dataset.stockCheckId = stockCheckId;
+            scanBtn.classList.toggle('hidden', isClosed);
+        }
+
+        const items = stockCheckItems.filter(i => i.stock_check_id === stockCheckId);
+        const matchedCount = items.filter(i => i.status === 'matched').length;
+        const missingCount = items.length - matchedCount;
+        const summaryEl = document.getElementById('stockCheckDetailSummary');
+        if (summaryEl) summaryEl.innerHTML = `
+            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-700"><p class="text-2xl font-bold text-slate-700 dark:text-gray-200">${items.length}</p><p class="text-xs text-slate-400">Tổng số</p></div>
+            <div class="p-3 rounded-lg bg-green-50 dark:bg-green-900/30"><p class="text-2xl font-bold text-green-600 dark:text-green-400">${matchedCount}</p><p class="text-xs text-slate-400">Đã kiểm</p></div>
+            <div class="p-3 rounded-lg bg-red-50 dark:bg-red-900/30"><p class="text-2xl font-bold text-red-600 dark:text-red-400">${missingCount}</p><p class="text-xs text-slate-400">Còn thiếu</p></div>
+        `;
+
+        const tbody = document.getElementById('stockCheckItemsTableBody');
+        if (!tbody) return;
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">Không có tài sản nào để kiểm kê.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = items.map(i => {
+            const asset = assets.find(a => a.id === i.asset_id);
+            const isMatched = i.status === 'matched';
+            const actionCell = isClosed
+                ? '<span class="text-xs text-slate-400 italic">Đã khóa</span>'
+                : `<button data-action="toggle-stockcheck-item" data-item-id="${i.id}" class="text-xs px-2 py-1 rounded border dark:border-slate-600 dark:text-gray-200 hover:bg-slate-100 dark:hover:bg-slate-700">${isMatched ? 'Đánh dấu thiếu' : 'Đánh dấu đã kiểm'}</button>`;
+            return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                <td class="p-3 font-medium text-slate-700 dark:text-slate-100">${asset ? asset.name : `#${i.asset_id} (đã xóa)`}</td>
+                <td class="p-3 text-slate-500 dark:text-slate-300">${asset?.location || '-'}</td>
+                <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${isMatched ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'}">${isMatched ? 'Đã kiểm' : 'Còn thiếu'}</span></td>
+                <td class="p-3 text-right">${actionCell}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function openStockCheckDetail(stockCheckId) {
+        await ensureStockCheckItemsGenerated(stockCheckId);
+        renderStockCheckDetail(stockCheckId);
+        openModal('stockCheckDetailModal');
+    }
+    window.openStockCheckDetail = openStockCheckDetail;
+
+    document.getElementById('stockCheckDetailModal')?.addEventListener('click', (e) => {
+        if (e.target.closest('.close-modal') || e.target === document.getElementById('stockCheckDetailModal')) activeStockCheckIdForScan = null;
+    });
+
     // =================================================================
     // LOGIC CHUYỂN ĐỔI LICENSE (TRANSFER) & LỊCH SỬ (HISTORY)
     // =================================================================
@@ -735,6 +1271,7 @@ window.QLTSPageLicense.init = async function () {
                     .update({
                         user_id: newUserId,
                         status: 'Active', // Chuyển xong thì auto Active
+                        assigned_date: todayDateStrLocal(),
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', tempTransferLicenseId);

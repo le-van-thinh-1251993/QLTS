@@ -155,17 +155,26 @@ window.QLTSPageSettings.init = async function () {
         const newName = document.getElementById('profile-update-name').value;
         const newAvatar = document.getElementById('profile-update-avatar').value;
 
-        const { error } = await supabaseClient
-            .from('profiles')
-            .update({ full_name: newName, avatar_url: newAvatar })
-            .eq('id', currentUserProfile.id);
+        if (!currentUserProfile) {
+            showInfoModal('Không tìm thấy thông tin người dùng. Vui lòng tải lại trang.', 'Lỗi');
+            return;
+        }
 
-        if (error) {
-            handleSupabaseError(error, 'cập nhật profile');
-        } else {
+        // [LOCAL-ONLY] Chưa có đăng nhập cloud (mục Auth đang tạm ẩn) nên profile
+        // được lưu thẳng vào localStorage, không đi qua bảng 'profiles' của Supabase.
+        try {
+            const storedKey = 'qlts_current_user_profile';
+            let stored = {};
+            try { stored = JSON.parse(localStorage.getItem(storedKey) || '{}'); } catch (e) { stored = {}; }
+            const merged = { ...stored, ...currentUserProfile, full_name: newName, avatar_url: newAvatar };
+            localStorage.setItem(storedKey, JSON.stringify(merged));
+            currentUserProfile.full_name = newName;
+            currentUserProfile.avatar_url = newAvatar;
             showInfoModal('Cập nhật profile thành công!');
             safeCloseModal('editProfileModal');
-            await refreshApp(); // Refresh để cập nhật lại thông tin
+            await refreshApp();
+        } catch (err) {
+            handleSupabaseError(err, 'lưu profile');
         }
     });
 
@@ -182,14 +191,21 @@ window.QLTSPageSettings.init = async function () {
             return showInfoModal('Mật khẩu xác nhận không khớp.', 'Lỗi');
         }
 
-        const { error } = await supabase_auth_client.auth.updateUser({ password: newPassword });
-
-        if (error) {
-            handleSupabaseError(error, 'cập nhật mật khẩu');
-        } else {
-            showInfoModal('Cập nhật mật khẩu thành công!');
-            e.target.reset();
+        // If Supabase auth client exists, use it
+        if (typeof supabase_auth_client !== 'undefined' && supabase_auth_client && supabase_auth_client.auth && typeof supabase_auth_client.auth.updateUser === 'function') {
+            const { error } = await supabase_auth_client.auth.updateUser({ password: newPassword });
+            if (error) {
+                handleSupabaseError(error, 'cập nhật mật khẩu');
+            } else {
+                showInfoModal('Cập nhật mật khẩu thành công!');
+                e.target.reset();
+            }
+            return;
         }
+
+        // Local-only mode: not supported
+        showInfoModal('Đổi mật khẩu không được hỗ trợ ở chế độ local-only.', 'Lưu ý');
+        e.target.reset();
     });
 
     // Dark Mode Logic
@@ -277,21 +293,39 @@ window.QLTSPageSettings.init = async function () {
             e.preventDefault();
             return showInfoModal('Giá trị thu hồi không được lớn hơn giá trị mua.', 'Dữ liệu không hợp lệ');
         }
+        // [RÀNG BUỘC] Thiết bị đang "Hỏng"/"Sửa chữa"/"Đã thanh lý" thì không được cấp phát cho ai.
+        // Admin phải chuyển trạng thái về Trong kho/Đang dùng trước khi gán người dùng.
+        const assetStatusVal = document.getElementById('modal_assetStatus').value;
+        const hasAssetUserSelected = !!(userChoicesInstance?.getValue(true));
+        if (['Repair', 'Broken', 'Disposed'].includes(assetStatusVal) && hasAssetUserSelected) {
+            e.preventDefault();
+            return showInfoModal('Thiết bị đang ở trạng thái "Sửa chữa"/"Hỏng"/"Đã thanh lý" nên không thể cấp phát cho người dùng. Vui lòng bỏ chọn người dùng hoặc cập nhật lại trạng thái trước khi lưu.', 'Không thể cấp phát');
+        }
+        if (assetStatusVal === 'Disposed' && !document.getElementById('modal_assetDisposedDate').value) {
+            e.preventDefault();
+            return showInfoModal('Vui lòng nhập ngày thanh lý.', 'Thiếu thông tin');
+        }
         return handleFormSubmit(e, 'assets', () => {
         const isNew = !document.getElementById('modal_assetId').value;
         const categoryId = parseInt(document.getElementById('modal_assetCategory').value);
         const assignedUser = users.find(u => u.name === userChoicesInstance?.getValue(true));
+        const supplierIdVal = document.getElementById('modal_assetSupplier').value;
+        const isDisposed = assetStatusVal === 'Disposed';
         const payload = {
             id: document.getElementById('modal_assetId').value,
             name: document.getElementById('modal_assetName').value,
             config: document.getElementById('modal_assetConfig').value,
             location: document.getElementById('modal_assetLocation').value,
             purchase_date: document.getElementById('modal_assetPurchaseDate').value || null,
+            supplier_id: supplierIdVal ? parseInt(supplierIdVal, 10) : null,
+            invoice_number: document.getElementById('modal_assetInvoiceNumber').value || null,
             cost: parseFloat(document.getElementById('modal_assetCost').value) || 0,
             salvage_value: parseFloat(document.getElementById('modal_assetSalvage').value) || 0,
             useful_life_months: parseInt(document.getElementById('modal_assetLife').value, 10) || null,
             depreciation_method: document.getElementById('modal_assetDepMethod').value || 'straight_line',
             status: document.getElementById('modal_assetStatus').value,
+            disposed_date: isDisposed ? (document.getElementById('modal_assetDisposedDate').value || null) : null,
+            disposed_reason: isDisposed ? (document.getElementById('modal_assetDisposedReason').value || null) : null,
             notes: document.getElementById('modal_assetNotes').value,
             category_id: categoryId,
             user_id: assignedUser?.id || null
@@ -324,6 +358,13 @@ window.QLTSPageSettings.init = async function () {
         if (expDateVal !== (expDateInput.dataset.originalValue || '') && isPastDateStr(expDateVal)) {
             e.preventDefault();
             return showInfoModal('Ngày hết hạn không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ');
+        }
+        // [RÀNG BUỘC] License đã hết hạn (kể cả hết hạn từ trước, đang giữ nguyên ngày cũ)
+        // thì không được cấp phát cho ai. Phải gia hạn (đổi ngày hết hạn) trước khi gán.
+        const hasLicenseUserSelected = !!(licenseUserChoicesInstance?.getValue(true));
+        if (isPastDateStr(expDateVal) && hasLicenseUserSelected) {
+            e.preventDefault();
+            return showInfoModal('License đã hết hạn nên không thể cấp phát cho người dùng. Vui lòng gia hạn (cập nhật ngày hết hạn) trước khi gán.', 'Không thể cấp phát');
         }
         return handleFormSubmit(e, 'licenses', () => {
         const isNew = !document.getElementById('modal_licenseId').value;
@@ -365,7 +406,7 @@ window.QLTSPageSettings.init = async function () {
             }
         }
         return handleFormSubmit(e, 'users', () => ({
-            id: userIdVal, name: document.getElementById('name').value, email: emailVal, department_id: document.getElementById('department').value || null, status: newStatus, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
+            id: userIdVal, name: document.getElementById('name').value, email: emailVal, phone: document.getElementById('phone').value || '', department_id: document.getElementById('department').value || null, status: newStatus, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
         }), 'addUserModal', (data, isUpdate) => addLog(data.id, 'USER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.email));
     });
 
@@ -373,58 +414,83 @@ window.QLTSPageSettings.init = async function () {
     document.getElementById('departmentForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'departments', () => ({ id: document.getElementById('deptId').value, name: document.getElementById('deptName').value }), 'departmentManagementModal', (data, isUpdate) => { addLog(data.id, 'DEPARTMENT', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name); renderLists(); }));
     document.getElementById('licenseTypeForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'license_types', () => ({ id: document.getElementById('licenseTypeId').value, name: document.getElementById('licenseTypeName').value }), 'licenseTypeModal', (data, isUpdate) => { addLog(data.id, 'LICENSE_TYPE', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name); renderLists(); }));
 
-    document.getElementById('maintenanceForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    document.getElementById('supplierForm')?.addEventListener('submit', (e) => {
+        const nameVal = document.getElementById('supplierName').value.trim();
+        if (!nameVal) {
+            e.preventDefault();
+            return showInfoModal('Vui lòng nhập tên nhà cung cấp.', 'Thiếu thông tin');
+        }
+        return handleFormSubmit(e, 'suppliers', () => ({
+            id: document.getElementById('supplierId').value,
+            name: nameVal,
+            contact_person: document.getElementById('supplierContact').value || null,
+            phone: document.getElementById('supplierPhone').value || null,
+            email: document.getElementById('supplierEmail').value || null,
+            address: document.getElementById('supplierAddress').value || null,
+            notes: document.getElementById('supplierNotes').value || null
+        }), null, (data, isUpdate) => {
+            addLog(data.id, 'SUPPLIER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name);
+            document.getElementById('supplierForm').reset();
+            document.getElementById('supplierId').value = '';
+            document.getElementById('btnCancelSupplierEdit').classList.add('hidden');
+            updateDropdowns();
+        });
+    });
+    document.getElementById('btnCancelSupplierEdit')?.addEventListener('click', () => {
+        document.getElementById('supplierForm').reset();
+        document.getElementById('supplierId').value = '';
+        document.getElementById('btnCancelSupplierEdit').classList.add('hidden');
+    });
+
+    document.getElementById('maintenanceForm')?.addEventListener('submit', (e) => {
         const titleVal = document.getElementById('maintenance_title').value;
-        if (!titleVal) return showInfoModal('Nhập tiêu đề lịch bảo trì');
+        if (!titleVal) { e.preventDefault(); return showInfoModal('Nhập tiêu đề lịch bảo trì'); }
         const dueDateVal = document.getElementById('maintenance_due').value;
-        if (isPastDateStr(dueDateVal)) return showInfoModal('Ngày dự kiến không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ');
-        const payload = {
-            asset_id: parseInt(document.getElementById('maintenance_asset').value, 10) || null,
-            title: titleVal,
-            due_date: dueDateVal || null,
-            status: 'Chưa xử lý',
-            created_by: currentUserProfile?.id || null
-        };
-        // Ghi chú tổng hợp: ưu tiên + mô tả
-        const priorityVal = document.getElementById('maintenance_priority').value || 'normal';
-        const descVal = document.getElementById('maintenance_desc').value;
-        const parts = [priorityVal && `Ưu tiên: ${priorityVal}`, descVal];
-        const noteText = parts.filter(Boolean).join(' | ');
-        if (noteText) payload.note = noteText;
-        const { error } = await supabaseClient.from('maintenance_tasks').insert(payload);
-        if (error) return handleSupabaseError(error, 'tạo lịch bảo trì');
-        if (payload.asset_id) await addLog(payload.asset_id, 'MAINT', 'Tạo lịch', titleVal || 'Lịch bảo trì');
-        showInfoModal('Đã lưu lịch bảo trì');
-        safeCloseModal('maintenanceModal');
-        await refreshApp();
+        if (isPastDateStr(dueDateVal)) { e.preventDefault(); return showInfoModal('Ngày dự kiến không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ'); }
+        return handleFormSubmit(e, 'maintenance_tasks', () => {
+            const idVal = document.getElementById('maintenance_id').value;
+            const payload = {
+                id: idVal,
+                asset_id: parseInt(document.getElementById('maintenance_asset').value, 10) || null,
+                title: titleVal,
+                due_date: dueDateVal || null
+            };
+            // Chỉ đặt trạng thái mặc định khi TẠO MỚI - khi sửa, giữ nguyên trạng thái hiện tại
+            // (Chưa xử lý/Đang xử lý/Hoàn thành...), tránh reset ngược 1 task đã xử lý.
+            if (!idVal) { payload.status = 'Chưa xử lý'; payload.created_by = currentUserProfile?.id || null; }
+            const priorityVal = document.getElementById('maintenance_priority').value || 'normal';
+            const descVal = document.getElementById('maintenance_desc').value;
+            const parts = [priorityVal && `Ưu tiên: ${priorityVal}`, descVal];
+            const noteText = parts.filter(Boolean).join(' | ');
+            payload.note = noteText || null;
+            return payload;
+        }, 'maintenanceModal', (data, isUpdate) => {
+            if (data?.asset_id) addLog(data.asset_id, 'MAINT', isUpdate ? 'Cập nhật' : 'Tạo lịch', titleVal || 'Lịch bảo trì');
+        });
     });
 
-    document.getElementById('stockCheckForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    document.getElementById('stockCheckForm')?.addEventListener('submit', (e) => {
         const dateVal = document.getElementById('stockcheck_date').value;
-        if (isPastDateStr(dateVal)) return showInfoModal('Ngày dự kiến không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ');
-        const payload = {
-            status: 'Đang mở',
-            created_by: currentUserProfile?.id || null
-        };
-        const nameVal = document.getElementById('stockcheck_name').value;
-        const extraNote = document.getElementById('stockcheck_notes').value;
-        // map date -> started_at, name/notes -> note to match existing columns
-        if (dateVal) payload.started_at = dateVal;
-        const mergedNote = [nameVal && `Tên đợt: ${nameVal}`, extraNote].filter(Boolean).join(' | ');
-        if (mergedNote) payload.note = mergedNote;
-        const { data, error } = await supabaseClient.from('stock_checks').insert(payload);
-        if (error) return handleSupabaseError(error, 'tạo đợt kiểm kê');
-        await addLog(data?.[0]?.id, 'STOCK_CHECK', 'Thêm mới', nameVal || 'Đợt kiểm kê');
-        showInfoModal('Đã tạo đợt kiểm kê');
-        safeCloseModal('stockCheckModal');
-        await refreshApp();
+        if (isPastDateStr(dateVal)) { e.preventDefault(); return showInfoModal('Ngày dự kiến không được nhỏ hơn ngày hiện tại.', 'Ngày không hợp lệ'); }
+        return handleFormSubmit(e, 'stock_checks', () => {
+            const idVal = document.getElementById('stockcheck_id').value;
+            const nameVal = document.getElementById('stockcheck_name').value;
+            const extraNote = document.getElementById('stockcheck_notes').value;
+            const payload = { id: idVal };
+            if (dateVal) payload.started_at = dateVal;
+            const mergedNote = [nameVal && `Tên đợt: ${nameVal}`, extraNote].filter(Boolean).join(' | ');
+            payload.note = mergedNote || null;
+            // Chỉ đặt trạng thái mặc định khi TẠO MỚI - khi sửa, giữ nguyên trạng thái hiện tại.
+            if (!idVal) { payload.status = 'Đang mở'; payload.created_by = currentUserProfile?.id || null; }
+            return payload;
+        }, 'stockCheckModal', (data, isUpdate) => {
+            addLog(data?.id, 'STOCK_CHECK', isUpdate ? 'Cập nhật' : 'Thêm mới', (document.getElementById('stockcheck_name')?.value) || 'Đợt kiểm kê');
+        });
     });
 
-    document.getElementById('btnConfirmAssign')?.addEventListener('click', async () => { const u = users.find(u => u.name === assignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const assetName = assets.find(a => a.id === tempId)?.name || 'tài sản'; await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); addLog(tempId, 'ASSET', 'Cấp phát', u.name); safeCloseModal('checkOutModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${assetName}" cho ${u.name}!`, 'Cấp phát thành công'); });
-    document.getElementById('btnConfirmAssignLicense')?.addEventListener('click', async () => { const u = users.find(u => u.name === licenseAssignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const licenseName = licenses.find(l => l.id === tempId)?.key_type || 'license'; await supabaseClient.from('licenses').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); addLog(tempId, 'LICENSE', 'Cấp phát', u.name); safeCloseModal('checkOutLicenseModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${licenseName}" cho ${u.name}!`, 'Cấp phát thành công'); });
-    document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const assetName = assets.find(a => a.id === tempId)?.name || 'tài sản'; const { error } = await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active' }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); showInfoModal(`Đã chuyển "${assetName}" sang ${u.name}!`, 'Chuyển đổi thành công'); } });
+    document.getElementById('btnConfirmAssign')?.addEventListener('click', async () => { const u = users.find(u => u.name === assignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const asset = assets.find(a => a.id === tempId); const assetName = asset?.name || 'tài sản'; if (asset && ['Repair', 'Broken'].includes(asset.status)) return showInfoModal('Thiết bị đang ở trạng thái "Sửa chữa"/"Hỏng" nên không thể cấp phát. Vui lòng cập nhật lại trạng thái trước.', 'Không thể cấp phát'); await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); addLog(tempId, 'ASSET', 'Cấp phát', u.name); safeCloseModal('checkOutModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${assetName}" cho ${u.name}!`, 'Cấp phát thành công'); });
+    document.getElementById('btnConfirmAssignLicense')?.addEventListener('click', async () => { const u = users.find(u => u.name === licenseAssignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const license = licenses.find(l => l.id === tempId); const licenseName = license?.key_type || 'license'; if (license && license.status === 'Expired') return showInfoModal('License đã hết hạn nên không thể cấp phát. Vui lòng gia hạn trước.', 'Không thể cấp phát'); await supabaseClient.from('licenses').update({ user_id: u.id, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); addLog(tempId, 'LICENSE', 'Cấp phát', u.name); safeCloseModal('checkOutLicenseModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${licenseName}" cho ${u.name}!`, 'Cấp phát thành công'); });
+    document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const assetName = assets.find(a => a.id === tempId)?.name || 'tài sản'; const { error } = await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); showInfoModal(`Đã chuyển "${assetName}" sang ${u.name}!`, 'Chuyển đổi thành công'); } });
 
     async function refreshApp(resetFilters = false) {
         await autoRestoreFromSupabaseIfNeeded();
@@ -551,7 +617,10 @@ window.QLTSPageSettings.init = async function () {
     } catch (err) { console.error('Error during startup modal/overlay cleanup', err); }
 
     // Load trang lần đầu - reset filter để đảm bảo trạng thái sạch
-    refreshApp(true);
+    refreshApp(true).then(() => {
+        // [MỚI] Nếu điều hướng tới từ modal Tìm kiếm toàn cục (?q=...), áp dụng từ khóa
+        if (typeof applyGlobalSearchParamIfAny === 'function') applyGlobalSearchParamIfAny();
+    });
 
     window.addTaiSan = () => {
     const location = [

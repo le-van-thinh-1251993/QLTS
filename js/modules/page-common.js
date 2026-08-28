@@ -1,5 +1,22 @@
 window.supabaseClient = window.supabaseClient || null;
-window.currentUserProfile = window.currentUserProfile || { role: 'admin', full_name: 'Admin' };
+
+// [LOCAL-ONLY] Không có đăng nhập cloud thật (mục Auth đang tạm ẩn), nên hồ sơ
+// người dùng hiện tại được lưu trực tiếp trong localStorage thay vì lấy từ Supabase
+// Auth. `id` cố định để "Chỉnh sửa Profile" có nơi để cập nhật/lưu lại.
+(function initLocalProfile() {
+    if (window.currentUserProfile && window.currentUserProfile.id) return;
+    const KEY = 'qlts_current_user_profile';
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { saved = {}; }
+    window.currentUserProfile = {
+        id: 'local-admin',
+        role: 'admin',
+        full_name: 'Admin',
+        email: '',
+        avatar_url: '',
+        ...saved
+    };
+})();
 window.remoteSupabaseClient = window.remoteSupabaseClient || null;
 window.hasAttemptedAutoRestore = !!window.hasAttemptedAutoRestore;
 
@@ -16,6 +33,7 @@ window.maintenanceTasks = window.maintenanceTasks || [];
 window.maintenanceEvents = window.maintenanceEvents || [];
 window.stockChecks = window.stockChecks || [];
 window.stockCheckItems = window.stockCheckItems || [];
+window.suppliers = window.suppliers || [];
 window.alertSettings = window.alertSettings || [];
 window.historyExportBuffer = window.historyExportBuffer || [];
 window.tempImportedUsers = window.tempImportedUsers || [];
@@ -62,6 +80,7 @@ window.STATUS_MAP = window.STATUS_MAP || {
     Stock: { text: 'Trong kho', classes: 'bg-sky-100 text-sky-700 border border-sky-200 dark:bg-sky-900/50 dark:text-sky-300 dark:border-sky-700' },
     Repair: { text: 'Sửa chữa', classes: 'bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300 dark:border-yellow-700' },
     Broken: { text: 'Hỏng', classes: 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-700' },
+    Disposed: { text: 'Đã thanh lý', classes: 'bg-slate-200 text-slate-600 border border-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600' },
     Expired: { text: 'Hết hạn', classes: 'bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' }
 };
 

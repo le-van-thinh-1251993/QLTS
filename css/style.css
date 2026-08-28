@@ -9,6 +9,16 @@ body {
     background-color: #f1f5f9; /* slate-100 */
 }
 
+/* [DARK MODE] Nhiều nút icon (Sửa/Xóa/Lịch sử/In tem/Hoàn thành...) chỉ đổi nền khi
+   hover bằng các class hover:bg-*-100/200 vốn không có biến thể dark:, khiến hover
+   lóe sáng giữa nền tối. Ép các hover-background phổ biến này sang tông tối phù hợp. */
+.dark .hover\:bg-green-100:hover { background-color: rgba(34, 197, 94, 0.2) !important; }
+.dark .hover\:bg-red-100:hover { background-color: rgba(239, 68, 68, 0.2) !important; }
+.dark .hover\:bg-blue-100:hover { background-color: rgba(59, 130, 246, 0.2) !important; }
+.dark .hover\:bg-indigo-100:hover { background-color: rgba(99, 102, 241, 0.2) !important; }
+.dark .hover\:bg-slate-100:hover { background-color: rgba(148, 163, 184, 0.15) !important; }
+.dark .hover\:bg-slate-200:hover { background-color: rgba(148, 163, 184, 0.2) !important; }
+
 /* Base form styling for consistent controls across pages */
 input,
 textarea,
@@ -73,11 +83,34 @@ button {
     font-weight: 600; /* font-semibold */
 }
 
-/* [DARK MODE OVERRIDE] Ép màu chữ trong bảng sang màu trắng ngà */
-.dark tbody td,
-.dark tbody td p,
-.dark tbody td span {
-    color: #E5E7EB !important; /* gray-200 */
+/* [DARK MODE OVERRIDE] Ép màu chữ trong bảng sang màu sáng dịu (không dùng badge
+   trạng thái đã tự khai báo màu riêng cho dark mode, vd dark:text-green-300, để
+   không làm mất màu phân biệt trạng thái). */
+.dark tbody td:not([class*="dark:text-"]),
+.dark tbody td p:not([class*="dark:text-"]),
+.dark tbody td span:not([class*="dark:text-"]) {
+    color: #CBD5E1 !important; /* slate-300 - dịu hơn gray-200 trước đây */
+}
+
+/* [DARK MODE SAFETY NET] Rất nhiều nơi trong giao diện dùng các class màu chữ tối
+   (text-slate-600/700/800/900, text-gray-600/700/800/900) nhưng thiếu biến thể
+   dark:text-*, khiến chữ (label, tiêu đề, badge, nút...) gần như đen, không đọc
+   được trên nền tối. Quy tắc dưới đây tự động đổi sang màu sáng dịu khi bật Dark
+   Mode, trừ khi phần tử đã tự khai báo màu riêng cho dark mode (có class chứa
+   "dark:text-") hoặc vẫn cố tình dùng nền sáng nguyên bản (bg-white/slate-50../
+   gray-50..) - những chỗ đó giữ nguyên cặp nền sáng - chữ tối để vẫn đọc được. */
+.dark .text-slate-900:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]),
+.dark .text-gray-900:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]) {
+    color: #E2E8F0 !important; /* slate-200 - dùng cho tiêu đề */
+}
+
+.dark .text-slate-600:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]),
+.dark .text-slate-700:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]),
+.dark .text-slate-800:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]),
+.dark .text-gray-600:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]),
+.dark .text-gray-700:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]),
+.dark .text-gray-800:not([class*="dark:text-"]):not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-slate-100"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]) {
+    color: #CBD5E1 !important; /* slate-300 - dùng cho phần chữ thường/nhãn */
 }
 
 /* [DARK MODE OVERRIDE] Đổi màu nền khi hover vào hàng trong bảng */
@@ -150,6 +183,7 @@ select option {
 .filters-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .filters-row .filter-control { display: flex; align-items: center; gap: 0.5rem; }
 .filters-row .filter-control label { white-space: nowrap; font-size: 0.875rem; color: #475569; }
+.dark .filters-row .filter-control label { color: #CBD5E1; }
 .filters-row .filter-control input[type="text"], .filters-row .filter-control select {
     max-width: 14rem; /* keep controls narrow */
     min-width: 8rem;
@@ -717,16 +751,29 @@ select:focus {
     break-inside: avoid;
 }
 
+.dark .label-card {
+    border-color: #475569;
+    background: #1e293b;
+}
+
 .label-card-title {
     font-weight: 600;
     font-size: 0.8rem;
     color: #1e293b;
 }
 
+.dark .label-card-title {
+    color: #f1f5f9;
+}
+
 .label-card-code {
     font-family: monospace;
     font-size: 0.75rem;
     color: #475569;
+}
+
+.dark .label-card-code {
+    color: #cbd5e1;
 }
 
 .label-barcode {

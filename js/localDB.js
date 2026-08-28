@@ -15,6 +15,7 @@ const LocalDB = {
         MAINTENANCE_EVENTS: 'qlts_maintenance_events',
         STOCK_CHECKS: 'qlts_stock_checks',
         STOCK_CHECK_ITEMS: 'qlts_stock_check_items',
+        SUPPLIERS: 'qlts_suppliers',
         ALERT_SETTINGS: 'qlts_alert_settings',
         COUNTER: 'qlts_id_counter'
     },
@@ -624,6 +625,12 @@ const LocalDB = {
             created_at: now
         }];
 
+        const suppliers = [
+            { id: 1, name: 'FPT Trading', contact_person: 'Nguyễn Văn Hùng', phone: '0901234567', email: 'sales@fpttrading.example.com', address: 'Hà Nội', notes: 'Nhà cung cấp laptop/desktop chính', created_at: now },
+            { id: 2, name: 'Synnex FPT', contact_person: 'Trần Thị Lan', phone: '0912345678', email: 'contact@synnexfpt.example.com', address: 'TP. Hồ Chí Minh', notes: 'Phân phối license bản quyền', created_at: now },
+            { id: 3, name: 'Digiworld', contact_person: 'Lê Minh Tuấn', phone: '0923456789', email: 'info@digiworld.example.com', address: 'TP. Hồ Chí Minh', notes: 'Thiết bị văn phòng, phụ kiện', created_at: now }
+        ];
+
         const defaultData = {
             departments,
             categories,
@@ -636,6 +643,7 @@ const LocalDB = {
             maintenance_events: maintenanceEvents,
             stock_checks: stockChecks,
             stock_check_items: stockCheckItems,
+            suppliers,
             alert_settings: alertSettings
         };
 
@@ -660,6 +668,7 @@ const LocalDB = {
             maintenance_events: maintenanceEvents.length + 1,
             stock_checks: stockChecks.length + 1,
             stock_check_items: stockCheckItems.length + 1,
+            suppliers: suppliers.length + 1,
             alert_settings: alertSettings.length + 1
         }));
 

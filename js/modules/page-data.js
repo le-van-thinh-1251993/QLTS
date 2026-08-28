@@ -22,7 +22,7 @@ window.QLTSPageData.init = async function () {
     async function fetchAllData() {
         console.log('fetchAllData() called');
         // Fetch all data from LocalDB
-        const [deptData, catData, userData, assetData, licenseData, historyData, licTypeData, maintenanceTaskData, maintenanceEventData, stockCheckData, stockCheckItemData, alertSettingData] = await Promise.all([
+        const [deptData, catData, userData, assetData, licenseData, historyData, licTypeData, maintenanceTaskData, maintenanceEventData, stockCheckData, stockCheckItemData, supplierData, alertSettingData] = await Promise.all([
             LocalDB.from('departments').select('*'),
             LocalDB.from('categories').select('*'),
             LocalDB.from('users').select('*'),
@@ -34,6 +34,7 @@ window.QLTSPageData.init = async function () {
             LocalDB.from('maintenance_events').select('*'),
             LocalDB.from('stock_checks').select('*'),
             LocalDB.from('stock_check_items').select('*'),
+            LocalDB.from('suppliers').select('*'),
             LocalDB.from('alert_settings').select('*')
         ]);
 
@@ -65,7 +66,10 @@ window.QLTSPageData.init = async function () {
         
         // Process license types
         licenseTypes = licTypeData.data || [];
-        
+
+        // Process suppliers
+        suppliers = supplierData.data || [];
+
         // Process users with department name join
         const usersRaw = userData.data || [];
         users = usersRaw.map(u => {
@@ -83,10 +87,12 @@ window.QLTSPageData.init = async function () {
         assets = assetsRaw.map(a => {
             const cat = categories.find(c => c.id === a.category_id);
             const usr = users.find(u => u.id === a.user_id);
+            const supplier = suppliers.find(s => s.id === a.supplier_id);
             return {
                 ...a,
                 category: cat ? cat.name : '-',
                 user: usr ? usr.name : null,
+                supplier: supplier ? supplier.name : null,
                 warranty_expiration_date: a.warranty_expiration_date || null,
                 purchase_date: a.purchase_date || null,
                 cost: a.cost || null,
@@ -450,22 +456,27 @@ window.QLTSPageData.init = async function () {
             const assetName = assets.find(a => a.id === task.asset_id)?.name || 'N/A';
             const isDone = task.status === DONE_STATUS;
             const statusClass = {
-                'Chưa xử lý': 'bg-amber-100 text-amber-700',
-                'Đang xử lý': 'bg-sky-100 text-sky-700',
-                'Hoàn thành': 'bg-green-100 text-green-700',
-                'Quá hạn': 'bg-red-100 text-red-700'
-            }[task.status] || 'bg-slate-100 text-slate-600';
-            const canDelete = !isDone || isAdmin;
+                'Chưa xử lý': 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+                'Đang xử lý': 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
+                'Hoàn thành': 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+                'Quá hạn': 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+            }[task.status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+            // [RÀNG BUỘC] Lịch bảo trì đã "Hoàn thành" thì khóa Sửa/Xóa với người không phải admin
+            // (trước đây chỉ Xóa bị khóa, Sửa vẫn tự do - không nhất quán). Admin có thể "Mở lại".
+            const isLocked = isDone && !isAdmin;
+            const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
             return `
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 maintenance-row cursor-pointer" data-id="${task.id}">
                     <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${task.title || '-'}</td>
                     <td class="p-3 text-slate-700 dark:text-slate-200">${assetName}</td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(task.due_date)}</td>
                     <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${task.status || '-'}</span></td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${task.note || '-'}</td>
                     <td class="p-3 text-right whitespace-nowrap">
-                        ${!isDone ? `<button class="text-green-600 hover:text-green-700 text-sm mr-3" data-action="complete-maint" data-id="${task.id}">Hoàn thành</button>` : ''}
-                        ${canDelete ? `<button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-maint" data-id="${task.id}">Xóa</button>` : '<span class="text-xs text-slate-400 italic">Đã khóa</span>'}
+                        <div class="flex gap-2 justify-end">
+                            ${!isDone ? `<div class="tooltip"><button data-action="complete-maint" data-id="${task.id}" class="${btnClasses} text-green-600 hover:bg-green-100"><i class="fa-solid fa-check"></i></button><span class="tooltiptext">Hoàn thành</span></div>` : (isAdmin ? `<div class="tooltip"><button data-action="reopen-maint" data-id="${task.id}" class="${btnClasses} text-amber-600 hover:bg-amber-100"><i class="fa-solid fa-rotate-left"></i></button><span class="tooltiptext">Mở lại</span></div>` : '')}
+                            ${!isLocked ? `<div class="tooltip"><button data-action="edit-maint" data-id="${task.id}" class="${btnClasses} text-blue-600 hover:bg-blue-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-maint" data-id="${task.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div>` : '<span class="text-xs text-slate-400 italic self-center">Đã khóa</span>'}
+                        </div>
                     </td>
                 </tr>`;
         });
@@ -490,19 +501,24 @@ window.QLTSPageData.init = async function () {
         const rows = pageItems.map(item => {
             const isDone = item.status === DONE_STATUS;
             const statusClass = {
-                'Đang mở': 'bg-cyan-100 text-cyan-700',
-                'Hoàn thành': 'bg-green-100 text-green-700'
-            }[item.status] || 'bg-slate-100 text-slate-600';
-            const canDelete = !isDone || isAdmin;
+                'Đang mở': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300',
+                'Hoàn thành': 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+            }[item.status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+            // [RÀNG BUỘC] Đợt kiểm kê đã "Hoàn thành" (đóng) thì khóa Sửa/Xóa + toàn bộ checklist
+            // với người không phải admin. Admin có thể "Mở lại" để tiếp tục thao tác.
+            const isLocked = isDone && !isAdmin;
+            const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
             return `
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 stock-row cursor-pointer" data-id="${item.id}">
                     <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${item.note || '-'}</td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(item.started_at)}</td>
                     <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${item.status || '-'}</span></td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${item.note ? item.note : '-'}</td>
                     <td class="p-3 text-right whitespace-nowrap">
-                        ${!isDone ? `<button class="text-green-600 hover:text-green-700 text-sm mr-3" data-action="complete-stock" data-id="${item.id}">Hoàn thành</button>` : ''}
-                        ${canDelete ? `<button class="text-red-600 hover:text-red-700 text-sm" data-action="delete-stock" data-id="${item.id}">Xóa</button>` : '<span class="text-xs text-slate-400 italic">Đã khóa</span>'}
+                        <div class="flex gap-2 justify-end">
+                            ${!isDone ? `<div class="tooltip"><button data-action="complete-stock" data-id="${item.id}" class="${btnClasses} text-green-600 hover:bg-green-100"><i class="fa-solid fa-check"></i></button><span class="tooltiptext">Hoàn thành</span></div>` : (isAdmin ? `<div class="tooltip"><button data-action="reopen-stock" data-id="${item.id}" class="${btnClasses} text-amber-600 hover:bg-amber-100"><i class="fa-solid fa-rotate-left"></i></button><span class="tooltiptext">Mở lại</span></div>` : '')}
+                            ${!isLocked ? `<div class="tooltip"><button data-action="edit-stock" data-id="${item.id}" class="${btnClasses} text-blue-600 hover:bg-blue-100"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-stock" data-id="${item.id}" class="${btnClasses} text-red-600 hover:bg-red-100"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div>` : '<span class="text-xs text-slate-400 italic self-center">Đã khóa</span>'}
+                        </div>
                     </td>
                 </tr>`;
         });
@@ -617,7 +633,7 @@ window.QLTSPageData.init = async function () {
             }
 
             const statusText = STATUS_MAP[status]?.text || status;
-            const statusClass = status === 'Active' ? 'bg-green-100 text-green-700' : status === 'Stock' ? 'bg-sky-100 text-sky-700' : status === 'Expired' ? 'bg-gray-100 text-gray-500' : 'bg-slate-100 text-slate-600';
+            const statusClass = status === 'Active' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' : status === 'Stock' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300' : status === 'Expired' ? 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
 
             tempImportedLicenses.push({
                 key_type: keyType,
@@ -718,6 +734,62 @@ window.QLTSPageData.init = async function () {
             }
         });
     }
+    // =================================================================
+    // [MỚI] TÌM KIẾM TOÀN CỤC (Tài sản + License + Nhân viên)
+    // =================================================================
+    function performGlobalSearch(term) {
+        const q = normalizeString(term);
+        if (!q) return { assetsRes: [], licensesRes: [], usersRes: [] };
+        const assetsRes = assets.filter(a => normalizeString([a.name, a.asset_code, a.config, a.category, a.user, a.location].filter(Boolean).join(' ')).includes(q)).slice(0, 8);
+        const licensesRes = licenses.filter(l => normalizeString([l.key_type, l.license_key, l.license_code, l.user, l.package_type].filter(Boolean).join(' ')).includes(q)).slice(0, 8);
+        const usersRes = users.filter(u => normalizeString([u.name, u.email, u.department, u.phone].filter(Boolean).join(' ')).includes(q)).slice(0, 8);
+        return { assetsRes, licensesRes, usersRes };
+    }
+
+    function renderGlobalSearchResults(term) {
+        const container = document.getElementById('globalSearchResults');
+        if (!container) return;
+        const q = (term || '').trim();
+        if (!q) { container.innerHTML = '<p class="text-sm text-slate-400 text-center p-4">Nhập từ khóa để tìm kiếm...</p>'; return; }
+        const { assetsRes, licensesRes, usersRes } = performGlobalSearch(q);
+        if (!assetsRes.length && !licensesRes.length && !usersRes.length) {
+            container.innerHTML = '<p class="text-sm text-slate-400 text-center p-4">Không tìm thấy kết quả nào.</p>';
+            return;
+        }
+        const escapedQ = encodeURIComponent(q);
+        const row = (icon, color, title, subtitle, href) => `
+            <a href="${href}" class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+                <i class="fa-solid ${icon} ${color} w-5 text-center"></i>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-slate-700 dark:text-gray-200 truncate">${title}</p>
+                    <p class="text-xs text-slate-400 truncate">${subtitle}</p>
+                </div>
+            </a>`;
+        const section = (title, items) => items.length ? `<div class="mb-2"><p class="text-xs font-bold text-slate-400 uppercase px-2 py-1">${title} (${items.length})</p>${items.join('')}</div>` : '';
+
+        container.innerHTML = [
+            section('Tài sản', assetsRes.map(a => row('fa-box', 'text-blue-500', a.name, [a.asset_code, a.user ? `Người dùng: ${a.user}` : null].filter(Boolean).join(' • ') || a.category || '', `assets.html?q=${escapedQ}`))),
+            section('License', licensesRes.map(l => row('fa-key', 'text-green-500', l.key_type, [l.license_key, l.user ? `Người dùng: ${l.user}` : null].filter(Boolean).join(' • '), `licenses.html?q=${escapedQ}`))),
+            section('Nhân viên', usersRes.map(u => row('fa-user', 'text-indigo-500', u.name, [u.email, u.department].filter(Boolean).join(' • '), `users.html?q=${escapedQ}`)))
+        ].join('');
+    }
+
+    // Nếu được điều hướng tới từ modal tìm kiếm toàn cục (?q=...), tự áp dụng từ khóa
+    // vào ô tìm kiếm sẵn có của trang này ngay khi tải xong dữ liệu lần đầu.
+    function applyGlobalSearchParamIfAny() {
+        const params = new URLSearchParams(window.location.search);
+        const q = params.get('q');
+        if (!q) return;
+        const assetInput = document.getElementById('searchInput');
+        if (assetInput && document.getElementById('assetTableBody')) { assetInput.value = q; window.applyAssetFilters(); return; }
+        if (assetInput && document.getElementById('licenseTableBody')) { assetInput.value = q; window.applyLicenseFilters(); return; }
+        const userInput = document.getElementById('searchUserInput');
+        if (userInput) { userInput.value = q; window.applyUserFilters(); }
+    }
+
+    window.performGlobalSearch = performGlobalSearch;
+    window.renderGlobalSearchResults = renderGlobalSearchResults;
+    window.applyGlobalSearchParamIfAny = applyGlobalSearchParamIfAny;
     window.fetchAllData = fetchAllData;
     window.safeCloseModal = safeCloseModal;
     window.attemptCloseModal = attemptCloseModal;

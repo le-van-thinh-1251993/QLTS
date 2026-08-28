@@ -15,10 +15,10 @@ window.QLTSPageDashboard.init = async function () {
         } else {
             tbody.innerHTML = items.map(item => {
                 if (type === 'asset') {
-                    const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+                    const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
                     return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.name}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.config || '-'}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || '-'}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
                 } else {
-                    const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+                    const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
                     return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.key_type}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.license_key || '-'}</td><td class="p-3 text-sm">${item.expiration_date || 'Vĩnh viễn'}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || '-'}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
                 }
             }).join('');
@@ -268,23 +268,23 @@ window.QLTSPageDashboard.init = async function () {
 
         // Nút Trước
         const prevDisabled = currentPage === 1;
-        const prevClass = prevDisabled ? 'pointer-events-none opacity-50 bg-gray-100 text-gray-400' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700';
-        html += `<li><a href="javascript:void(0)" data-page="${currentPage - 1}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 ml-0 leading-tight border border-slate-300 rounded-l-lg ${prevClass}">Trước</a></li>`;
+        const prevClass = prevDisabled ? 'pointer-events-none opacity-50 bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-white';
+        html += `<li><a href="javascript:void(0)" data-page="${currentPage - 1}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 ml-0 leading-tight border border-slate-300 dark:border-slate-600 rounded-l-lg ${prevClass}">Trước</a></li>`;
 
         // Các nút số trang (Dùng danh sách rút gọn)
         rangeWithDots.forEach(page => {
             if (page === '...') {
-                html += `<li><span class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-slate-300">...</span></li>`;
+                html += `<li><span class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">...</span></li>`;
             } else {
-                const active = (page === currentPage) ? 'z-10 text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700';
-                html += `<li><a href="javascript:void(0)" data-page="${page}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 leading-tight border border-slate-300 ${active}">${page}</a></li>`;
+                const active = (page === currentPage) ? 'z-10 text-blue-600 border-blue-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:bg-blue-900/50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-800' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-white';
+                html += `<li><a href="javascript:void(0)" data-page="${page}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 leading-tight border border-slate-300 dark:border-slate-600 ${active}">${page}</a></li>`;
             }
         });
 
         // Nút Sau
         const nextDisabled = currentPage === totalPages;
-        const nextClass = nextDisabled ? 'pointer-events-none opacity-50 bg-gray-100 text-gray-400' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700';
-        html += `<li><a href="javascript:void(0)" data-page="${currentPage + 1}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 leading-tight border border-slate-300 rounded-r-lg ${nextClass}">Sau</a></li></ul>`;
+        const nextClass = nextDisabled ? 'pointer-events-none opacity-50 bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500' : 'text-slate-500 bg-white hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-white';
+        html += `<li><a href="javascript:void(0)" data-page="${currentPage + 1}" data-table="${tableType}" class="flex items-center justify-center px-3 h-8 leading-tight border border-slate-300 dark:border-slate-600 rounded-r-lg ${nextClass}">Sau</a></li></ul>`;
 
         container.innerHTML = html;
     }
@@ -297,7 +297,7 @@ window.QLTSPageDashboard.init = async function () {
         const pageData = data.slice(start, start + ITEMS_PER_PAGE);
         if (pageData.length === 0) { tbody.innerHTML = `<tr><td colspan="11" class="p-8 text-center text-slate-400">Không có dữ liệu.</td></tr>`; renderPagination('assetPagination', 1, 0, ITEMS_PER_PAGE, 'assets'); return; }
         tbody.innerHTML = pageData.map(item => {
-            const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+            const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
             const isAdmin = currentUserProfile.role === 'admin';
             let btns = '';
             const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
@@ -307,7 +307,7 @@ window.QLTSPageDashboard.init = async function () {
                     btns = `<div class="tooltip"><button data-action="checkout-asset" data-id="${item.id}" class="${btnClasses} bg-blue-600 text-white hover:bg-blue-700"><i class="fa-solid fa-hand-holding-hand"></i></button><span class="tooltiptext">Cấp phát</span></div>`;
                 } else if (item.status === 'Active') {
                     btns = `<div class="tooltip"><button data-action="checkin-asset" data-id="${item.id}" class="${btnClasses} bg-yellow-500 text-white hover:bg-yellow-600"><i class="fa-solid fa-rotate-left"></i></button><span class="tooltiptext">Thu hồi</span></div>
-                            <div class="tooltip"><button data-action="transfer" data-id="${item.id}" class="${btnClasses} text-blue-600 bg-blue-100 hover:bg-blue-200"><i class="fa-solid fa-right-left"></i></button><span class="tooltiptext">Chuyển đổi</span></div>`;
+                            <div class="tooltip"><button data-action="transfer" data-id="${item.id}" class="${btnClasses} text-blue-600 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:hover:bg-blue-800"><i class="fa-solid fa-right-left"></i></button><span class="tooltiptext">Chuyển đổi</span></div>`;
                 }
             }
 
@@ -345,7 +345,7 @@ window.QLTSPageDashboard.init = async function () {
         const pageData = data.slice(start, start + ITEMS_PER_PAGE);
 
         tbody.innerHTML = pageData.map(item => {
-            const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100' };
+            const status = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
             const isAdmin = currentUserProfile.role === 'admin';
 
             // --- CẬP NHẬT PHẦN NÚT BẤM (ACTIONS) ---
@@ -360,7 +360,7 @@ window.QLTSPageDashboard.init = async function () {
                     // Nút Thu hồi (Checkin)
                     btns += `<div class="tooltip"><button data-action="checkin-license" data-id="${item.id}" class="${btnClasses} bg-yellow-500 text-white hover:bg-yellow-600"><i class="fa-solid fa-rotate-left"></i></button><span class="tooltiptext">Thu hồi</span></div>`;
                     // Nút Chuyển đổi (Transfer) - Mới thêm
-                    btns += `<div class="tooltip"><button data-action="transfer-license" data-id="${item.id}" class="${btnClasses} bg-indigo-100 text-indigo-600 hover:bg-indigo-200"><i class="fa-solid fa-right-left"></i></button><span class="tooltiptext">Chuyển đổi</span></div>`;
+                    btns += `<div class="tooltip"><button data-action="transfer-license" data-id="${item.id}" class="${btnClasses} bg-indigo-100 text-indigo-600 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:hover:bg-indigo-800"><i class="fa-solid fa-right-left"></i></button><span class="tooltiptext">Chuyển đổi</span></div>`;
                 }
             }
 
@@ -421,6 +421,7 @@ window.QLTSPageDashboard.init = async function () {
                 <td class="p-4 text-sm text-slate-500"><span class="bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded text-xs font-bold">${holdingInfo}</span></td>
                 <td class="p-4 font-bold text-sm ${u.status === 'Đang hoạt động' ? 'text-green-600' : 'text-slate-400'}">${u.status}</td>
                 <td class="p-4 flex gap-2">
+                    <div class="tooltip"><button data-action="scan-user" data-id="${u.id}" class="${btnClasses} text-indigo-600 hover:bg-indigo-100"><i class="fa-solid fa-qrcode"></i></button><span class="tooltiptext">Scan (QR)</span></div>
                     ${adminActions}
                 </td>
             </tr>`;
@@ -433,6 +434,22 @@ window.QLTSPageDashboard.init = async function () {
         const cl = document.getElementById('categoryListContainer'); if (cl) cl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + categories.map(c => `<li class="p-3 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-700"><span class="font-medium text-slate-700 dark:text-gray-200">${c.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-cat" data-id="${c.id}" data-name="${c.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-cat" data-id="${c.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
         const dl = document.getElementById('departmentListContainer'); if (dl) dl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + departments.map(d => `<li class="p-3 border-b flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-700"><span class="dark:text-gray-200">${d.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-dept" data-id="${d.id}" data-name="${d.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-dept" data-id="${d.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
         const ltl = document.getElementById('licenseTypeListContainer'); if (ltl) ltl.innerHTML = '<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + licenseTypes.map(t => `<li class="p-3 flex justify-between hover:bg-slate-50 dark:hover:bg-slate-700"><span class="font-medium text-slate-700 dark:text-gray-200">${t.name}</span><div class="flex gap-2"><div class="tooltip"><button data-action="edit-lic-type" data-id="${t.id}" data-name="${t.name}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div><div class="tooltip"><button data-action="delete-lic-type" data-id="${t.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div></div></li>`).join('') + '</ul>';
+
+        const sl = document.getElementById('supplierListContainer');
+        if (sl) {
+            sl.innerHTML = suppliers.length ? ('<ul class="divide-y divide-slate-100 dark:divide-slate-700">' + suppliers.map(s => `
+                <li class="p-3 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <div>
+                        <p class="font-medium text-slate-700 dark:text-gray-200">${s.name}</p>
+                        <p class="text-xs text-slate-400 dark:text-slate-400">${[s.contact_person, s.phone, s.email].filter(Boolean).join(' • ') || 'Chưa có thông tin liên hệ'}</p>
+                    </div>
+                    <div class="flex gap-2 flex-shrink-0">
+                        <div class="tooltip"><button data-action="edit-supplier" data-id="${s.id}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-slate-600"><i class="fa-solid fa-pen"></i></button><span class="tooltiptext">Sửa</span></div>
+                        <div class="tooltip"><button data-action="delete-supplier" data-id="${s.id}" class="${btnClasses} text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-slate-600"><i class="fa-solid fa-trash"></i></button><span class="tooltiptext">Xóa</span></div>
+                    </div>
+                </li>`).join('') + '</ul>')
+                : '<p class="p-4 text-center text-sm text-slate-400 italic">Chưa có nhà cung cấp nào.</p>';
+        }
     }
 
     function handleUserFileSelect(e) {
@@ -620,6 +637,8 @@ window.QLTSPageDashboard.init = async function () {
     function updateDropdowns() {
         const catDropdown = document.getElementById('modal_assetCategory');
         if (catDropdown) { const cur = catDropdown.value; catDropdown.innerHTML = '<option value="">-- Chọn loại --</option>' + categories.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); catDropdown.value = cur; }
+        const supplierDropdown = document.getElementById('modal_assetSupplier');
+        if (supplierDropdown) { const cur = supplierDropdown.value; supplierDropdown.innerHTML = '<option value="">-- Không có --</option>' + suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join(''); supplierDropdown.value = cur; }
         const licTypeDropdown = document.getElementById('modal_licenseType');
         if (licTypeDropdown) { const cur = licTypeDropdown.value; licTypeDropdown.innerHTML = '<option value="">-- Chọn loại Key --</option>' + licenseTypes.map(t => `<option value="${t.name}">${t.name}</option>`).join(''); licTypeDropdown.value = cur; }
         const filterLicType = document.getElementById('filterLicenseType');
@@ -814,7 +833,7 @@ window.QLTSPageDashboard.init = async function () {
         currentFilteredAssets = assets
             .filter(a => {
                 if (!normalizedTerm) return true;
-                const searchPool = [a.name, a.config, a.category, a.location].map(v => normalizeString(v)).join(' ');
+                const searchPool = [a.name, a.config, a.category, a.location, a.asset_code, a.user].map(v => normalizeString(v)).join(' ');
                 return searchPool.includes(normalizedTerm);
             })
             .filter(a => {
@@ -853,7 +872,7 @@ window.QLTSPageDashboard.init = async function () {
         currentFilteredLicenses = licenses
             .filter(l => {
                 if (!normalizedTerm) return true;
-                const searchPool = [l.key_type, l.package_type, l.license_key, l.notes].map(v => normalizeString(v)).join(' ');
+                const searchPool = [l.key_type, l.package_type, l.license_key, l.notes, l.license_code, l.user].map(v => normalizeString(v)).join(' ');
                 return searchPool.includes(normalizedTerm);
             })
             .filter(l => (typeFilter === '' || l.key_type === typeFilter) && (packageFilter === '' || l.package_type === packageFilter))
@@ -872,7 +891,7 @@ window.QLTSPageDashboard.init = async function () {
     function applyUserFilters() {
         const term = document.getElementById('searchUserInput')?.value.toLowerCase() || '';
         const deptId = document.getElementById('filterDepartment')?.value || '';
-        currentFilteredUsers = users.filter(u => u.name.toLowerCase().includes(term) && (deptId === '' || u.department_id == deptId))
+        currentFilteredUsers = users.filter(u => [u.name, u.email, u.department, u.phone].filter(Boolean).some(v => v.toLowerCase().includes(term)) && (deptId === '' || u.department_id == deptId))
             .sort((a, b) => (a[userSort.column] || '').localeCompare(b[userSort.column] || '') * (userSort.direction === 'asc' ? 1 : -1));
         renderTableUsers(currentFilteredUsers);
     }
@@ -974,19 +993,20 @@ window.QLTSPageDashboard.init = async function () {
         // 1. Đóng form edit trước
         if (modalId) safeCloseModal(modalId);
         // 2. Hiển thị modal thành công (thông báo cụ thể theo loại dữ liệu)
-        const TABLE_LABELS = { assets: 'tài sản', licenses: 'license', users: 'nhân viên', categories: 'danh mục', departments: 'phòng ban', license_types: 'loại key' };
+        const TABLE_LABELS = { assets: 'tài sản', licenses: 'license', users: 'nhân viên', categories: 'danh mục', departments: 'phòng ban', license_types: 'loại key', maintenance_tasks: 'lịch bảo trì', stock_checks: 'đợt kiểm kê' };
         const entityLabel = TABLE_LABELS[table] || 'dữ liệu';
-        const entityName = payload.name || payload.key_type || payload.email || '';
+        const entityName = payload.name || payload.key_type || payload.email || payload.title || '';
         const actionWord = isUpdate ? 'Đã cập nhật' : 'Đã thêm mới';
         showInfoModal(`${actionWord} ${entityLabel}${entityName ? ` "${entityName}"` : ''} thành công!`, "Thông báo");
-        const modal = e.target.closest('.fixed.flex');
-        if (modal) attemptCloseModal(modal.id);
         // 3. Tải lại dữ liệu ngầm, giữ nguyên filter/search
         await fetchAllData();
         // 4. Chỉ render lại bảng hiện tại, KHÔNG reload filter/dropdown
         if (document.getElementById('assetTableBody')) applyAssetFilters();
         if (document.getElementById('licenseTableBody')) applyLicenseFilters();
         if (document.getElementById('userTableBody')) applyUserFilters();
+        if (document.getElementById('maintenanceTableBody') && typeof renderMaintenanceList === 'function') renderMaintenanceList();
+        if (document.getElementById('stockCheckTableBody') && typeof renderStockCheckList === 'function') renderStockCheckList();
+        if (document.getElementById('supplierListContainer')) renderLists();
     }
 
     if (document.getElementById('dashboardContent')) {
@@ -999,6 +1019,95 @@ window.QLTSPageDashboard.init = async function () {
         if (document.getElementById('licenseTableBody')) applyLicenseFilters();
     }
 
+    // =================================================================
+    // [MỚI] BÁO CÁO KHẤU HAO CHI TIẾT
+    // =================================================================
+    function computeDepreciation(asset) {
+        const cost = Number(asset.cost) || 0;
+        const salvage = Number(asset.salvage_value) || 0;
+        const lifeMonths = Number(asset.useful_life_months) || 0;
+        const depreciableBase = Math.max(0, cost - salvage);
+        if (!asset.purchase_date || cost <= 0 || lifeMonths <= 0) {
+            return { monthsElapsed: 0, accumulated: 0, bookValue: cost };
+        }
+        const purchaseDate = new Date(asset.purchase_date);
+        if (isNaN(purchaseDate.getTime())) return { monthsElapsed: 0, accumulated: 0, bookValue: cost };
+        const now = new Date();
+        let monthsElapsed = (now.getFullYear() - purchaseDate.getFullYear()) * 12 + (now.getMonth() - purchaseDate.getMonth());
+        if (now.getDate() < purchaseDate.getDate()) monthsElapsed -= 1;
+        monthsElapsed = Math.max(0, Math.min(monthsElapsed, lifeMonths));
+
+        let accumulated;
+        if (asset.depreciation_method === 'declining_balance') {
+            // Số dư giảm dần (double declining balance), không vượt quá phần được phép khấu hao
+            const rate = Math.min(1, (2 / lifeMonths));
+            let bookValue = cost;
+            for (let m = 0; m < monthsElapsed; m++) {
+                const monthlyDep = Math.min(bookValue - salvage, bookValue * rate);
+                if (monthlyDep <= 0) break;
+                bookValue -= monthlyDep;
+            }
+            accumulated = Math.min(depreciableBase, cost - bookValue);
+        } else {
+            // Đường thẳng (straight-line)
+            const monthlyDep = depreciableBase / lifeMonths;
+            accumulated = Math.min(depreciableBase, monthlyDep * monthsElapsed);
+        }
+        const bookValue = Math.max(salvage, cost - accumulated);
+        return { monthsElapsed, accumulated, bookValue };
+    }
+
+    function renderDepreciationReport() {
+        const tbody = document.getElementById('depreciationReportTableBody');
+        const tfoot = document.getElementById('depreciationReportFooter');
+        if (!tbody) return;
+        const DEP_METHOD_LABEL = { straight_line: 'Đường thẳng', declining_balance: 'Số dư giảm dần' };
+        const rows = assets.filter(a => a.status !== 'Disposed').map(a => {
+            const { monthsElapsed, accumulated, bookValue } = computeDepreciation(a);
+            return { asset: a, monthsElapsed, accumulated, bookValue };
+        });
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-400">Không có tài sản để tính khấu hao.</td></tr>';
+            if (tfoot) tfoot.innerHTML = '';
+            return;
+        }
+        tbody.innerHTML = rows.map(r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                <td class="p-3 font-medium text-slate-700 dark:text-slate-100">${r.asset.name}</td>
+                <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(r.asset.purchase_date)}</td>
+                <td class="p-3 text-right text-slate-600 dark:text-slate-300">${currencyVN(r.asset.cost)}</td>
+                <td class="p-3 text-right text-slate-600 dark:text-slate-300">${currencyVN(r.asset.salvage_value)}</td>
+                <td class="p-3 text-slate-600 dark:text-slate-300">${DEP_METHOD_LABEL[r.asset.depreciation_method] || r.asset.depreciation_method || '-'}</td>
+                <td class="p-3 text-right text-slate-600 dark:text-slate-300">${r.monthsElapsed}</td>
+                <td class="p-3 text-right text-amber-600 dark:text-amber-400">${currencyVN(r.accumulated)}</td>
+                <td class="p-3 text-right font-semibold text-green-600 dark:text-green-400">${currencyVN(r.bookValue)}</td>
+            </tr>
+        `).join('');
+        if (tfoot) {
+            const totalCost = rows.reduce((s, r) => s + (Number(r.asset.cost) || 0), 0);
+            const totalAccumulated = rows.reduce((s, r) => s + r.accumulated, 0);
+            const totalBookValue = rows.reduce((s, r) => s + r.bookValue, 0);
+            tfoot.innerHTML = `<tr>
+                <td class="p-3" colspan="2">Tổng cộng (${rows.length} tài sản)</td>
+                <td class="p-3 text-right">${currencyVN(totalCost)}</td>
+                <td class="p-3" colspan="3"></td>
+                <td class="p-3 text-right text-amber-700 dark:text-amber-400">${currencyVN(totalAccumulated)}</td>
+                <td class="p-3 text-right text-green-700 dark:text-green-400">${currencyVN(totalBookValue)}</td>
+            </tr>`;
+        }
+    }
+
+    // Ẩn/hiện field "Ngày thanh lý"/"Lý do thanh lý" theo trạng thái đang chọn
+    const assetStatusSelect = document.getElementById('modal_assetStatus');
+    const disposedFieldsWrapper = document.getElementById('assetDisposedFields');
+    if (assetStatusSelect && disposedFieldsWrapper) {
+        assetStatusSelect.addEventListener('change', () => {
+            disposedFieldsWrapper.classList.toggle('hidden', assetStatusSelect.value !== 'Disposed');
+        });
+    }
+
+    window.computeDepreciation = computeDepreciation;
+    window.renderDepreciationReport = renderDepreciationReport;
     window.handleAssetFileSelect = handleAssetFileSelect;
     window.handleUserFileSelect = handleUserFileSelect;
     window.renderTableAssets = renderTableAssets;

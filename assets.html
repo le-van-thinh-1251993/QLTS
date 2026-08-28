@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Security: Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://i.pravatar.cc https://ui-avatars.com; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https://i.pravatar.cc https://ui-avatars.com; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
     <title>Kho tài sản - Quản lý Tài sản CNTT</title>
     <script src="https://cdn.tailwindcss.com"></script> 
     <script>
@@ -32,6 +32,8 @@
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+    <!-- Quét QR bằng camera -->
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <style>
@@ -115,6 +117,9 @@
                     <input id="searchInput" type="text" placeholder="Tìm kiếm tài sản theo tên, loại, vị trí..." class="w-full h-10 pl-10 pr-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400">
                 </div>
                 <div class="flex items-center">
+                    <button id="globalSearchBtn" title="Tìm kiếm toàn cục" class="text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 mr-4">
+                        <i class="fa-solid fa-magnifying-glass text-xl"></i>
+                    </button>
                     <div class="relative">
                         <button id="notification-button" class="text-slate-600 hover:text-blue-600">
                             <i class="fa-regular fa-bell text-xl"></i>
@@ -175,7 +180,7 @@
                                     </div>
                                 </div>
                                 <div class="filter-control">
-                                    <button id="clearAssetFilters" class="px-3 py-1 bg-slate-100 rounded border text-sm">Xóa lọc</button>
+                                    <button id="clearAssetFilters" class="px-3 py-1 bg-slate-100 text-slate-700 rounded border text-sm dark:bg-slate-700 dark:text-gray-200 dark:border-slate-600 dark:hover:bg-slate-600">Xóa lọc</button>
                                 </div>
                             </div>
 
@@ -200,10 +205,28 @@
                                     <span class="tooltiptext">In tem đã chọn (hoặc tất cả nếu chưa chọn)</span>
                                 </div>
                                 <div class="tooltip">
-                                    <button id="manageCategoriesBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                    <button id="manageCategoriesBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all dark:bg-slate-700 dark:hover:bg-slate-600 dark:border-slate-600 dark:text-gray-200">
                                         <i class="fa-solid fa-tags"></i>
                                     </button>
                                     <span class="tooltiptext">Quản lý Danh mục</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button id="manageSuppliersBtn" class="icon-btn bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold rounded-lg flex items-center justify-center shadow-sm transition-all dark:bg-slate-700 dark:hover:bg-slate-600 dark:border-slate-600 dark:text-gray-200">
+                                        <i class="fa-solid fa-truck-field"></i>
+                                    </button>
+                                    <span class="tooltiptext">Quản lý Nhà cung cấp</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button id="openDepreciationReportBtn" class="icon-btn bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                        <i class="fa-solid fa-chart-line"></i>
+                                    </button>
+                                    <span class="tooltiptext">Báo cáo khấu hao</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button id="openQrScannerBtn" class="icon-btn bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
+                                        <i class="fa-solid fa-camera"></i>
+                                    </button>
+                                    <span class="tooltiptext">Quét mã QR</span>
                                 </div>
                                 <div class="tooltip">
                                     <button id="openMaintenanceModalBtn" class="icon-btn bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center shadow-sm transition-all">
@@ -255,9 +278,12 @@
                     <!-- Maintenance & Stock Check lists -->
                     <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div class="bg-white dark:bg-slate-800 rounded-lg shadow border border-slate-200 dark:border-slate-700">
-                            <div class="flex items-center justify-between p-4 border-b dark:border-slate-700">
+                            <div class="flex items-center justify-between p-4 border-b dark:border-slate-700 gap-2">
                                 <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Lịch bảo trì</h3>
-                                <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">Danh sách mới nhất</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">Danh sách mới nhất</span>
+                                    <div class="tooltip"><button id="exportMaintenanceBtn" class="w-8 h-8 flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white"><i class="fa-solid fa-file-export"></i></button><span class="tooltiptext">Xuất Excel</span></div>
+                                </div>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
@@ -278,9 +304,12 @@
                         </div>
 
                         <div class="bg-white dark:bg-slate-800 rounded-lg shadow border border-slate-200 dark:border-slate-700">
-                            <div class="flex items-center justify-between p-4 border-b dark:border-slate-700">
+                            <div class="flex items-center justify-between p-4 border-b dark:border-slate-700 gap-2">
                                 <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Đợt kiểm kê</h3>
-                                <span class="text-xs px-2 py-1 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200">Danh sách mới nhất</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs px-2 py-1 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-200">Danh sách mới nhất</span>
+                                    <div class="tooltip"><button id="exportStockCheckBtn" class="w-8 h-8 flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white"><i class="fa-solid fa-file-export"></i></button><span class="tooltiptext">Xuất Excel</span></div>
+                                </div>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
@@ -308,8 +337,9 @@
     <div id="maintenanceModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700 max-h-[80vh] overflow-y-auto">
             <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
-            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700">Thêm lịch bảo trì</h3>
+            <h3 id="maintenanceModalTitle" class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700">Thêm lịch bảo trì</h3>
             <form id="maintenanceForm" class="space-y-4">
+                <input type="hidden" id="maintenance_id">
                 <div>
                     <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Thiết bị</label>
                     <select id="maintenance_asset" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></select>
@@ -342,8 +372,9 @@
     <div id="stockCheckModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700 max-h-[80vh] overflow-y-auto">
             <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
-            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700">Tạo đợt kiểm kê</h3>
+            <h3 id="stockCheckModalTitle" class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700">Tạo đợt kiểm kê</h3>
             <form id="stockCheckForm" class="space-y-4">
+                <input type="hidden" id="stockcheck_id">
                 <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Tên đợt kiểm kê</label><input type="text" id="stockcheck_name" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></div>
                 <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ngày dự kiến</label><input type="date" id="stockcheck_date" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
                 <div>
@@ -355,6 +386,119 @@
                     <button type="submit" class="px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600">Lưu</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Chi tiết đợt kiểm kê (checklist + quét QR) -->
+    <div id="stockCheckDetailModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl p-6 relative border dark:border-slate-700 max-h-[85vh] flex flex-col">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <div class="flex items-center justify-between mb-4 border-b pb-2 dark:border-slate-700 flex-wrap gap-2">
+                <h3 id="stockCheckDetailTitle" class="text-xl font-bold dark:text-gray-200"><i class="fa-solid fa-clipboard-check mr-2"></i>Đợt kiểm kê</h3>
+                <div class="flex gap-2">
+                    <button id="btnStockCheckScan" data-stock-check-id="" class="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-sm"><i class="fa-solid fa-camera mr-1"></i>Quét QR</button>
+                    <button id="btnStockCheckExport" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"><i class="fa-solid fa-file-export mr-1"></i>Xuất Excel</button>
+                </div>
+            </div>
+            <div id="stockCheckDetailSummary" class="grid grid-cols-3 gap-3 mb-4 text-center text-sm"></div>
+            <div class="overflow-auto flex-1 border rounded-lg dark:border-slate-600">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-700 sticky top-0 z-10">
+                        <tr class="dark:text-gray-200">
+                            <th class="p-3">Tài sản</th>
+                            <th class="p-3">Vị trí</th>
+                            <th class="p-3">Trạng thái kiểm kê</th>
+                            <th class="p-3 text-right">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockCheckItemsTableBody" class="divide-y dark:divide-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Quản lý Nhà cung cấp -->
+    <div id="supplierModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl p-6 relative border dark:border-slate-700 max-h-[85vh] overflow-y-auto">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700">Quản lý Nhà cung cấp</h3>
+            <form id="supplierForm" class="grid grid-cols-2 gap-3 mb-4">
+                <input type="hidden" id="supplierId">
+                <div class="col-span-2"><label class="block text-xs font-semibold mb-1 dark:text-gray-300">Tên nhà cung cấp *</label><input type="text" id="supplierName" required class="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
+                <div><label class="block text-xs font-semibold mb-1 dark:text-gray-300">Người liên hệ</label><input type="text" id="supplierContact" class="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
+                <div><label class="block text-xs font-semibold mb-1 dark:text-gray-300">Điện thoại</label><input type="text" id="supplierPhone" class="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
+                <div><label class="block text-xs font-semibold mb-1 dark:text-gray-300">Email</label><input type="email" id="supplierEmail" class="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
+                <div><label class="block text-xs font-semibold mb-1 dark:text-gray-300">Địa chỉ</label><input type="text" id="supplierAddress" class="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
+                <div class="col-span-2"><label class="block text-xs font-semibold mb-1 dark:text-gray-300">Ghi chú</label><input type="text" id="supplierNotes" class="w-full border rounded-lg p-2 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
+                <div class="col-span-2 flex justify-end gap-2">
+                    <button type="button" id="btnCancelSupplierEdit" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 hidden dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600">Hủy sửa</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Lưu</button>
+                </div>
+            </form>
+            <div id="supplierListContainer" class="max-h-64 overflow-y-auto border rounded-lg dark:border-slate-600"></div>
+            <div class="flex justify-end mt-6 pt-4 border-t dark:border-slate-700">
+                <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Báo cáo khấu hao -->
+    <div id="depreciationReportModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-6xl p-6 relative border dark:border-slate-700 max-h-[90vh] flex flex-col">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <div class="flex items-center justify-between mb-4 border-b pb-2 dark:border-slate-700">
+                <h3 class="text-xl font-bold dark:text-gray-200"><i class="fa-solid fa-chart-line mr-2"></i>Báo cáo khấu hao tài sản</h3>
+                <button id="exportDepreciationBtn" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"><i class="fa-solid fa-file-export mr-1"></i>Xuất Excel</button>
+            </div>
+            <div class="overflow-auto flex-1 border rounded-lg dark:border-slate-600">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-700 sticky top-0 z-10">
+                        <tr class="dark:text-gray-200">
+                            <th class="p-3">Tên tài sản</th>
+                            <th class="p-3">Ngày mua</th>
+                            <th class="p-3 text-right">Nguyên giá</th>
+                            <th class="p-3 text-right">GT thu hồi</th>
+                            <th class="p-3">PP khấu hao</th>
+                            <th class="p-3 text-right">Đã dùng (tháng)</th>
+                            <th class="p-3 text-right">Khấu hao lũy kế</th>
+                            <th class="p-3 text-right">Giá trị còn lại</th>
+                        </tr>
+                    </thead>
+                    <tbody id="depreciationReportTableBody" class="divide-y dark:divide-slate-700"></tbody>
+                    <tfoot id="depreciationReportFooter" class="bg-slate-50 dark:bg-slate-700 font-bold dark:text-gray-200"></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Quét mã QR -->
+    <div id="qrScannerModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[70] flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative border dark:border-slate-700">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-4 dark:text-gray-200"><i class="fa-solid fa-camera mr-2"></i>Quét mã QR</h3>
+            <div id="qrReaderContainer" class="rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 mb-3" style="min-height:250px;"></div>
+            <p id="qrScannerStatus" class="text-xs text-slate-500 dark:text-gray-400 mb-3 text-center">Đưa mã QR vào khung hình để quét...</p>
+            <div class="border-t pt-3 dark:border-slate-700">
+                <label class="block text-xs font-semibold mb-1 dark:text-gray-300">Hoặc dán nội dung mã QR đã quét</label>
+                <div class="flex gap-2">
+                    <textarea id="qrManualInput" rows="2" class="w-full border rounded-lg p-2 text-xs font-mono dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="Dán nội dung QR..."></textarea>
+                    <button id="btnQrManualLookup" class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm whitespace-nowrap">Tra cứu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Kết quả quét QR + hành động nhanh -->
+    <div id="qrScanResultModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[75] flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6 relative border dark:border-slate-700 text-center">
+            <button class="close-modal absolute top-4 right-4 text-slate-400"><i class="fa-solid fa-times text-2xl"></i></button>
+            <div class="w-14 h-14 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-3 text-blue-600 dark:text-blue-300 text-2xl">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <h3 id="qrScanResultTitle" class="text-lg font-bold mb-1 dark:text-gray-200">-</h3>
+            <p id="qrScanResultStatus" class="text-sm text-slate-500 dark:text-gray-400 mb-1"></p>
+            <p id="qrScanResultUser" class="text-sm text-blue-600 dark:text-blue-400 mb-4"></p>
+            <div id="qrScanResultActions" class="flex flex-col gap-2"></div>
         </div>
     </div>
 
@@ -385,6 +529,13 @@
                     <input type="date" id="modal_assetPurchaseDate" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Nhà cung cấp</label>
+                        <select id="modal_assetSupplier" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></select>
+                    </div>
+                    <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Số hóa đơn</label><input type="text" id="modal_assetInvoiceNumber" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" placeholder="VD: HD-2026-001"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
                     <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Giá trị (VNĐ)</label><input type="number" min="0" id="modal_assetCost" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="0"></div>
                     <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Giá trị thu hồi (VNĐ)</label><input type="number" min="0" id="modal_assetSalvage" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" placeholder="0"></div>
                 </div>
@@ -394,10 +545,15 @@
                         <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Phương pháp khấu hao</label>
                         <select id="modal_assetDepMethod" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
                             <option value="straight_line">Đường thẳng</option>
+                            <option value="declining_balance">Số dư giảm dần</option>
                         </select>
                     </div>
                 </div>
-                <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Trạng thái</label><select id="modal_assetStatus" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"><option value="Stock">Trong kho</option><option value="Active">Đang dùng</option><option value="Repair">Sửa chữa</option><option value="Broken">Hỏng</option></select></div>
+                <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Trạng thái</label><select id="modal_assetStatus" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"><option value="Stock">Trong kho</option><option value="Active">Đang dùng</option><option value="Repair">Sửa chữa</option><option value="Broken">Hỏng</option><option value="Disposed">Đã thanh lý</option></select></div>
+                <div id="assetDisposedFields" class="hidden grid grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ngày thanh lý</label><input type="date" id="modal_assetDisposedDate" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></div>
+                    <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Lý do thanh lý</label><input type="text" id="modal_assetDisposedReason" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" placeholder="VD: Hư hỏng không sửa được"></div>
+                </div>
                 <div>
                     <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Người sử dụng</label>
                     <select id="modal_assetUser" class="w-full"></select>
@@ -405,7 +561,7 @@
                 <div><label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ghi chú</label><input type="text" id="modal_assetNotes" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400"></div>
                 
                 <div class="flex justify-end gap-3 mt-6 pt-4 border-t">
-                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Hủy</button>
+                    <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600">Hủy</button>
                     <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Lưu</button>
                 </div>
             </form>
@@ -462,7 +618,7 @@
                 <input type="hidden" id="categoryOldName">
                 <input type="text" id="categoryName" placeholder="Tên danh mục..." class="flex-grow border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400" required>
                 <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Lưu</button>
-                <button type="button" id="btnCancelCategoryEdit" class="px-4 py-2 bg-slate-200 rounded-lg hover:bg-slate-300 hidden">Hủy</button>
+                <button type="button" id="btnCancelCategoryEdit" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 hidden dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600">Hủy</button>
             </form>
             <div id="categoryListContainer" class="max-h-64 overflow-y-auto border rounded-lg bg-slate-50 dark:bg-slate-700 dark:border-slate-600"></div>
             <div class="flex justify-end mt-6 pt-4 border-t dark:border-slate-700">
@@ -587,6 +743,18 @@
                 <button class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600">Hủy</button>
                 <button id="btnConfirmQuickAddUser" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Lưu</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: Tìm kiếm toàn cục -->
+    <div id="globalSearchModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[90] flex justify-center items-start pt-24 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-xl p-4 relative border dark:border-slate-700">
+            <div class="relative mb-3">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="globalSearchInput" placeholder="Tìm tài sản, license, nhân viên..." class="w-full pl-10 pr-10 py-2.5 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" autocomplete="off">
+                <button class="close-modal absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div id="globalSearchResults" class="max-h-[60vh] overflow-y-auto"><p class="text-sm text-slate-400 text-center p-4">Nhập từ khóa để tìm kiếm...</p></div>
         </div>
     </div>
 
