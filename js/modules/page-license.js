@@ -679,7 +679,7 @@ window.QLTSPageLicense.init = async function () {
                 });
             }
 
-            else if (action === 'delete-user') { if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal("Xóa nhân viên?", async () => { await supabaseClient.from('users').delete().eq('id', id); await addLog(id, 'USER', 'Xóa', 'Xóa nhân viên'); await refreshApp(); }); }
+            else if (action === 'delete-user') { const userToDelete = users.find(user => user.id === id); const userName = userToDelete?.name || 'nhân viên'; if (assets.some(a => a.user_id === id) || licenses.some(l => l.user_id === id)) return showInfoModal("Không thể xóa user đang giữ tài sản/license!"); showConfirmationModal(`Xóa nhân viên "${userName}"?`, async () => { await supabaseClient.from('users').delete().eq('id', id); await addLog(id, 'USER', 'Xóa', `Tên: ${userName}; Email: ${userToDelete?.email || 'trống'}; Phòng ban: ${userToDelete?.department || 'trống'}`); await refreshApp(); }); }
             else if (action === 'edit-user') { const u = users.find(x => x.id === id); if (u) { document.getElementById('userId').value = u.id; document.getElementById('name').value = u.name; document.getElementById('email').value = u.email; document.getElementById('phone').value = u.phone || ''; document.getElementById('status').value = u.status; updateDropdowns(); document.getElementById('department').value = departments.find(d => d.name === u.department)?.id || ''; openModal('addUserModal'); } }
             else if (action === 'scan-user') {
                 const u = users.find(x => x.id === id);

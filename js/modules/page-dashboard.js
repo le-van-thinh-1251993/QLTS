@@ -970,11 +970,58 @@ window.QLTSPageDashboard.init = async function () {
         return filteredRows || [];
     }
 
+    function getActivityRows(table) {
+        const rowsByTable = {
+            assets,
+            licenses,
+            users,
+            categories,
+            departments,
+            license_types: licenseTypes,
+            suppliers,
+            maintenance_tasks: maintenanceTasks,
+            stock_checks: stockChecks
+        };
+        return rowsByTable[table] || [];
+    }
+
+    function describeActivityChanges(table, previous, next, isUpdate) {
+        const labels = {
+            name: 'Tên', email: 'Email', phone: 'Số điện thoại', department_id: 'Phòng ban',
+            category_id: 'Danh mục', supplier_id: 'Nhà cung cấp', config: 'Cấu hình',
+            location: 'Vị trí', purchase_date: 'Ngày nhập', cost: 'Nguyên giá',
+            status: 'Trạng thái', user_id: 'Người sử dụng', assigned_date: 'Ngày cấp phát',
+            notes: 'Ghi chú', title: 'Tiêu đề', due_date: 'Ngày dự kiến', note: 'Ghi chú',
+            key_type: 'Loại key', license_key: 'Mã key', package_type: 'Gói',
+            expiration_date: 'Ngày hết hạn', contact_person: 'Người liên hệ',
+            address: 'Địa chỉ', priority: 'Mức ưu tiên', started_at: 'Ngày kiểm kê'
+        };
+        const displayValue = (field, value) => {
+            if (value === null || value === undefined || value === '') return 'trống';
+            if (field === 'status' && window.STATUS_MAP?.[value]) return window.STATUS_MAP[value].text;
+            if (field === 'user_id') return users.find(user => user.id === value)?.name || 'Không có';
+            if (field === 'department_id') return departments.find(department => department.id === value)?.name || 'Không có';
+            if (field === 'category_id') return categories.find(category => category.id === value)?.name || 'Không có';
+            if (field === 'supplier_id') return suppliers.find(supplier => supplier.id === value)?.name || 'Không có';
+            if (field.endsWith('_date') || field === 'started_at') return String(value).substring(0, 10);
+            return String(value);
+        };
+        const fields = Object.keys(next).filter(field => field !== 'id' && field !== 'created_at');
+        const changes = fields.filter(field => !isUpdate || String(previous?.[field] ?? '') !== String(next[field] ?? ''));
+        return changes.map(field => {
+            const label = labels[field] || field;
+            if (!isUpdate) return `${label}: ${displayValue(field, next[field])}`;
+            return `${label}: ${displayValue(field, previous?.[field])} -> ${displayValue(field, next[field])}`;
+        }).join('; ');
+    }
+
     async function handleFormSubmit(e, table, payloadBuilder, modalId, postAction) {
         e.preventDefault();
         const payload = payloadBuilder();
         const id = payload.id; delete payload.id;
         const isUpdate = !!id;
+        const previous = isUpdate ? getActivityRows(table).find(row => String(row.id) === String(id)) : null;
+        const activityDetails = describeActivityChanges(table, previous, payload, isUpdate);
         let error;
         let resData = null;
         if (isUpdate) {
@@ -989,7 +1036,7 @@ window.QLTSPageDashboard.init = async function () {
             return; 
         }
         // Post-action (e.g. add log)
-        if (postAction) postAction(resData, isUpdate);
+        if (postAction) postAction(resData, isUpdate, activityDetails);
         // 1. Đóng form edit trước
         if (modalId) safeCloseModal(modalId);
         // 2. Hiển thị modal thành công (thông báo cụ thể theo loại dữ liệu)

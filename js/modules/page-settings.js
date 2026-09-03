@@ -83,6 +83,17 @@ window.QLTSPageSettings.init = async function () {
         MAINT: 'Bảo trì', STOCK_CHECK: 'Kiểm kê'
     };
 
+    function getActivitySubjectName(log, typeKey, rows) {
+        const subject = (rows[typeKey] || []).find(row => String(row.id) === String(log.assetId));
+        if (subject?.name || subject?.key_type || subject?.title) return subject.name || subject.key_type || subject.title;
+        const detailName = /(?:^|; )Tên(?: tài sản| đợt)?\s*:\s*([^;]+)/i.exec(log.desc || '')?.[1];
+        if (detailName) return detailName.trim();
+        const actionName = /(?:Xóa tài sản|Xóa license|Xóa lịch bảo trì):\s*([^;]+)/i.exec(log.desc || '')?.[1];
+        if (actionName) return actionName.trim();
+        const deletedLabels = { ASSET: 'Tài sản đã xóa', LICENSE: 'License đã xóa', USER: 'Nhân viên đã xóa', CATEGORY: 'Danh mục đã xóa', DEPARTMENT: 'Phòng ban đã xóa', LICENSE_TYPE: 'Loại key đã xóa', SUPPLIER: 'Nhà cung cấp đã xóa', MAINT: 'Lịch bảo trì đã xóa', STOCK_CHECK: 'Đợt kiểm kê đã xóa' };
+        return deletedLabels[typeKey] || 'Bản ghi đã xóa';
+    }
+
     function renderActivityLog() {
         const tabBtn = document.getElementById('activityLogTabBtn');
         const isAdmin = currentUserProfile && currentUserProfile.role === 'admin';
@@ -99,7 +110,7 @@ window.QLTSPageSettings.init = async function () {
         const pageItems = sorted.slice(start, start + ACTIVITY_LOG_PAGE_SIZE);
 
         if (pageItems.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-500">Chưa có hoạt động nào.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">Chưa có hoạt động nào.</td></tr>';
             if (window.renderPagination) window.renderPagination('activityLogPagination', 1, 0, ACTIVITY_LOG_PAGE_SIZE, 'activity');
             return;
         }
@@ -109,17 +120,45 @@ window.QLTSPageSettings.init = async function () {
             const typeKey = match ? match[1] : '';
             const actionText = match ? match[2] : (h.action || '');
             const typeLabel = ACTIVITY_TYPE_LABELS[typeKey] || typeKey || '-';
+            const subjectRows = { ASSET: assets, LICENSE: licenses, USER: users, CATEGORY: categories, DEPARTMENT: departments, LICENSE_TYPE: licenseTypes, SUPPLIER: suppliers, MAINT: assets, STOCK_CHECK: stockChecks };
+            const subjectName = getActivitySubjectName(h, typeKey, subjectRows);
             return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
                 <td class="p-3 text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">${h.time || ''}</td>
                 <td class="p-3 text-slate-700 dark:text-slate-200">${typeLabel}</td>
                 <td class="p-3 font-semibold text-blue-600 dark:text-blue-400">${actionText}</td>
-                <td class="p-3 text-slate-600 dark:text-slate-300">${h.desc || ''}</td>
+                <td class="p-3 text-slate-600 dark:text-slate-300 max-w-sm truncate" title="${subjectName}">${subjectName}</td>
                 <td class="p-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">${h.createdBy || 'Admin'}</td>
+                <td class="p-3 text-right"><button type="button" class="activity-log-detail-btn text-blue-600 hover:text-blue-800 dark:text-blue-400" data-log-id="${h.id}" title="Xem chi tiết"><i class="fa-solid fa-eye"></i></button></td>
             </tr>`;
         }).join('');
         if (window.renderPagination) window.renderPagination('activityLogPagination', activityLogCurrentPage, sorted.length, ACTIVITY_LOG_PAGE_SIZE, 'activity');
     }
     window.renderActivityLog = renderActivityLog;
+
+    document.getElementById('activityLogTableBody')?.addEventListener('click', (event) => {
+        const button = event.target.closest('.activity-log-detail-btn');
+        if (!button) return;
+        const log = (assetHistory || []).find(item => String(item.id) === String(button.dataset.logId));
+        if (!log) return;
+        const match = /^(\[\w+\])\s*(.*)$/.exec(log.action || '');
+        const typeKey = match ? match[1].slice(1, -1) : '';
+        const subjectRows = { ASSET: assets, LICENSE: licenses, USER: users, CATEGORY: categories, DEPARTMENT: departments, LICENSE_TYPE: licenseTypes, SUPPLIER: suppliers, MAINT: assets, STOCK_CHECK: stockChecks };
+        const subjectName = getActivitySubjectName(log, typeKey, subjectRows);
+        const details = (log.desc || 'Không có thông tin chi tiết.').split(';').map(item => item.trim()).filter(Boolean);
+        document.getElementById('activityLogDetailContent').innerHTML = `
+            <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mb-4">
+                <strong>Thời gian</strong><span>${log.time || '-'}</span>
+                <strong>Loại</strong><span>${ACTIVITY_TYPE_LABELS[typeKey] || typeKey || '-'}</span>
+                <strong>Hành động</strong><span class="font-semibold text-blue-600">${match ? match[2] : log.action || '-'}</span>
+                <strong>Đối tượng</strong><span>${subjectName}</span>
+                <strong>Người thực hiện</strong><span>${log.createdBy || 'Admin'}</span>
+            </div>
+            <div class="border-t pt-3 dark:border-slate-700">
+                <h4 class="font-semibold mb-2">Nội dung chi tiết</h4>
+                <ul class="list-disc pl-5 space-y-1">${details.map(detail => `<li>${detail}</li>`).join('')}</ul>
+            </div>`;
+        openModal('activityLogDetailModal');
+    });
 
     // Chuyển tab trong trang Cài đặt (wiring 1 lần, panel tương ứng bật/tắt qua class 'hidden')
     document.querySelectorAll('.settings-tab-btn').forEach((btn, idx) => {
@@ -336,7 +375,7 @@ window.QLTSPageSettings.init = async function () {
             payload.asset_code = window.QLTSHelpers.buildAssetCode(categoryName, deptName, assets.map(a => a.asset_code).filter(Boolean));
         }
         return payload;
-        }, 'assetModal', (data, isUpdate) => addLog(data.id, 'ASSET', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa tài sản' : 'Nhập kho'));
+        }, 'assetModal', (data, isUpdate, details) => addLog(data.id, 'ASSET', isUpdate ? 'Cập nhật' : 'Thêm mới', details));
     });
 
     document.getElementById('licenseForm')?.addEventListener('submit', (e) => {
@@ -385,7 +424,7 @@ window.QLTSPageSettings.init = async function () {
             payload.license_code = window.QLTSHelpers.buildLicenseCode(keyType, deptName, licenses.map(l => l.license_code).filter(Boolean));
         }
         return payload;
-        }, 'licenseModal', (data, isUpdate) => addLog(data.id, 'LICENSE', isUpdate ? 'Cập nhật' : 'Thêm mới', isUpdate ? 'Chỉnh sửa license' : 'Nhập kho'));
+        }, 'licenseModal', (data, isUpdate, details) => addLog(data.id, 'LICENSE', isUpdate ? 'Cập nhật' : 'Thêm mới', details));
     });
 
     document.getElementById('userForm')?.addEventListener('submit', (e) => {
@@ -407,12 +446,12 @@ window.QLTSPageSettings.init = async function () {
         }
         return handleFormSubmit(e, 'users', () => ({
             id: userIdVal, name: document.getElementById('name').value, email: emailVal, phone: document.getElementById('phone').value || '', department_id: document.getElementById('department').value || null, status: newStatus, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('name').value)}`
-        }), 'addUserModal', (data, isUpdate) => addLog(data.id, 'USER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.email));
+        }), 'addUserModal', (data, isUpdate, details) => addLog(data.id, 'USER', isUpdate ? 'Cập nhật' : 'Thêm mới', details));
     });
 
-    document.getElementById('categoryForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'categories', () => ({ id: document.getElementById('categoryOldName').value, name: document.getElementById('categoryName').value }), 'categoryModal', (data, isUpdate) => { addLog(data.id, 'CATEGORY', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name); renderLists(); }));
-    document.getElementById('departmentForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'departments', () => ({ id: document.getElementById('deptId').value, name: document.getElementById('deptName').value }), 'departmentManagementModal', (data, isUpdate) => { addLog(data.id, 'DEPARTMENT', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name); renderLists(); }));
-    document.getElementById('licenseTypeForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'license_types', () => ({ id: document.getElementById('licenseTypeId').value, name: document.getElementById('licenseTypeName').value }), 'licenseTypeModal', (data, isUpdate) => { addLog(data.id, 'LICENSE_TYPE', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name); renderLists(); }));
+    document.getElementById('categoryForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'categories', () => ({ id: document.getElementById('categoryOldName').value, name: document.getElementById('categoryName').value }), 'categoryModal', (data, isUpdate, details) => { addLog(data.id, 'CATEGORY', isUpdate ? 'Cập nhật' : 'Thêm mới', details); renderLists(); }));
+    document.getElementById('departmentForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'departments', () => ({ id: document.getElementById('deptId').value, name: document.getElementById('deptName').value }), 'departmentManagementModal', (data, isUpdate, details) => { addLog(data.id, 'DEPARTMENT', isUpdate ? 'Cập nhật' : 'Thêm mới', details); renderLists(); }));
+    document.getElementById('licenseTypeForm')?.addEventListener('submit', (e) => handleFormSubmit(e, 'license_types', () => ({ id: document.getElementById('licenseTypeId').value, name: document.getElementById('licenseTypeName').value }), 'licenseTypeModal', (data, isUpdate, details) => { addLog(data.id, 'LICENSE_TYPE', isUpdate ? 'Cập nhật' : 'Thêm mới', details); renderLists(); }));
 
     document.getElementById('supplierForm')?.addEventListener('submit', (e) => {
         const nameVal = document.getElementById('supplierName').value.trim();
@@ -428,8 +467,8 @@ window.QLTSPageSettings.init = async function () {
             email: document.getElementById('supplierEmail').value || null,
             address: document.getElementById('supplierAddress').value || null,
             notes: document.getElementById('supplierNotes').value || null
-        }), null, (data, isUpdate) => {
-            addLog(data.id, 'SUPPLIER', isUpdate ? 'Cập nhật' : 'Thêm mới', data.name);
+        }), null, (data, isUpdate, details) => {
+            addLog(data.id, 'SUPPLIER', isUpdate ? 'Cập nhật' : 'Thêm mới', details);
             document.getElementById('supplierForm').reset();
             document.getElementById('supplierId').value = '';
             document.getElementById('btnCancelSupplierEdit').classList.add('hidden');
@@ -464,8 +503,8 @@ window.QLTSPageSettings.init = async function () {
             const noteText = parts.filter(Boolean).join(' | ');
             payload.note = noteText || null;
             return payload;
-        }, 'maintenanceModal', (data, isUpdate) => {
-            if (data?.asset_id) addLog(data.asset_id, 'MAINT', isUpdate ? 'Cập nhật' : 'Tạo lịch', titleVal || 'Lịch bảo trì');
+        }, 'maintenanceModal', (data, isUpdate, details) => {
+            if (data?.asset_id) addLog(data.asset_id, 'MAINT', isUpdate ? 'Cập nhật' : 'Tạo lịch', details);
         });
     });
 
@@ -483,8 +522,8 @@ window.QLTSPageSettings.init = async function () {
             // Chỉ đặt trạng thái mặc định khi TẠO MỚI - khi sửa, giữ nguyên trạng thái hiện tại.
             if (!idVal) { payload.status = 'Đang mở'; payload.created_by = currentUserProfile?.id || null; }
             return payload;
-        }, 'stockCheckModal', (data, isUpdate) => {
-            addLog(data?.id, 'STOCK_CHECK', isUpdate ? 'Cập nhật' : 'Thêm mới', (document.getElementById('stockcheck_name')?.value) || 'Đợt kiểm kê');
+        }, 'stockCheckModal', (data, isUpdate, details) => {
+            addLog(data?.id, 'STOCK_CHECK', isUpdate ? 'Cập nhật' : 'Thêm mới', details);
         });
     });
 
