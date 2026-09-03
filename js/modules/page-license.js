@@ -501,7 +501,7 @@ window.QLTSPageLicense.init = async function () {
             window.applyAssetFilters();
             const activeFilter = isAssetFilterOrSearchActive();
             const sourceRows = resolveExportData(currentFilteredAssets, assets, activeFilter);
-            const data = sourceRows.map(a => ({ "Mã tài sản": a.asset_code || '', "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Ngày nhập": formatDateDisplay(a.purchase_date), "Người dùng": a.user, "Trạng thái": a.status, "Ghi chú": a.notes }));
+            const data = sourceRows.map(a => ({ "Mã tài sản": a.asset_code || '', "Tên": a.name, "Cấu hình": a.config, "Loại": a.category, "Vị trí": a.location, "Ngày nhập": formatDateDisplay(a.purchase_date), "Người dùng": a.user, "Trạng thái": (STATUS_MAP[a.status] && STATUS_MAP[a.status].text) || a.status || '', "Ghi chú": a.notes }));
             exportToExcel(data, 'Assets.xlsx');
             return;
         }
