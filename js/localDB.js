@@ -17,6 +17,7 @@ const LocalDB = {
         STOCK_CHECK_ITEMS: 'qlts_stock_check_items',
         SUPPLIERS: 'qlts_suppliers',
         ALERT_SETTINGS: 'qlts_alert_settings',
+        WORKBOOK_DATA: 'qlts_workbook_data',
         COUNTER: 'qlts_id_counter'
     },
 
@@ -43,10 +44,12 @@ const LocalDB = {
         CATEGORIES: 'it_categories_final'
     },
 
-    // Initialize default data
-    init() {
+    // Initialize imported workbook data before the app reads any tables.
+    async init() {
         console.log('LocalDB.init() called');
         console.log('Checking for existing data...', localStorage.getItem(this.KEYS.DEPARTMENTS));
+
+        await this.importWorkbookDataIfNeeded();
 
         this.migrateLegacyDataIfNeeded();
         this.seedClipStudioPaintKeys();
@@ -59,6 +62,168 @@ const LocalDB = {
         } else {
             console.log('Existing data found, skipping default data creation');
             this.ensureSeedData();
+        }
+    },
+
+    async importWorkbookDataIfNeeded() {
+        const importFlag = 'qlts_workbook_imported_v8';
+        if (localStorage.getItem(importFlag) === '1') return;
+        if (typeof XLSX === 'undefined') {
+            console.warn('Workbook import skipped: XLSX library is not loaded');
+            return;
+        }
+
+        try {
+            const response = await fetch(encodeURI('TÀI SẢN_THIẾT BỊ MÁY MÓC.xlsx'));
+            if (!response.ok) throw new Error(`Workbook request failed: ${response.status}`);
+            const workbook = XLSX.read(await response.arrayBuffer(), { type: 'array', cellDates: false, raw: false });
+            const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
+            const clean = (value) => String(value ?? '').replace(/\r\n?/g, '\n').split('\n').map(line => line.replace(/[ \t]+/g, ' ').trim()).join('\n').trim();
+            const getRows = (sheetName) => XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: false });
+            const findHeader = (rows, headerNames = ['ma ts', 'ma tai san']) => rows.findIndex(row => row.some(cell => headerNames.includes(normalize(cell))));
+            const sourceSheetName = ['02. TS máy móc thiết bị', '04. TH THEO LOẠI TS', '03. Chi tiết TS các bộ phận'].find(name => workbook.SheetNames.includes(name));
+            if (!sourceSheetName) throw new Error('Không tìm thấy sheet chi tiết tài sản');
+
+            const workbookSheets = {};
+            workbook.SheetNames.forEach(sheetName => {
+                const rows = getRows(sheetName);
+                workbookSheets[sheetName] = rows;
+            });
+
+            const sourceRows = getRows(sourceSheetName);
+            const headerIndex = findHeader(sourceRows);
+            if (headerIndex < 0) throw new Error(`Không tìm thấy dòng tiêu đề trong sheet ${sourceSheetName}`);
+            const headers = sourceRows[headerIndex].map((header, index) => clean(header) || `Cột ${index + 1}`);
+            const records = sourceRows.slice(headerIndex + 1).map(row => {
+                const record = {};
+                headers.forEach((header, index) => { record[header] = clean(row[index]); });
+                return record;
+            });
+            const findField = (record, ...names) => {
+                if (!record) return '';
+                const entry = Object.entries(record).find(([key]) => names.includes(normalize(key)));
+                return entry ? entry[1] : '';
+            };
+            const parseSheetRecords = (sheetName, headerNames) => {
+                if (!workbook.SheetNames.includes(sheetName)) return [];
+                const rows = getRows(sheetName);
+                const index = findHeader(rows, headerNames);
+                if (index < 0) return [];
+                const sheetHeaders = rows[index].map((header, columnIndex) => clean(header) || `Cột ${columnIndex + 1}`);
+                return rows.slice(index + 1).map(row => {
+                    const record = {};
+                    sheetHeaders.forEach((header, columnIndex) => { record[header] = clean(row[columnIndex]); });
+                    return record;
+                }).filter(record => Object.values(record).some(Boolean));
+            };
+            const detailRecords = parseSheetRecords('03. Chi tiết TS các bộ phận', ['ma ts', 'ma tai san']);
+            const detailByCode = new Map(detailRecords.map(record => [normalize(findField(record, 'ma ts', 'ma tai san')), record]));
+            const personnelSheetName = '6. data thông tin nhân sự';
+            const personnelRows = workbook.SheetNames.includes(personnelSheetName) ? getRows(personnelSheetName) : [];
+            const personnelHeaderIndex = findHeader(personnelRows, ['ma nhan vien', 'ho ten']);
+            const personnelHeaders = personnelHeaderIndex >= 0 ? personnelRows[personnelHeaderIndex].map((header, index) => clean(header) || `Cột ${index + 1}`) : [];
+            const personnelRecords = personnelHeaderIndex >= 0 ? personnelRows.slice(personnelHeaderIndex + 1).map(row => {
+                const record = {};
+                personnelHeaders.forEach((header, index) => { record[header] = clean(row[index]); });
+                return record;
+            }).filter(record => findField(record, 'ma nhan vien') || findField(record, 'ho ten')) : [];
+            const assetRecords = records.filter(record => {
+                const code = findField(record, 'ma ts', 'ma tai san');
+                const name = findField(record, 'ten tai san');
+                const normalizedCode = normalize(code);
+                const isInternalComponent = /^(r|ram|vga|gpu|cpu|ng|psu|nguon|oc|hdd|ssd)\d*/.test(normalizedCode);
+                return (code || name) && !isInternalComponent;
+            });
+            const now = new Date().toISOString();
+            const getAssetType = (code, name) => {
+                const value = normalize(code || name);
+                if (/^mh/.test(value) || value.includes('man hinh')) return 'Màn hình';
+                if (/^bp/.test(value) || value.includes('ban phim')) return 'Bàn phím';
+                if (/^ch/.test(value) || value.includes('chuot')) return 'Chuột';
+                if (/^(pc|r|ram|oc|hdd|ssd|vga|cpu|ng|psu|nguon)/.test(value)) return 'PC';
+                if (/^(lt|laptop)/.test(value) || value.includes('laptop')) return 'Laptop';
+                if (value.includes('dien thoai')) return 'Điện thoại';
+                if (value.includes('may in')) return 'Máy in';
+                return clean(name) || 'Khác';
+            };
+            const categoryNames = [...new Set(assetRecords.map(record => getAssetType(findField(record, 'ma ts', 'ma tai san'), findField(record, 'ten tai san'))))];
+            const categories = categoryNames.map((name, index) => ({ id: index + 1, name, created_at: now }));
+            const departmentNames = [...new Set(personnelRecords.map(record => findField(record, 'bo phan')).filter(Boolean))];
+            const departments = departmentNames.map((name, index) => ({ id: index + 1, name, created_at: now }));
+            const assetUserNames = assetRecords.map(record => findField(record, 'ho ten nhan vien dang sd', 'ho ten nhan vien sd gan nhat', 'nguoi su dung')).filter(Boolean);
+            const personnelUserNames = personnelRecords.map(record => findField(record, 'ho ten')).filter(Boolean);
+            const userNames = [...new Set([...assetUserNames, ...personnelUserNames])];
+            const users = userNames.map((name, index) => {
+                const record = personnelRecords.find(item => findField(item, 'ho ten') === name) || assetRecords.find(item => findField(item, 'ho ten nhan vien dang sd', 'ho ten nhan vien sd gan nhat', 'nguoi su dung') === name);
+                const departmentName = findField(record, 'bo phan');
+                return {
+                    id: index + 1,
+                    name,
+                    employee_code: findField(record, 'ma nhan vien'),
+                    email: findField(record, 'email cong ty'),
+                    department_id: departments.find(department => normalize(department.name) === normalize(departmentName))?.id || null,
+                    status: normalize(findField(record, 'trang thai')).includes('nghi') ? 'Đã nghỉ việc' : 'Đang hoạt động',
+                    avatar: this.buildUserAvatar(name),
+                    source_data: record,
+                    created_at: now
+                };
+            });
+            const userIdByName = new Map(users.map(user => [normalize(user.name), user.id]));
+            const statusMap = { 'dang su dung': 'Active', 'su dung': 'Active', 'ton kho': 'Stock', 'trong kho': 'Stock', 'hong': 'Broken', 'hong/ thanh ly': 'Disposed', 'hong/thanh ly': 'Disposed', 'ban thanh ly': 'Disposed', 'da thanh ly': 'Disposed' };
+            const getStandardConfig = (code, name) => {
+                const value = normalize(code || name);
+                if (/^pc/.test(value)) return '- Chip: \n- Ram: \n- Card màn hình: \n- Ổ cứng:';
+                if (/^(mh|man hinh)/.test(value)) return 'Màn hình máy tính';
+                if (/^(ch|chuot)/.test(value)) return 'Chuột';
+                if (/^(bp|ban phim)/.test(value)) return 'Bàn phím';
+                if (/^(r|ram)/.test(value)) return 'RAM';
+                if (/^(oc|hdd|ssd)/.test(value)) return 'Ổ cứng';
+                if (/^(lt|laptop)/.test(value) || value.includes('laptop')) return 'Laptop';
+                return '';
+            };
+            const assets = assetRecords.map((record, index) => {
+                const code = findField(record, 'ma ts', 'ma tai san');
+                const detail = detailByCode.get(normalize(code));
+                const isPc = /^pc\d+/.test(normalize(code));
+                const name = isPc ? code : (findField(record, 'ten tai san') || `Tài sản ${index + 1}`);
+                const userName = findField(record, 'ho ten nhan vien dang sd', 'ho ten nhan vien sd gan nhat', 'nguoi su dung') || findField(detail, 'ho ten nhan vien dang sd', 'ho ten nhan vien sd gan nhat');
+                const rawStatus = findField(record, 'trang thai tai san') || findField(detail, 'trang thai tai san');
+                const assetType = getAssetType(code, name);
+                const detailConfig = findField(detail, 'thong so ki thuat', 'thong so ky thuat');
+                return {
+                    id: index + 1,
+                    asset_code: code || `TS-${String(index + 1).padStart(3, '0')}`,
+                    name,
+                    config: detailConfig || findField(record, 'thong so ki thuat', 'thong so ky thuat') || getStandardConfig(code, name),
+                    category_id: categories.find(category => normalize(category.name) === normalize(assetType))?.id || null,
+                    location: findField(record, 'vi tri'),
+                    purchase_date: findField(record, 'ngay cap', 'ngay mua'),
+                    user_id: userIdByName.get(normalize(userName)) || null,
+                    status: statusMap[normalize(rawStatus)] || 'Stock',
+                    notes: findField(record, 'ghi chu'),
+                    unit: findField(record, 'don vi tinh'),
+                    quantity: findField(record, 'so luong'),
+                    brand: findField(record, 'hang mua'),
+                    warranty_code: findField(record, 'ma so bao hanh'),
+                    handover_code: findField(record, 'ma bien ban ban giao'),
+                    source_data: record,
+                    created_at: now
+                };
+            });
+            const suppliers = [...new Set(assetRecords.map(record => findField(record, 'don vi mua', 'don vi cung cap')).filter(Boolean))].map((name, index) => ({ id: index + 1, name, created_at: now }));
+            const licenseTypes = [];
+            const emptyTables = { licenses: [], asset_history: [], maintenance_tasks: [], maintenance_events: [], stock_checks: [], stock_check_items: [], alert_settings: [] };
+            Object.entries({ departments, categories, users, assets, suppliers, license_types: licenseTypes, ...emptyTables }).forEach(([table, data]) => {
+                localStorage.setItem(this.KEYS[table.toUpperCase()], JSON.stringify(data));
+            });
+            localStorage.setItem(this.KEYS.WORKBOOK_DATA, JSON.stringify({ sourceSheet: sourceSheetName, sheets: workbookSheets, importedAt: now }));
+            localStorage.setItem(this.KEYS.COUNTER, JSON.stringify({ assets: assets.length + 1, users: users.length + 1, departments: departments.length + 1, categories: categories.length + 1, suppliers: suppliers.length + 1, licenses: 1, license_types: 1, asset_history: 1, maintenance_tasks: 1, maintenance_events: 1, stock_checks: 1, stock_check_items: 1, alert_settings: 1 }));
+            localStorage.setItem('qlts_seed_v2', '1');
+            localStorage.setItem('qlts_csp_keys_seeded_v1', '1');
+            localStorage.setItem(importFlag, '1');
+            console.log(`LocalDB: Imported ${assets.length} assets from ${sourceSheetName}; preserved ${workbook.SheetNames.length} workbook sheets`);
+        } catch (error) {
+            console.error('LocalDB workbook import failed:', error);
         }
     },
 
@@ -981,6 +1146,6 @@ if (typeof window !== 'undefined') {
     window.LocalDB = LocalDB;
     // Initialize after export
     console.log('LocalDB: Starting initialization...');
-    LocalDB.init();
+    window.localDBReady = LocalDB.init();
     console.log('LocalDB: Initialization complete');
 }

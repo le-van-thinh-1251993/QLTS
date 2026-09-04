@@ -218,7 +218,7 @@
             <h3 id="drillDownModalTitle" class="text-xl font-bold mb-4 border-b pb-3 dark:text-white dark:border-slate-700">Chi tiết tài sản</h3>
             <div class="overflow-y-auto flex-1 dark:text-gray-200">
                 <table class="w-full text-left">
-                    <thead class="bg-slate-50 dark:bg-slate-700 sticky top-0">
+                    <thead id="drillDownModalTableHead" class="bg-slate-50 dark:bg-slate-700 sticky top-0">
                         <tr>
                             <th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Loại Key</th>
                             <th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã Key</th>
@@ -273,7 +273,8 @@
     <!-- LocalDB for local storage operations -->
     <!-- <script src="config.js"></script> -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/localDB.js?v=20260825-1"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="js/localDB.js?v=20260904-7"></script>
     <script src="js/modules/script-helpers.js?v=20260825-1"></script>
     
 <script src="js/modules/page-common.js?v=20260825-1"></script>

@@ -239,6 +239,7 @@ async function autoRestoreFromSupabaseIfNeeded() {
 
 window.QLTSPageCommon = window.QLTSPageCommon || {};
 window.QLTSPageCommon.init = async function () {
+    if (window.localDBReady) await window.localDBReady;
     window.supabaseClient = window.LocalDB;
 
     if (!supabaseClient) {

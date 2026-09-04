@@ -5,10 +5,16 @@ window.QLTSPageDashboard.init = async function () {
 
     function showDrillDown(title, items, type = 'asset') {
         const modalTitle = document.getElementById('drillDownModalTitle');
+        const thead = document.getElementById('drillDownModalTableHead');
         const tbody = document.getElementById('drillDownModalTableBody');
         if (!modalTitle || !tbody) return;
 
         modalTitle.textContent = title;
+        if (thead) {
+            thead.innerHTML = type === 'asset'
+                ? '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tên tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Cấu hình</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người dùng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Trạng thái</th></tr>'
+                : '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Loại Key</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã Key</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Hạn sử dụng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người dùng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Trạng thái</th></tr>';
+        }
 
         if (items.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">Không có dữ liệu chi tiết.</td></tr>';
@@ -16,10 +22,11 @@ window.QLTSPageDashboard.init = async function () {
             tbody.innerHTML = items.map(item => {
                 if (type === 'asset') {
                     const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
-                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.name}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.config || '-'}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || '-'}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
+                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.name || '-'}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.asset_code || '-'}</td><td class="p-3 text-sm whitespace-pre-line">${item.config || ''}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || ''}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
                 } else {
                     const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
-                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.key_type}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.license_key || '-'}</td><td class="p-3 text-sm">${item.expiration_date || 'Vĩnh viễn'}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || '-'}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
+                    const expiration = item.expiration_date || '';
+                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.key_type || '-'}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.license_key || '-'}</td><td class="p-3 text-sm">${expiration}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || ''}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
                 }
             }).join('');
         }
