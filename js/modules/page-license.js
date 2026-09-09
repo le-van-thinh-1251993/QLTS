@@ -305,15 +305,16 @@ window.QLTSPageLicense.init = async function () {
             const id = parseInt(maintRow.dataset.id);
             const task = maintenanceTasks.find(m => m.id === id);
             if (task) {
-                const assetName = assets.find(a => a.id === task.asset_id)?.name || 'N/A';
-                const creator = users.find(u => u.id === task.created_by)?.name || 'Admin';
+                const asset = assets.find(a => a.id === task.asset_id);
+                const assetName = asset ? `${asset.name}${asset.asset_code ? ` (${asset.asset_code})` : ''}` : 'Chưa gắn thiết bị';
+                const creator = users.find(u => u.id === task.created_by)?.name || (task.created_by === 'local-admin' ? (window.currentUserProfile?.full_name || 'Admin') : 'Admin');
                 const detailsHtml = `
                     <div class="text-left space-y-2 text-sm">
                         <p><strong>Tiêu đề:</strong> ${task.title || '-'}</p>
                         <p><strong>Thiết bị:</strong> ${assetName}</p>
                         <p><strong>Ngày dự kiến:</strong> ${formatDateDisplay(task.due_date)}</p>
                         <p><strong>Trạng thái:</strong> ${task.status || '-'}</p>
-                        <p><strong>Ghi chú:</strong> ${task.note || 'Không có'}</p>
+                        <p><strong>Ghi chú / Nội dung:</strong> ${task.note || 'Không có'}</p>
                         <p><strong>Người tạo:</strong> ${creator}</p>
                     </div>
                 `;
@@ -1131,7 +1132,7 @@ window.QLTSPageLicense.init = async function () {
         // nữa) - phải "Mở lại" (chỉ admin) trước khi thao tác tiếp.
         const isClosed = check.status === 'Hoàn thành';
         const titleEl = document.getElementById('stockCheckDetailTitle');
-        if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-clipboard-check mr-2"></i>${check.note || 'Đợt kiểm kê'}${isClosed ? ' <span class="ml-2 align-middle px-2 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"><i class="fa-solid fa-lock mr-1"></i>Đã đóng</span>' : ''}`;
+        if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-clipboard-check mr-2"></i>${check.name || check.note || 'Đợt kiểm kê'}${isClosed ? ' <span class="ml-2 align-middle px-2 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"><i class="fa-solid fa-lock mr-1"></i>Đã đóng</span>' : ''}`;
         const scanBtn = document.getElementById('btnStockCheckScan');
         if (scanBtn) {
             scanBtn.dataset.stockCheckId = stockCheckId;

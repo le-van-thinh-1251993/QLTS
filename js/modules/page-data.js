@@ -453,7 +453,8 @@ window.QLTSPageData.init = async function () {
         }
 
         const rows = pageItems.map(task => {
-            const assetName = assets.find(a => a.id === task.asset_id)?.name || 'N/A';
+            const asset = assets.find(a => a.id === task.asset_id);
+            const assetName = asset ? `${asset.name}${asset.asset_code ? ` (${asset.asset_code})` : ''}` : 'Chưa gắn thiết bị';
             const isDone = task.status === DONE_STATUS;
             const statusClass = {
                 'Chưa xử lý': 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
@@ -508,12 +509,14 @@ window.QLTSPageData.init = async function () {
             // với người không phải admin. Admin có thể "Mở lại" để tiếp tục thao tác.
             const isLocked = isDone && !isAdmin;
             const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
+            const itemCount = (stockCheckItems || []).filter(ci => ci.stock_check_id === item.id).length;
+            const detailText = [item.note, itemCount > 0 ? `(${itemCount} tài sản)` : ''].filter(Boolean).join(' • ') || 'Kiểm kê định kỳ';
             return `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 stock-row cursor-pointer" data-id="${item.id}">
-                    <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${item.note || '-'}</td>
+                    <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${item.name || item.note || ('Đợt kiểm kê #' + item.id)}</td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(item.started_at)}</td>
                     <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${item.status || '-'}</span></td>
-                    <td class="p-3 text-slate-600 dark:text-slate-300">${item.note ? item.note : '-'}</td>
+                    <td class="p-3 text-slate-600 dark:text-slate-300">${detailText}</td>
                     <td class="p-3 text-right whitespace-nowrap">
                         <div class="flex gap-2 justify-end">
                             ${!isDone ? `<div class="tooltip"><button data-action="complete-stock" data-id="${item.id}" class="${btnClasses} text-green-600 hover:bg-green-100"><i class="fa-solid fa-check"></i></button><span class="tooltiptext">Hoàn thành</span></div>` : (isAdmin ? `<div class="tooltip"><button data-action="reopen-stock" data-id="${item.id}" class="${btnClasses} text-amber-600 hover:bg-amber-100"><i class="fa-solid fa-rotate-left"></i></button><span class="tooltiptext">Mở lại</span></div>` : '')}

@@ -3,31 +3,244 @@ window.QLTSPageDashboard.init = async function () {
     // =================================================================
     const ITEMS_PER_PAGE = 10;
 
+    // Dữ liệu phục vụ drill-down từ các thẻ thống kê Dashboard
+    const currentDashboardData = {
+        repairAssets: [],
+        backlogMaintenance: [],
+        openStockChecks: [],
+        alertsList: [],
+        totalAssets: [],
+        assetsInUse: [],
+        assetsInStock: [],
+        depreciationAssets: [],
+        nextMaintenanceTasks: []
+    };
+
+    // Helper: Định dạng ngày hiển thị dd/mm/yyyy
+    // Helper: Định dạng ngày hiển thị dd/mm/yyyy
+    const formatVN = (val) => {
+        if (!val) return '-';
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? String(val) : d.toLocaleDateString('vi-VN');
+    };
+
+    // Helper: Tìm tên người dùng theo ID hoặc tên có sẵn
+    const getUserName = (userId, fallback = '') => {
+        if (fallback) return fallback;
+        if (!userId) return '';
+        if (userId === 'local-admin' || (window.currentUserProfile && String(userId) === String(window.currentUserProfile.id))) {
+            return window.currentUserProfile?.full_name || 'Admin';
+        }
+        const userList = (window.users && Array.isArray(window.users) && window.users.length) ? window.users : ((typeof users !== 'undefined' && Array.isArray(users)) ? users : []);
+        const u = userList.find(user => user.id === userId || String(user.id) === String(userId));
+        if (u && (u.name || u.full_name)) return u.name || u.full_name;
+        return '';
+    };
+
+    // Helper: Tìm tài sản theo ID
+    const getAssetName = (assetId) => {
+        if (!assetId) return null;
+        const assetList = (window.assets && Array.isArray(window.assets) && window.assets.length) ? window.assets : ((typeof assets !== 'undefined' && Array.isArray(assets)) ? assets : []);
+        return assetList.find(a => a.id === assetId || String(a.id) === String(assetId)) || null;
+    };
+
     function showDrillDown(title, items, type = 'asset') {
         const modalTitle = document.getElementById('drillDownModalTitle');
         const thead = document.getElementById('drillDownModalTableHead');
         const tbody = document.getElementById('drillDownModalTableBody');
+        const countEl = document.getElementById('drillDownModalCount');
         if (!modalTitle || !tbody) return;
 
         modalTitle.textContent = title;
+        const totalItems = (items && Array.isArray(items)) ? items.length : 0;
+        if (countEl) countEl.textContent = `Tổng số: ${totalItems} mục`;
+
         if (thead) {
-            thead.innerHTML = type === 'asset'
-                ? '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tên tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Cấu hình</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người dùng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Trạng thái</th></tr>'
-                : '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Loại Key</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã Key</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Hạn sử dụng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người dùng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Trạng thái</th></tr>';
+            if (type === 'asset') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tên tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Cấu hình / Vị trí</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người dùng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Trạng thái</th></tr>';
+            } else if (type === 'license') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Loại Key / Tên</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã Key</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Gói / Phiên bản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Hạn sử dụng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người dùng / Trạng thái</th></tr>';
+            } else if (type === 'maintenance') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tiêu đề / Thiết bị</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Nội dung bảo trì</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Ngày đến hạn</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người phụ trách</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Trạng thái</th></tr>';
+            } else if (type === 'stock_check') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Đợt kiểm kê</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Ghi chú / Mục đích</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Ngày bắt đầu</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người thực hiện</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Trạng thái</th></tr>';
+            } else if (type === 'depreciation') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tên tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mã tài sản</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-right">Nguyên giá</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-center">Thời gian SD</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-right">Khấu hao / tháng</th></tr>';
+            } else if (type === 'alert') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Loại cảnh báo</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Đối tượng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Thời hạn</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Còn lại</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mức độ</th></tr>';
+            } else if (type === 'activity') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Thời gian</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Hành động</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tài sản liên quan</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người thực hiện</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Chi tiết</th></tr>';
+            }
         }
 
-        if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">Không có dữ liệu chi tiết.</td></tr>';
+        if (totalItems === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 dark:text-slate-500"><i class="fa-solid fa-circle-info text-2xl mb-2 block opacity-40"></i>Không có dữ liệu chi tiết trong mục này.</td></tr>';
         } else {
             tbody.innerHTML = items.map(item => {
                 if (type === 'asset') {
                     const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
-                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.name || '-'}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.asset_code || '-'}</td><td class="p-3 text-sm whitespace-pre-line">${item.config || ''}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || ''}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
-                } else {
+                    const userName = item.user || getUserName(item.user_id);
+                    const code = item.asset_code || (item.id ? `TS-${String(item.id).padStart(3, '0')}` : '-');
+                    const subParts = [];
+                    if (item.config) subParts.push(item.config);
+                    if (item.location) subParts.push(item.location);
+                    const subInfo = subParts.join(' • ') || (item.category || '-');
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3 font-medium text-slate-800 dark:text-slate-100">${item.name || '-'}</td>
+                        <td class="p-3 text-xs text-slate-500 dark:text-slate-400 font-mono">${code}</td>
+                        <td class="p-3 text-xs text-slate-500 dark:text-slate-400 whitespace-pre-line">${subInfo}</td>
+                        <td class="p-3 text-sm text-blue-600 dark:text-blue-400 font-medium">${userName ? `<i class="fa-solid fa-user mr-1 text-xs"></i>${userName}` : '<span class="text-slate-400 italic">Chưa phân bổ</span>'}</td>
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td>
+                    </tr>`;
+                } else if (type === 'license') {
                     const statusInfo = STATUS_MAP[item.status] || { text: item.status, classes: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' };
-                    const expiration = item.expiration_date || '';
-                    return `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium text-slate-700">${item.key_type || '-'}</td><td class="p-3 text-xs text-slate-500 font-mono">${item.license_key || '-'}</td><td class="p-3 text-sm">${expiration}</td><td class="p-3 text-sm text-blue-600 font-semibold">${item.user || ''}</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span></td></tr>`;
+                    const userName = item.user || getUserName(item.user_id);
+                    const expiration = item.expiration_date ? formatVN(item.expiration_date) : 'Vĩnh viễn';
+                    const swName = item.software_name || item.key_type || 'License';
+                    const licCode = item.license_code || (item.id ? `LIC-${String(item.id).padStart(3, '0')}` : '');
+                    const pkg = item.package_type || 'Tiêu chuẩn';
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3">
+                            <div class="font-medium text-slate-800 dark:text-slate-100">${swName}</div>
+                            ${licCode ? `<div class="text-xs text-slate-400 font-mono">${licCode}</div>` : ''}
+                        </td>
+                        <td class="p-3 text-xs text-slate-500 dark:text-slate-400 font-mono">${item.license_key || '-'}</td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300">${pkg}</td>
+                        <td class="p-3 text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">${expiration}</td>
+                        <td class="p-3">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-full text-xs font-bold ${statusInfo.classes}">${statusInfo.text}</span>
+                                ${userName ? `<span class="text-xs text-blue-600 dark:text-blue-400 font-medium">${userName}</span>` : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+                } else if (type === 'maintenance') {
+                    const titleText = item.title || item.task_name || item.name || 'Bảo trì thiết bị';
+                    const relatedAsset = getAssetName(item.asset_id) || (item.device_name ? { name: item.device_name } : null);
+                    const assetCodeStr = relatedAsset && relatedAsset.asset_code ? ` (${relatedAsset.asset_code})` : (relatedAsset && relatedAsset.id ? ` (TS-${String(relatedAsset.id).padStart(3, '0')})` : '');
+                    const assetInfo = relatedAsset
+                        ? `<div class="text-xs text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1 font-medium"><i class="fa-solid fa-cube text-[10px]"></i><span>${relatedAsset.name}${assetCodeStr}</span></div>`
+                        : `<div class="text-xs text-slate-400 dark:text-slate-500 mt-1 italic"><i class="fa-solid fa-circle-question text-[10px] mr-1"></i>Chưa gắn thiết bị</div>`;
+                    let contentText = item.note || item.description || item.details || item.maintenance_type;
+                    if (!contentText || contentText === '-') contentText = 'Bảo dưỡng định kỳ theo lịch';
+                    const rawDate = item.due_date || item.next_due_date || item.scheduled_for;
+                    const dueDate = formatVN(rawDate);
+                    const pic = item.assigned_to || item.technician || getUserName(item.created_by) || 'IT Phụ trách';
+                    const st = item.status || 'Chưa xử lý';
+                    const isDone = st.toLowerCase() === 'hoàn thành';
+                    const isOverdue = st.toLowerCase() === 'quá hạn';
+                    const isInProgress = st.toLowerCase() === 'đang xử lý';
+                    let stClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+                    if (isDone) stClass = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+                    else if (isOverdue) stClass = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+                    else if (isInProgress) stClass = 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300';
+
+                    const dObj = safeDate(rawDate);
+                    let dueBadge = '';
+                    if (dObj && !isDone) {
+                        const days = Math.ceil((dObj - new Date()) / 86400000);
+                        if (days < 0) {
+                            dueBadge = `<div class="text-[11px] text-red-500 font-semibold mt-0.5"><i class="fa-solid fa-circle-exclamation mr-0.5"></i>Quá hạn ${Math.abs(days)} ngày</div>`;
+                        } else if (days <= 7) {
+                            dueBadge = `<div class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5"><i class="fa-solid fa-clock mr-0.5"></i>Còn ${days} ngày</div>`;
+                        }
+                    }
+
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3">
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">${titleText}</div>
+                            ${assetInfo}
+                        </td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs">${contentText}</td>
+                        <td class="p-3 text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                            <div>${dueDate}</div>
+                            ${dueBadge}
+                        </td>
+                        <td class="p-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            <i class="fa-solid fa-user-gear text-slate-400 dark:text-slate-500 mr-1.5 text-xs"></i>${pic}
+                        </td>
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-bold ${stClass}">${st}</span></td>
+                    </tr>`;
+                } else if (type === 'stock_check') {
+                    let nameText = item.name;
+                    if (!nameText && item.note && item.note.includes('Tên đợt:')) {
+                        const m = item.note.match(/Tên đợt:\s*([^|]+)/);
+                        if (m) nameText = m[1].trim();
+                    }
+                    if (!nameText) nameText = item.id ? `Đợt kiểm kê #${item.id}` : 'Đợt kiểm kê';
+
+                    const stockItems = (window.stockCheckItems && Array.isArray(window.stockCheckItems)) ? window.stockCheckItems.filter(ci => ci.stock_check_id === item.id) : [];
+                    const itemCountStr = stockItems.length > 0
+                        ? `<div class="text-xs text-blue-600 dark:text-blue-400 mt-1 font-medium"><i class="fa-solid fa-clipboard-check text-[10px] mr-1"></i>${stockItems.length} tài sản kiểm kê</div>`
+                        : '';
+
+                    let noteText = item.note ? item.note.replace(/Tên đợt:\s*[^|]+\s*\|?\s*/, '').trim() : '';
+                    if (!noteText) noteText = 'Kiểm kê tài sản định kỳ';
+
+                    const rawDate = item.started_at || item.check_date || item.created_at;
+                    const startDate = formatVN(rawDate);
+                    const pic = item.assignee || getUserName(item.created_by) || 'IT Admin';
+                    const st = item.status || 'Đang mở';
+                    const isDone = st.toLowerCase() === 'hoàn thành';
+                    const stClass = isDone
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                        : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300';
+
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">
+                            <div>${nameText}</div>
+                            ${itemCountStr}
+                        </td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs">${noteText}</td>
+                        <td class="p-3 text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">${startDate}</td>
+                        <td class="p-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            <i class="fa-solid fa-user-check text-slate-400 dark:text-slate-500 mr-1.5 text-xs"></i>${pic}
+                        </td>
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-bold ${stClass}">${st}</span></td>
+                    </tr>`;
+                } else if (type === 'depreciation') {
+                    const cost = Number(item.cost) || 0;
+                    const salvage = Number(item.salvage_value) || 0;
+                    const life = Number(item.useful_life_months) || 0;
+                    const monthly = (cost > 0 && life > 0) ? Math.max(0, cost - salvage) / life : 0;
+                    const code = item.asset_code || (item.id ? `TS-${String(item.id).padStart(3, '0')}` : '-');
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3 font-medium text-slate-800 dark:text-slate-100">
+                            <div>${item.name || '-'}</div>
+                            <div class="text-xs text-slate-400 mt-0.5">${item.category || ''}</div>
+                        </td>
+                        <td class="p-3 text-xs text-slate-500 dark:text-slate-400 font-mono">${code}</td>
+                        <td class="p-3 text-sm text-right font-medium text-slate-700 dark:text-slate-200">${currencyVN(cost)}</td>
+                        <td class="p-3 text-sm text-center text-slate-600 dark:text-slate-300">${life > 0 ? `${life} tháng` : '-'}</td>
+                        <td class="p-3 text-sm text-right font-bold text-emerald-600 dark:text-emerald-400">${currencyVN(monthly)}</td>
+                    </tr>`;
+                } else if (type === 'alert') {
+                    const daysText = item.daysLeft === 0
+                        ? '<span class="text-red-600 font-bold">Hôm nay</span>'
+                        : (item.daysLeft < 0 ? `<span class="text-red-600 font-bold">Quá hạn ${Math.abs(item.daysLeft)} ngày</span>` : `${item.daysLeft} ngày`);
+
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200">${item.category}</span></td>
+                        <td class="p-3 text-sm font-medium text-slate-800 dark:text-slate-100">${item.title}</td>
+                        <td class="p-3 text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">${item.dueDate}</td>
+                        <td class="p-3 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">${daysText}</td>
+                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-bold ${item.levelClass}">${item.level}</span></td>
+                    </tr>`;
+                } else if (type === 'activity') {
+                    const timeStr = item.time || formatVN(item.created_at);
+                    const actName = item.action || 'Thao tác';
+                    const targetName = item.assetName || (getAssetName(item.asset_id)?.name) || 'Hệ thống';
+                    const userStr = item.createdBy || getUserName(item.created_by) || 'Admin';
+                    const descStr = item.desc || item.description || '-';
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap font-mono">${timeStr}</td>
+                        <td class="p-3 text-sm font-semibold text-slate-800 dark:text-slate-100">${actName}</td>
+                        <td class="p-3 text-sm text-blue-600 dark:text-blue-400 font-medium">${targetName}</td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap"><i class="fa-solid fa-user text-xs text-slate-400 mr-1"></i>${userStr}</td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300">${descStr}</td>
+                    </tr>`;
                 }
+                return '';
             }).join('');
         }
         openModal('drillDownModal');
@@ -44,8 +257,127 @@ window.QLTSPageDashboard.init = async function () {
         return isNaN(d.getTime()) ? null : d;
     };
 
+    let dashboardCardsBound = false;
+    function initDashboardCardClicks() {
+        if (dashboardCardsBound) return;
+        dashboardCardsBound = true;
+
+        const bind = (id, getter) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('click', () => {
+                    const p = getter();
+                    if (p) showDrillDown(p.title, p.items, p.type);
+                });
+            }
+        };
+
+        bind('cardAssetsInRepair', () => ({
+            title: `Danh sách thiết bị Hỏng / Chờ sửa chữa (${currentDashboardData.repairAssets.length})`,
+            items: currentDashboardData.repairAssets,
+            type: 'asset'
+        }));
+        bind('cardMaintenanceBacklog', () => ({
+            title: `Danh sách Bảo trì tồn đọng (${currentDashboardData.backlogMaintenance.length})`,
+            items: currentDashboardData.backlogMaintenance,
+            type: 'maintenance'
+        }));
+        bind('cardOpenStockChecks', () => ({
+            title: `Các đợt kiểm kê đang mở (${currentDashboardData.openStockChecks.length})`,
+            items: currentDashboardData.openStockChecks,
+            type: 'stock_check'
+        }));
+        bind('cardAlertCount', () => ({
+            title: `Tổng hợp cảnh báo hạn dùng & Bảo trì (${currentDashboardData.alertsList.length})`,
+            items: currentDashboardData.alertsList,
+            type: 'alert'
+        }));
+        bind('cardTotalAssets', () => ({
+            title: `Tất cả tài sản hệ thống (${currentDashboardData.totalAssets.length})`,
+            items: currentDashboardData.totalAssets,
+            type: 'asset'
+        }));
+        bind('cardAssetsInUse', () => ({
+            title: `Tài sản đang sử dụng (${currentDashboardData.assetsInUse.length})`,
+            items: currentDashboardData.assetsInUse,
+            type: 'asset'
+        }));
+        bind('cardAssetsInStock', () => ({
+            title: `Tài sản sẵn sàng trong kho (${currentDashboardData.assetsInStock.length})`,
+            items: currentDashboardData.assetsInStock,
+            type: 'asset'
+        }));
+        bind('cardMonthlyDep', () => ({
+            title: `Bảng khấu hao tài sản hàng tháng (${currentDashboardData.depreciationAssets.length})`,
+            items: currentDashboardData.depreciationAssets,
+            type: 'depreciation'
+        }));
+        bind('cardNextMaintenance', () => ({
+            title: `Lịch bảo trì sắp tới (${currentDashboardData.nextMaintenanceTasks.length})`,
+            items: currentDashboardData.nextMaintenanceTasks,
+            type: 'maintenance'
+        }));
+    }
+
+    let dashboardToolbarBound = false;
+    function initDashboardToolbar() {
+        if (dashboardToolbarBound) return;
+        dashboardToolbarBound = true;
+
+        const btnRefresh = document.getElementById('btnRefreshDashboard');
+        if (btnRefresh) {
+            btnRefresh.addEventListener('click', async () => {
+                const icon = document.getElementById('refreshIcon');
+                if (icon) icon.classList.add('fa-spin');
+                btnRefresh.disabled = true;
+                try {
+                    if (typeof window.fetchAllData === 'function') {
+                        await window.fetchAllData();
+                    } else if (typeof updateDashboard === 'function') {
+                        updateDashboard();
+                    }
+                } catch (err) {
+                    console.error('Lỗi làm mới dashboard:', err);
+                } finally {
+                    setTimeout(() => {
+                        if (icon) icon.classList.remove('fa-spin');
+                        btnRefresh.disabled = false;
+                    }, 500);
+                }
+            });
+        }
+
+        const toggleBtn = document.getElementById('toggleAdvancedCharts');
+        const advContainer = document.getElementById('advancedChartsContainer');
+        const toggleText = document.getElementById('toggleAdvancedText');
+        const toggleIcon = document.getElementById('toggleAdvancedIcon');
+        if (toggleBtn && advContainer) {
+            toggleBtn.addEventListener('click', () => {
+                const isHidden = advContainer.classList.contains('hidden');
+                if (isHidden) {
+                    advContainer.classList.remove('hidden');
+                    if (toggleText) toggleText.textContent = 'Thu gọn';
+                    if (toggleIcon) toggleIcon.className = 'fa-solid fa-chevron-up text-[10px]';
+                } else {
+                    advContainer.classList.add('hidden');
+                    if (toggleText) toggleText.textContent = 'Mở rộng';
+                    if (toggleIcon) toggleIcon.className = 'fa-solid fa-chevron-down text-[10px]';
+                }
+            });
+        }
+    }
+
     function updateDashboard() {
         if (!document.getElementById('dashboardContent')) return;
+
+        // Cập nhật timestamp Dashboard
+        const lastUpdatedEl = document.getElementById('dashboardLastUpdated');
+        if (lastUpdatedEl) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateStr = now.toLocaleDateString('vi-VN');
+            lastUpdatedEl.textContent = `${timeStr} (${dateStr})`;
+        }
 
         if (document.getElementById('totalAssets')) document.getElementById('totalAssets').textContent = assets.length;
         if (document.getElementById('assetsInUse')) document.getElementById('assetsInUse').textContent = assets.filter(a => a.status === 'Active').length;
@@ -74,25 +406,71 @@ window.QLTSPageDashboard.init = async function () {
         const maintenanceThreshold = alertCfg.maintenance_threshold_days || 7;
         const nowAlerts = new Date();
         const calcDaysLeft = (d) => Math.ceil((d - nowAlerts) / (1000 * 60 * 60 * 24));
-        const assetWarrantyAlerts = assets.filter(a => {
+
+        // Tổng hợp danh sách cảnh báo chi tiết
+        const alertsList = [];
+        assets.forEach(a => {
             const d = safeDate(a.warranty_expiration_date);
-            if (!d) return false;
+            if (!d) return;
             const daysLeft = calcDaysLeft(d);
-            return daysLeft >= 0 && daysLeft <= warrantyThreshold;
-        }).length;
-        const licenseExpiryAlerts = licenses.filter(l => {
+            if (daysLeft >= 0 && daysLeft <= warrantyThreshold) {
+                alertsList.push({
+                    category: 'Bảo hành tài sản',
+                    title: a.name + (a.asset_code ? ` [${a.asset_code}]` : ''),
+                    dueDate: d.toLocaleDateString('vi-VN'),
+                    daysLeft: daysLeft,
+                    level: daysLeft <= 7 ? 'Khẩn cấp' : 'Sắp tới',
+                    levelClass: daysLeft <= 7 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                });
+            }
+        });
+        licenses.forEach(l => {
             const d = safeDate(l.expiration_date);
-            if (!d) return false;
+            if (!d) return;
             const daysLeft = calcDaysLeft(d);
-            return daysLeft >= 0 && daysLeft <= licenseThreshold;
-        }).length;
-        const maintenanceAlerts = backlogTasks.filter(t => {
+            if (daysLeft >= 0 && daysLeft <= licenseThreshold) {
+                alertsList.push({
+                    category: 'Hạn dùng License',
+                    title: (l.key_type || 'License') + (l.license_key ? ` [${l.license_key}]` : ''),
+                    dueDate: d.toLocaleDateString('vi-VN'),
+                    daysLeft: daysLeft,
+                    level: daysLeft <= 7 ? 'Khẩn cấp' : 'Sắp tới',
+                    levelClass: daysLeft <= 7 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                });
+            }
+        });
+        backlogTasks.forEach(t => {
             const d = safeDate(t.next_due_date || t.due_date || t.scheduled_for);
-            if (!d) return false;
+            if (!d) return;
             const daysLeft = calcDaysLeft(d);
-            return daysLeft >= 0 && daysLeft <= maintenanceThreshold;
-        }).length;
-        const totalAlerts = assetWarrantyAlerts + licenseExpiryAlerts + maintenanceAlerts;
+            if (daysLeft >= 0 && daysLeft <= maintenanceThreshold) {
+                const relatedAsset = getAssetName(t.asset_id);
+                const assetStr = relatedAsset ? ` [${relatedAsset.name}]` : '';
+                alertsList.push({
+                    category: 'Lịch bảo trì',
+                    title: (t.title || 'Bảo trì định kỳ') + assetStr,
+                    dueDate: d.toLocaleDateString('vi-VN'),
+                    daysLeft: daysLeft,
+                    level: daysLeft <= 2 ? 'Khẩn cấp' : 'Sắp tới',
+                    levelClass: daysLeft <= 2 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                });
+            }
+        });
+
+        // Cập nhật bộ nhớ dữ liệu phục vụ click drill-down
+        currentDashboardData.repairAssets = assets.filter(a => ['Repair', 'Broken'].includes(a.status));
+        currentDashboardData.backlogMaintenance = backlogTasks;
+        currentDashboardData.openStockChecks = stockChecks.filter(c => (c.status || '').toLowerCase() !== 'hoàn thành');
+        currentDashboardData.alertsList = alertsList;
+        currentDashboardData.totalAssets = assets;
+        currentDashboardData.assetsInUse = assets.filter(a => a.status === 'Active');
+        currentDashboardData.assetsInStock = assets.filter(a => a.status === 'Stock');
+        currentDashboardData.depreciationAssets = assets.filter(a => Number(a.cost) > 0);
+        currentDashboardData.nextMaintenanceTasks = backlogTasks.slice().sort((a, b) => (safeDate(a.next_due_date || a.due_date || a.scheduled_for) || 0) - (safeDate(b.next_due_date || b.due_date || b.scheduled_for) || 0));
+
+        // Khởi tạo sự kiện click card và toolbar
+        initDashboardCardClicks();
+        initDashboardToolbar();
 
         const nextMaintenanceEl = document.getElementById('nextMaintenance');
         if (nextMaintenanceEl) nextMaintenanceEl.textContent = nextDue ? nextDue.toLocaleDateString('vi-VN') : 'Không lịch';
@@ -107,12 +485,35 @@ window.QLTSPageDashboard.init = async function () {
         if (monthlyDepEl) monthlyDepEl.textContent = currencyVN(monthlyDep || 0);
 
         const alertCountEl = document.getElementById('alertCount');
-        if (alertCountEl) alertCountEl.textContent = totalAlerts;
+        if (alertCountEl) alertCountEl.textContent = alertsList.length;
 
+        // Helper vẽ biểu đồ kèm Empty State handling
         const drawChart = (id, instance, type, labels, data, colors, label = 'Dữ liệu', onClickCallback = null) => {
             const ctx = document.getElementById(id);
             if (!ctx || typeof Chart === 'undefined') return null;
             if (instance) instance.destroy();
+
+            const parent = ctx.parentElement;
+            const hasData = Array.isArray(data) && data.length > 0 && data.some(v => Number(v) > 0);
+
+            if (!hasData) {
+                ctx.style.display = 'none';
+                let emptyEl = parent ? parent.querySelector('.chart-empty-state') : null;
+                if (!emptyEl && parent) {
+                    emptyEl = document.createElement('div');
+                    emptyEl.className = 'chart-empty-state flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-10';
+                    emptyEl.innerHTML = '<i class="fa-solid fa-chart-pie text-3xl mb-2 opacity-30"></i><span class="text-xs">Chưa có dữ liệu thống kê</span>';
+                    parent.appendChild(emptyEl);
+                }
+                return null;
+            } else {
+                ctx.style.display = '';
+                if (parent) {
+                    const emptyEl = parent.querySelector('.chart-empty-state');
+                    if (emptyEl) emptyEl.remove();
+                }
+            }
+
             return new Chart(ctx, {
                 type: type,
                 data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: colors || ['#3b82f6', '#22c55e', '#eab308', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'], borderWidth: 1 }] },
@@ -148,7 +549,7 @@ window.QLTSPageDashboard.init = async function () {
             showDrillDown(`License trạng thái: ${clickedLabel}`, licenses.filter(l => l.status === licKeys[index]), 'license');
         });
 
-        // --- [MỚI] Biểu đồ Hạn sử dụng License trên Dashboard chính ---
+        // --- Biểu đồ Hạn sử dụng License trên Dashboard chính ---
         const now = new Date();
         const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
         const expirationStatus = { 'Hết hạn': 0, 'Sắp hết hạn (30 ngày)': 0, 'Còn hạn': 0, 'Vĩnh viễn': 0 };
@@ -197,12 +598,57 @@ window.QLTSPageDashboard.init = async function () {
             if (u) showDrillDown(`Tài sản của: ${u.name}`, assets.filter(a => a.user_id === u.id), 'asset');
         });
 
+        // Biểu đồ xu hướng hoạt động với Empty State
         const last7Days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().split('T')[0]; }).reverse();
         const actData = last7Days.map(date => assetHistory.filter(h => (h.created_at || '').startsWith(date)).length);
         const ctxTrend = document.getElementById('activityTrendChart');
         if (ctxTrend && typeof Chart !== 'undefined') {
             if (chartActivity) chartActivity.destroy();
-            chartActivity = new Chart(ctxTrend, { type: 'line', data: { labels: last7Days, datasets: [{ label: 'Số hoạt động', data: actData, borderColor: '#0ea5e9', tension: 0.3, fill: true, backgroundColor: 'rgba(14, 165, 233, 0.1)' }] }, options: { responsive: true, maintainAspectRatio: false } });
+            const parentTrend = ctxTrend.parentElement;
+            const hasTrendData = Array.isArray(actData) && actData.length > 0 && actData.some(v => Number(v) > 0);
+
+            if (!hasTrendData) {
+                ctxTrend.style.display = 'none';
+                let emptyEl = parentTrend ? parentTrend.querySelector('.chart-empty-state') : null;
+                if (!emptyEl && parentTrend) {
+                    emptyEl = document.createElement('div');
+                    emptyEl.className = 'chart-empty-state flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-10';
+                    emptyEl.innerHTML = '<i class="fa-solid fa-chart-line text-3xl mb-2 opacity-30"></i><span class="text-xs">Chưa có dữ liệu hoạt động trong 7 ngày qua</span>';
+                    parentTrend.appendChild(emptyEl);
+                }
+            } else {
+                ctxTrend.style.display = '';
+                if (parentTrend) {
+                    const emptyEl = parentTrend.querySelector('.chart-empty-state');
+                    if (emptyEl) emptyEl.remove();
+                }
+                chartActivity = new Chart(ctxTrend, {
+                    type: 'line',
+                    data: {
+                        labels: last7Days,
+                        datasets: [{
+                            label: 'Số hoạt động',
+                            data: actData,
+                            borderColor: '#0ea5e9',
+                            tension: 0.3,
+                            fill: true,
+                            backgroundColor: 'rgba(14, 165, 233, 0.1)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: (evt, elements) => {
+                            if (elements.length > 0) {
+                                const index = elements[0].index;
+                                const dateStr = last7Days[index];
+                                const acts = (assetHistory || []).filter(h => (h.created_at || '').startsWith(dateStr));
+                                showDrillDown(`Hoạt động ngày ${formatVN(dateStr)} (${acts.length})`, acts, 'activity');
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         const uLicCounts = users.map(u => ({ name: u.name, count: licenses.filter(l => l.user_id === u.id).length })).filter(u => u.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);

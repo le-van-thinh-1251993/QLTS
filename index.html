@@ -73,112 +73,245 @@
 
             <main class="flex-1 p-6 overflow-y-auto" id="content-area">
                 <div id="dashboardContent">
-                    <h2 class="text-2xl font-bold text-slate-800 dark:text-gray-200 mb-6">Dashboard Tổng quan</h2>
-                    
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-6 mb-6">
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-blue-500 h-full">
-                            <div class="p-3 rounded-full bg-blue-100 text-blue-500"><i class="fa-solid fa-cubes-stacked text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Tổng tài sản</p>
-                                <p id="totalAssets" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
-                            </div>
+                    <!-- Dashboard Header: Title + Timestamp + Refresh button -->
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800 dark:text-gray-100">Dashboard Tổng quan</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+                                <i class="fa-regular fa-clock text-slate-400"></i>
+                                <span>Cập nhật lúc:</span>
+                                <span id="dashboardLastUpdated" class="font-semibold text-slate-700 dark:text-slate-300">--:--:--</span>
+                            </p>
                         </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-green-500 h-full">
-                            <div class="p-3 rounded-full bg-green-100 text-green-500"><i class="fa-solid fa-desktop text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Đang sử dụng</p>
-                                <p id="assetsInUse" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
-                            </div>
+                        <div class="flex items-center gap-2">
+                            <button id="btnRefreshDashboard" type="button" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm cursor-pointer" title="Làm mới dữ liệu">
+                                <i class="fa-solid fa-arrows-rotate text-blue-500" id="refreshIcon"></i>
+                                <span>Làm mới</span>
+                            </button>
                         </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-gray-500 h-full">
-                            <div class="p-3 rounded-full bg-gray-100 text-gray-500"><i class="fa-solid fa-warehouse text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Trong kho</p>
-                                <p id="assetsInStock" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
+                    </div>
+
+                    <!-- KHỐI 1: CẦN XỬ LÝ NGAY (Ưu tiên vận hành) -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="relative flex h-2.5 w-2.5">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                                </span>
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Việc cần xử lý ngay</h3>
                             </div>
+                            <span class="text-xs text-slate-400">Ưu tiên xử lý sự cố & thời hạn</span>
                         </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-red-500 h-full">
-                            <div class="p-3 rounded-full bg-red-100 text-red-500"><i class="fa-solid fa-screwdriver-wrench text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Hỏng/Sửa chữa</p>
-                                <p id="assetsInRepair" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <!-- Card: Hỏng / Sửa chữa -->
+                            <div id="cardAssetsInRepair" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border border-red-200 dark:border-red-900/50 flex items-center border-l-4 border-l-red-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem danh sách thiết bị hỏng/sửa">
+                                <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-screwdriver-wrench text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Hỏng / Sửa chữa</p>
+                                    <div class="flex items-baseline justify-between mt-1">
+                                        <p id="assetsInRepair" class="text-2xl font-bold text-slate-800 dark:text-gray-100">0</p>
+                                        <span class="text-xs text-red-600 dark:text-red-400 font-medium group-hover:underline">Chi tiết <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-amber-500 h-full">
-                            <div class="p-3 rounded-full bg-amber-100 text-amber-600"><i class="fa-solid fa-wrench text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Bảo trì tồn</p>
-                                <p id="maintenanceBacklog" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
+
+                            <!-- Card: Bảo trì tồn đọng -->
+                            <div id="cardMaintenanceBacklog" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border border-amber-200 dark:border-amber-900/50 flex items-center border-l-4 border-l-amber-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem danh sách bảo trì tồn đọng">
+                                <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-wrench text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Bảo trì tồn đọng</p>
+                                    <div class="flex items-baseline justify-between mt-1">
+                                        <p id="maintenanceBacklog" class="text-2xl font-bold text-slate-800 dark:text-gray-100">0</p>
+                                        <span class="text-xs text-amber-600 dark:text-amber-400 font-medium group-hover:underline">Chi tiết <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-indigo-500 h-full">
-                            <div class="p-3 rounded-full bg-indigo-100 text-indigo-600"><i class="fa-solid fa-calendar-check text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Lịch bảo trì kế tiếp</p>
-                                <p id="nextMaintenance" class="text-2xl font-bold text-slate-800 dark:text-gray-200">-</p>
+
+                            <!-- Card: Kiểm kê mở -->
+                            <div id="cardOpenStockChecks" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border border-cyan-200 dark:border-cyan-900/50 flex items-center border-l-4 border-l-cyan-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem các đợt kiểm kê đang mở">
+                                <div class="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-900/30 text-cyan-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-clipboard-check text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Kiểm kê mở</p>
+                                    <div class="flex items-baseline justify-between mt-1">
+                                        <p id="openStockChecks" class="text-2xl font-bold text-slate-800 dark:text-gray-100">0</p>
+                                        <span class="text-xs text-cyan-600 dark:text-cyan-400 font-medium group-hover:underline">Chi tiết <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-cyan-500 h-full">
-                            <div class="p-3 rounded-full bg-cyan-100 text-cyan-600"><i class="fa-solid fa-clipboard-check text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Kiểm kê mở</p>
-                                <p id="openStockChecks" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
-                            </div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-emerald-500 h-full">
-                            <div class="p-3 rounded-full bg-emerald-100 text-emerald-600"><i class="fa-solid fa-coins text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Khấu hao/tháng</p>
-                                <p id="monthlyDep" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
-                            </div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700 flex items-center border-l-4 border-red-500 h-full">
-                            <div class="p-3 rounded-full bg-red-100 text-red-600"><i class="fa-solid fa-bell text-2xl"></i></div>
-                            <div class="ml-4">
-                                <p class="text-slate-500 text-sm font-medium">Cảnh báo sắp tới</p>
-                                <p id="alertCount" class="text-2xl font-bold text-slate-800 dark:text-gray-200">0</p>
+
+                            <!-- Card: Cảnh báo sắp tới -->
+                            <div id="cardAlertCount" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border border-rose-200 dark:border-rose-900/50 flex items-center border-l-4 border-l-rose-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem danh sách cảnh báo hạn dùng">
+                                <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/30 text-rose-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-bell text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Cảnh báo sắp tới</p>
+                                    <div class="flex items-baseline justify-between mt-1">
+                                        <p id="alertCount" class="text-2xl font-bold text-slate-800 dark:text-gray-100">0</p>
+                                        <span class="text-xs text-rose-600 dark:text-rose-400 font-medium group-hover:underline">Chi tiết <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Tình Trạng Thiết Bị</h3>
-                            <div class="relative h-64"><canvas id="assetHealthChart"></canvas></div>
+                    <!-- KHỐI 2: TỔNG QUAN TÀI SẢN & CHI PHÍ -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Tổng quan tài sản & Vận hành</h3>
+                            </div>
+                            <span class="text-xs text-slate-400">Quy mô kho & hiện trạng sử dụng</span>
                         </div>
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Tài sản theo Loại</h3>
-                            <div class="relative h-64"><canvas id="categoryChart"></canvas></div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Phân bổ theo Vị trí</h3>
-                            <div class="relative h-64"><canvas id="locationAssetChart"></canvas></div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                            <!-- Card: Tổng tài sản -->
+                            <div id="cardTotalAssets" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border dark:border-slate-700 flex items-center border-l-4 border-l-blue-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem tất cả tài sản">
+                                <div class="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-cubes-stacked text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Tổng tài sản</p>
+                                    <p id="totalAssets" class="text-2xl font-bold text-slate-800 dark:text-gray-100 mt-1">0</p>
+                                </div>
+                            </div>
+
+                            <!-- Card: Đang sử dụng -->
+                            <div id="cardAssetsInUse" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border dark:border-slate-700 flex items-center border-l-4 border-l-green-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem tài sản đang dùng">
+                                <div class="p-3 rounded-xl bg-green-50 dark:bg-green-900/30 text-green-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-desktop text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Đang sử dụng</p>
+                                    <p id="assetsInUse" class="text-2xl font-bold text-slate-800 dark:text-gray-100 mt-1">0</p>
+                                </div>
+                            </div>
+
+                            <!-- Card: Trong kho -->
+                            <div id="cardAssetsInStock" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border dark:border-slate-700 flex items-center border-l-4 border-l-slate-400 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem tài sản trong kho">
+                                <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-warehouse text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Trong kho</p>
+                                    <p id="assetsInStock" class="text-2xl font-bold text-slate-800 dark:text-gray-100 mt-1">0</p>
+                                </div>
+                            </div>
+
+                            <!-- Card: Khấu hao / tháng -->
+                            <div id="cardMonthlyDep" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border dark:border-slate-700 flex items-center border-l-4 border-l-emerald-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem chi tiết khấu hao">
+                                <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-coins text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Khấu hao / tháng</p>
+                                    <p id="monthlyDep" class="text-base font-bold text-slate-800 dark:text-gray-100 mt-1 truncate">0</p>
+                                </div>
+                            </div>
+
+                            <!-- Card: Lịch bảo trì kế tiếp -->
+                            <div id="cardNextMaintenance" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border dark:border-slate-700 flex items-center border-l-4 border-l-indigo-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem lịch bảo trì kế tiếp">
+                                <div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-calendar-check text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Bảo trì kế tiếp</p>
+                                    <p id="nextMaintenance" class="text-sm font-bold text-slate-800 dark:text-gray-100 mt-1 truncate">-</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Tổng quan hạn sử dụng License</h3>
-                            <div class="relative h-64"><canvas id="licenseExpirationChartDashboard"></canvas></div>
+                    <!-- KHỐI 3: BIỂU ĐỒ VẬN HÀNH TRỌNG TÂM -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-pie text-blue-500"></i>
+                                <span>Chỉ số vận hành trọng tâm</span>
+                            </h3>
                         </div>
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Tài sản theo Phòng ban</h3>
-                            <div class="relative h-64"><canvas id="departmentAssetChart"></canvas></div>
-                        </div>
-                        <div class="bg-white dark:bg-slate-800 p-5 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Top Người dùng (Tài sản)</h3>
-                            <div class="relative h-64"><canvas id="userAssetChart"></canvas></div>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <!-- Chart: Tình trạng thiết bị -->
+                            <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700 flex flex-col">
+                                <div class="flex items-center justify-between pb-3 mb-2 border-b dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200">Tình Trạng Thiết Bị</h4>
+                                    <span class="text-xs text-slate-400">Tỷ lệ theo trạng thái</span>
+                                </div>
+                                <div class="relative flex-1 min-h-[240px]" id="wrap-assetHealthChart">
+                                    <canvas id="assetHealthChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Chart: Hạn License -->
+                            <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700 flex flex-col">
+                                <div class="flex items-center justify-between pb-3 mb-2 border-b dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200">Hạn Sử Dụng License</h4>
+                                    <span class="text-xs text-slate-400">Bản quyền phần mềm</span>
+                                </div>
+                                <div class="relative flex-1 min-h-[240px]" id="wrap-licenseExpirationChartDashboard">
+                                    <canvas id="licenseExpirationChartDashboard"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Chart: Xu hướng hoạt động 7 ngày -->
+                            <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700 flex flex-col">
+                                <div class="flex items-center justify-between pb-3 mb-2 border-b dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200">Xu Hướng Hoạt Động</h4>
+                                    <span class="text-xs text-slate-400">7 ngày gần nhất</span>
+                                </div>
+                                <div class="relative flex-1 min-h-[240px]" id="wrap-activityTrendChart">
+                                    <canvas id="activityTrendChart"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        <div class="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Xu Hướng Hoạt Động (7 ngày qua)</h3>
-                            <div class="relative h-72"><canvas id="activityTrendChart"></canvas></div>
+                    <!-- KHỐI 4: PHÂN BỔ & THỐNG KÊ CHI TIẾT (Có thể thu gọn/mở rộng) -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-simple text-indigo-500"></i>
+                                <span>Phân bổ & Thống kê chi tiết</span>
+                            </h3>
+                            <button id="toggleAdvancedCharts" type="button" class="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium cursor-pointer">
+                                <span id="toggleAdvancedText">Thu gọn</span>
+                                <i class="fa-solid fa-chevron-up text-[10px]" id="toggleAdvancedIcon"></i>
+                            </button>
                         </div>
-                        <div class="bg-white dark:bg-slate-800 p-6 rounded-lg shadow dark:shadow-none border dark:border-slate-700">
-                            <h3 class="text-lg font-bold text-slate-700 dark:text-gray-200 mb-4 border-b pb-2">Top Người dùng License</h3>
-                            <div class="relative h-72"><canvas id="userLicenseChart"></canvas></div>
+                        <div id="advancedChartsContainer" class="space-y-6 transition-all duration-200">
+                            <!-- 3 biểu đồ phân bổ -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-3 border-b dark:border-slate-700 pb-2">Tài sản theo Loại</h4>
+                                    <div class="relative h-60" id="wrap-categoryChart"><canvas id="categoryChart"></canvas></div>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-3 border-b dark:border-slate-700 pb-2">Phân bổ theo Vị trí</h4>
+                                    <div class="relative h-60" id="wrap-locationAssetChart"><canvas id="locationAssetChart"></canvas></div>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-3 border-b dark:border-slate-700 pb-2">Tài sản theo Phòng ban</h4>
+                                    <div class="relative h-60" id="wrap-departmentAssetChart"><canvas id="departmentAssetChart"></canvas></div>
+                                </div>
+                            </div>
+                            <!-- 2 biểu đồ top người dùng -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-3 border-b dark:border-slate-700 pb-2">Top 10 Người dùng (Tài sản)</h4>
+                                    <div class="relative h-64" id="wrap-userAssetChart"><canvas id="userAssetChart"></canvas></div>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border dark:border-slate-700">
+                                    <h4 class="text-sm font-bold text-slate-700 dark:text-gray-200 mb-3 border-b dark:border-slate-700 pb-2">Top 10 Người dùng License</h4>
+                                    <div class="relative h-64" id="wrap-userLicenseChart"><canvas id="userLicenseChart"></canvas></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -205,7 +338,10 @@
                         </tbody>
                 </table>
             </div>
-            <div class="mt-6 pt-4 border-t flex justify-end"><button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600">Đóng</button></div>
+            <div class="mt-6 pt-4 border-t flex items-center justify-between">
+                <span id="drillDownModalCount" class="text-xs text-slate-500 dark:text-slate-400 font-medium">Tổng: 0 mục</span>
+                <button type="button" class="close-modal px-5 py-2 text-slate-600 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600">Đóng</button>
+            </div>
         </div>
     </div>
 
@@ -253,10 +389,10 @@
     <script src="js/modules/sidebar.js?v=20260909-1"></script>
 
 <script src="js/modules/page-common.js?v=20260825-1"></script>
-<script src="js/modules/page-data.js?v=20260825-1"></script>
+<script src="js/modules/page-data.js?v=20260909-4"></script>
 <script src="js/modules/page-ui.js?v=20260825-1"></script>
-<script src="js/modules/page-dashboard.js?v=20260825-1"></script>
-<script src="js/modules/page-license.js?v=20260825-1"></script>
+<script src="js/modules/page-dashboard.js?v=20260909-4"></script>
+<script src="js/modules/page-license.js?v=20260909-4"></script>
 <script src="js/modules/page-settings.js?v=20260825-1"></script>
 <script src="js/script.js?v=20260825-1"></script>
 </body>
