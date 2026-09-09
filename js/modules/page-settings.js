@@ -586,8 +586,12 @@ window.QLTSPageSettings.init = async function () {
                 }
             }
             applyAssetFilters(); 
-            renderMaintenanceList(); 
-            renderStockCheckList(); 
+        }
+        if (document.getElementById('maintenanceTableBody')) {
+            if (typeof renderMaintenanceList === 'function') renderMaintenanceList();
+        }
+        if (document.getElementById('stockCheckTableBody')) {
+            if (typeof renderStockCheckList === 'function') renderStockCheckList();
         }
         if (document.getElementById('licenseTableBody')) { 
             if (resetFilters) resetLicenseFilters(); 

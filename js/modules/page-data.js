@@ -442,13 +442,73 @@ window.QLTSPageData.init = async function () {
         const tbody = document.getElementById('maintenanceTableBody');
         if (!tbody) return;
         const isAdmin = currentUserProfile.role === 'admin';
-        const sorted = (maintenanceTasks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-        const start = (maintenanceCurrentPage - 1) * MAINT_STOCK_PAGE_SIZE;
-        const pageItems = sorted.slice(start, start + MAINT_STOCK_PAGE_SIZE);
+
+        const allTasks = (maintenanceTasks || []).slice();
+
+        // Cập nhật thẻ thống kê
+        const totalEl = document.getElementById('maintTotalCount');
+        const pendingEl = document.getElementById('maintPendingCount');
+        const processingEl = document.getElementById('maintProcessingCount');
+        const doneEl = document.getElementById('maintDoneCount');
+        const overdueEl = document.getElementById('maintOverdueCount');
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (totalEl) totalEl.textContent = allTasks.length;
+        if (pendingEl) pendingEl.textContent = allTasks.filter(t => t.status === 'Chưa xử lý').length;
+        if (processingEl) processingEl.textContent = allTasks.filter(t => t.status === 'Đang xử lý').length;
+        if (doneEl) doneEl.textContent = allTasks.filter(t => t.status === 'Hoàn thành').length;
+        if (overdueEl) overdueEl.textContent = allTasks.filter(t => {
+            if (t.status === 'Quá hạn') return true;
+            if (t.status !== 'Hoàn thành' && t.due_date) {
+                const d = new Date(t.due_date);
+                return !isNaN(d.getTime()) && d < today;
+            }
+            return false;
+        }).length;
+
+        // Bộ lọc & tìm kiếm
+        const searchInput = document.getElementById('filterMaintenanceSearch') || (document.getElementById('assetTableBody') ? null : document.getElementById('searchInput'));
+        const statusSelect = document.getElementById('filterMaintenanceStatus');
+
+        let filtered = allTasks;
+        if (statusSelect && statusSelect.value) {
+            const val = statusSelect.value;
+            if (val === 'Quá hạn') {
+                filtered = filtered.filter(t => {
+                    if (t.status === 'Quá hạn') return true;
+                    if (t.status !== 'Hoàn thành' && t.due_date) {
+                        const d = new Date(t.due_date);
+                        return !isNaN(d.getTime()) && d < today;
+                    }
+                    return false;
+                });
+            } else {
+                filtered = filtered.filter(t => t.status === val);
+            }
+        }
+        if (searchInput && searchInput.value.trim()) {
+            const q = normalizeString(searchInput.value.trim());
+            filtered = filtered.filter(t => {
+                const asset = assets.find(a => a.id === t.asset_id);
+                const assetName = asset ? `${asset.name} ${asset.asset_code || ''}` : '';
+                const searchStr = normalizeString(`${t.title || ''} ${t.note || ''} ${assetName}`);
+                return searchStr.includes(q);
+            });
+        }
+
+        const sorted = filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        const pageSize = 10;
+        const totalPages = Math.ceil(sorted.length / pageSize) || 1;
+        if (maintenanceCurrentPage > totalPages) maintenanceCurrentPage = totalPages;
+        if (maintenanceCurrentPage < 1) maintenanceCurrentPage = 1;
+        const start = (maintenanceCurrentPage - 1) * pageSize;
+        const pageItems = sorted.slice(start, start + pageSize);
 
         if (pageItems.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">Chưa có lịch bảo trì</td></tr>';
-            if (window.renderPagination) window.renderPagination('maintenancePagination', 1, 0, MAINT_STOCK_PAGE_SIZE, 'maintenance');
+            tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500">Chưa có lịch bảo trì phù hợp</td></tr>';
+            if (window.renderPagination) window.renderPagination('maintenancePagination', 1, 0, pageSize, 'maintenance');
             return;
         }
 
@@ -463,7 +523,6 @@ window.QLTSPageData.init = async function () {
                 'Quá hạn': 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
             }[task.status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
             // [RÀNG BUỘC] Lịch bảo trì đã "Hoàn thành" thì khóa Sửa/Xóa với người không phải admin
-            // (trước đây chỉ Xóa bị khóa, Sửa vẫn tự do - không nhất quán). Admin có thể "Mở lại".
             const isLocked = isDone && !isAdmin;
             const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
             return `
@@ -471,7 +530,7 @@ window.QLTSPageData.init = async function () {
                     <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${task.title || '-'}</td>
                     <td class="p-3 text-slate-700 dark:text-slate-200">${assetName}</td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(task.due_date)}</td>
-                    <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${task.status || '-'}</span></td>
+                    <td class="p-3 text-center"><span class="px-2.5 py-1 text-xs font-semibold rounded-full ${statusClass}">${task.status || '-'}</span></td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${task.note || '-'}</td>
                     <td class="p-3 text-right whitespace-nowrap">
                         <div class="flex gap-2 justify-end">
@@ -482,20 +541,53 @@ window.QLTSPageData.init = async function () {
                 </tr>`;
         });
         tbody.innerHTML = rows.join('');
-        if (window.renderPagination) window.renderPagination('maintenancePagination', maintenanceCurrentPage, sorted.length, MAINT_STOCK_PAGE_SIZE, 'maintenance');
+        if (window.renderPagination) window.renderPagination('maintenancePagination', maintenanceCurrentPage, sorted.length, pageSize, 'maintenance');
     }
 
     function renderStockCheckList() {
         const tbody = document.getElementById('stockCheckTableBody');
         if (!tbody) return;
         const isAdmin = currentUserProfile.role === 'admin';
-        const sorted = (stockChecks || []).slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-        const start = (stockCheckCurrentPage - 1) * MAINT_STOCK_PAGE_SIZE;
-        const pageItems = sorted.slice(start, start + MAINT_STOCK_PAGE_SIZE);
+
+        const allChecks = (stockChecks || []).slice();
+
+        // Cập nhật thẻ thống kê
+        const totalEl = document.getElementById('stockTotalCount');
+        const openEl = document.getElementById('stockOpenCount');
+        const doneEl = document.getElementById('stockDoneCount');
+        const itemsEl = document.getElementById('stockTotalItemsCount');
+
+        if (totalEl) totalEl.textContent = allChecks.length;
+        if (openEl) openEl.textContent = allChecks.filter(s => s.status === 'Đang mở').length;
+        if (doneEl) doneEl.textContent = allChecks.filter(s => s.status === 'Hoàn thành').length;
+        if (itemsEl) itemsEl.textContent = (stockCheckItems || []).length;
+
+        const searchInput = document.getElementById('filterStockCheckSearch') || (document.getElementById('assetTableBody') ? null : document.getElementById('searchInput'));
+        const statusSelect = document.getElementById('filterStockCheckStatus');
+
+        let filtered = allChecks;
+        if (statusSelect && statusSelect.value) {
+            filtered = filtered.filter(s => s.status === statusSelect.value);
+        }
+        if (searchInput && searchInput.value.trim()) {
+            const q = normalizeString(searchInput.value.trim());
+            filtered = filtered.filter(s => {
+                const searchStr = normalizeString(`${s.name || ''} ${s.note || ''}`);
+                return searchStr.includes(q);
+            });
+        }
+
+        const sorted = filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        const pageSize = 10;
+        const totalPages = Math.ceil(sorted.length / pageSize) || 1;
+        if (stockCheckCurrentPage > totalPages) stockCheckCurrentPage = totalPages;
+        if (stockCheckCurrentPage < 1) stockCheckCurrentPage = 1;
+        const start = (stockCheckCurrentPage - 1) * pageSize;
+        const pageItems = sorted.slice(start, start + pageSize);
 
         if (pageItems.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-500">Chưa có đợt kiểm kê</td></tr>';
-            if (window.renderPagination) window.renderPagination('stockCheckPagination', 1, 0, MAINT_STOCK_PAGE_SIZE, 'stock');
+            tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-500">Chưa có đợt kiểm kê phù hợp</td></tr>';
+            if (window.renderPagination) window.renderPagination('stockCheckPagination', 1, 0, pageSize, 'stock');
             return;
         }
 
@@ -506,7 +598,6 @@ window.QLTSPageData.init = async function () {
                 'Hoàn thành': 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
             }[item.status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
             // [RÀNG BUỘC] Đợt kiểm kê đã "Hoàn thành" (đóng) thì khóa Sửa/Xóa + toàn bộ checklist
-            // với người không phải admin. Admin có thể "Mở lại" để tiếp tục thao tác.
             const isLocked = isDone && !isAdmin;
             const btnClasses = "w-8 h-8 flex items-center justify-center rounded-md transition-all";
             const itemCount = (stockCheckItems || []).filter(ci => ci.stock_check_id === item.id).length;
@@ -515,7 +606,7 @@ window.QLTSPageData.init = async function () {
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40 stock-row cursor-pointer" data-id="${item.id}">
                     <td class="p-3 font-semibold text-slate-800 dark:text-slate-100">${item.name || item.note || ('Đợt kiểm kê #' + item.id)}</td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${formatDateDisplay(item.started_at)}</td>
-                    <td class="p-3"><span class="px-2 py-1 text-xs rounded-full ${statusClass}">${item.status || '-'}</span></td>
+                    <td class="p-3 text-center"><span class="px-2.5 py-1 text-xs font-semibold rounded-full ${statusClass}">${item.status || '-'}</span></td>
                     <td class="p-3 text-slate-600 dark:text-slate-300">${detailText}</td>
                     <td class="p-3 text-right whitespace-nowrap">
                         <div class="flex gap-2 justify-end">
@@ -526,7 +617,7 @@ window.QLTSPageData.init = async function () {
                 </tr>`;
         });
         tbody.innerHTML = rows.join('');
-        if (window.renderPagination) window.renderPagination('stockCheckPagination', stockCheckCurrentPage, sorted.length, MAINT_STOCK_PAGE_SIZE, 'stock');
+        if (window.renderPagination) window.renderPagination('stockCheckPagination', stockCheckCurrentPage, sorted.length, pageSize, 'stock');
     }
 
     // Ghi log hoạt động; ưu tiên Supabase, nếu lỗi thì chỉ log console để không chặn flow
@@ -786,8 +877,53 @@ window.QLTSPageData.init = async function () {
         const assetInput = document.getElementById('searchInput');
         if (assetInput && document.getElementById('assetTableBody')) { assetInput.value = q; window.applyAssetFilters(); return; }
         if (assetInput && document.getElementById('licenseTableBody')) { assetInput.value = q; window.applyLicenseFilters(); return; }
+        if (assetInput && document.getElementById('maintenanceTableBody')) {
+            assetInput.value = q;
+            const sub = document.getElementById('filterMaintenanceSearch');
+            if (sub) sub.value = q;
+            maintenanceCurrentPage = 1;
+            renderMaintenanceList();
+            return;
+        }
+        if (assetInput && document.getElementById('stockCheckTableBody')) {
+            assetInput.value = q;
+            const sub = document.getElementById('filterStockCheckSearch');
+            if (sub) sub.value = q;
+            stockCheckCurrentPage = 1;
+            renderStockCheckList();
+            return;
+        }
         const userInput = document.getElementById('searchUserInput');
         if (userInput) { userInput.value = q; window.applyUserFilters(); }
+    }
+
+    // Lắng nghe sự kiện tìm kiếm & lọc trên trang maintenance.html và stock-checks.html
+    const maintSearch = document.getElementById('filterMaintenanceSearch');
+    const maintStatus = document.getElementById('filterMaintenanceStatus');
+    if (maintSearch) maintSearch.addEventListener('input', () => { maintenanceCurrentPage = 1; renderMaintenanceList(); });
+    if (maintStatus) maintStatus.addEventListener('change', () => { maintenanceCurrentPage = 1; renderMaintenanceList(); });
+
+    const stockSearch = document.getElementById('filterStockCheckSearch');
+    const stockStatus = document.getElementById('filterStockCheckStatus');
+    if (stockSearch) stockSearch.addEventListener('input', () => { stockCheckCurrentPage = 1; renderStockCheckList(); });
+    if (stockStatus) stockStatus.addEventListener('change', () => { stockCheckCurrentPage = 1; renderStockCheckList(); });
+
+    // Top search input trên maintenance và stock-checks
+    const topSearch = document.getElementById('searchInput');
+    if (topSearch && !document.getElementById('assetTableBody') && !document.getElementById('licenseTableBody')) {
+        topSearch.addEventListener('input', () => {
+            if (document.getElementById('maintenanceTableBody')) {
+                const sub = document.getElementById('filterMaintenanceSearch');
+                if (sub) sub.value = topSearch.value;
+                maintenanceCurrentPage = 1;
+                renderMaintenanceList();
+            } else if (document.getElementById('stockCheckTableBody')) {
+                const sub = document.getElementById('filterStockCheckSearch');
+                if (sub) sub.value = topSearch.value;
+                stockCheckCurrentPage = 1;
+                renderStockCheckList();
+            }
+        });
     }
 
     window.performGlobalSearch = performGlobalSearch;
