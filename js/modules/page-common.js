@@ -274,22 +274,6 @@ window.QLTSPageCommon.init = async function () {
         }
     };
 
-    const hamburgerButton = document.getElementById('hamburger-button');
-    const sidebar = document.getElementById('sidebar');
-    const sidebarBackdrop = document.getElementById('sidebar-backdrop');
-
-    const toggleSidebar = () => {
-        if (sidebar && sidebarBackdrop) {
-            sidebar.classList.toggle('-translate-x-full');
-            sidebarBackdrop.classList.toggle('hidden');
-        }
-    };
-
-    if (hamburgerButton) {
-        hamburgerButton.addEventListener('click', toggleSidebar);
-    }
-
-    if (sidebarBackdrop) {
-        sidebarBackdrop.addEventListener('click', toggleSidebar);
-    }
+    // Sidebar toggle (hamburger + backdrop) đã chuyển sang sidebar.js
+    // để quản lý tập trung cùng với việc render menu.
 };

@@ -35,34 +35,8 @@
         <!-- Mobile menu backdrop -->
         <div id="sidebar-backdrop" class="hidden md:hidden fixed inset-0 bg-black opacity-50 z-40"></div>
 
-        <!-- Sidebar -->
+        <!-- Sidebar — nội dung được inject bởi sidebar.js -->
         <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition duration-200 ease-in-out z-50 flex flex-col">
-            <div class="h-16 flex items-center justify-center border-b border-slate-700">
-                <i class="fa-solid fa-cubes-stacked mr-3 text-2xl text-blue-400"></i>
-                <h1 class="text-xl font-bold">IT-AMS</h1>
-            </div>
-            <nav class="flex-1 px-2 space-y-2">
-                <a href="assets.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-boxes-stacked sidebar-icon"></i>
-                    <span class="ml-4">Kho tài sản</span>
-                </a>
-                <a href="licenses.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-key w-6 text-center"></i><span class="ml-4">Quản lý License</span>
-                </a>
-                <a href="index.html" class="nav-link flex items-center px-4 py-2.5 text-slate-100 bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-chart-simple sidebar-icon"></i><span class="ml-4">Dashboard</span>
-                </a>
-                <a href="users.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-users sidebar-icon"></i><span class="ml-4">Người dùng</span>
-                </a>
-                <a href="seating.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-chair sidebar-icon"></i><span class="ml-4">Sắp xếp chỗ ngồi</span>
-                </a>
-                <a href="settings.html" class="nav-link flex items-center px-4 py-2.5 text-slate-300 hover:bg-slate-700 rounded-lg">
-                    <i class="fa-solid fa-gear sidebar-icon"></i>
-                    <span class="ml-4">Cài đặt</span>
-                </a>
-            </nav>
         </aside>
 
         <!-- Main content -->
@@ -276,7 +250,8 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="js/localDB.js?v=20260904-7"></script>
     <script src="js/modules/script-helpers.js?v=20260825-1"></script>
-    
+    <script src="js/modules/sidebar.js?v=20260909-1"></script>
+
 <script src="js/modules/page-common.js?v=20260825-1"></script>
 <script src="js/modules/page-data.js?v=20260825-1"></script>
 <script src="js/modules/page-ui.js?v=20260825-1"></script>

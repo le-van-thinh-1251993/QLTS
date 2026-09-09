@@ -1138,6 +1138,34 @@ const LocalDB = {
             };
             reader.readAsText(file);
         });
+    },
+
+    // =================================================================
+    // STORAGE USAGE — Đo dung lượng localStorage đang sử dụng
+    // Giúp giám sát và cảnh báo khi gần đầy (~5MB chuẩn trình duyệt).
+    // =================================================================
+    getStorageUsage() {
+        const ESTIMATED_TOTAL = 5 * 1024 * 1024; // 5MB — giới hạn chuẩn của hầu hết trình duyệt
+        const details = {};
+        let totalUsed = 0;
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const value = localStorage.getItem(key) || '';
+            // Mỗi ký tự JavaScript (UTF-16) chiếm 2 bytes trong localStorage
+            const sizeBytes = (key.length + value.length) * 2;
+            details[key] = sizeBytes;
+            totalUsed += sizeBytes;
+        }
+
+        return {
+            usedBytes: totalUsed,
+            totalBytes: ESTIMATED_TOTAL,
+            usedPercent: Math.round((totalUsed / ESTIMATED_TOTAL) * 10000) / 100,
+            usedMB: Math.round(totalUsed / 1024 / 1024 * 100) / 100,
+            totalMB: 5,
+            details: details
+        };
     }
 };
 
