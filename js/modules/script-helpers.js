@@ -189,7 +189,19 @@
     const buildLicenseCode = (typeName, deptName, existingLicenseCodes) =>
         buildEntityCode('type', typeName, deptName, existingLicenseCodes);
 
+    const escapeHTML = (str) => {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
+    window.escapeHTML = escapeHTML;
+
     window.QLTSHelpers = {
+        escapeHTML,
         normalizeString,
         parseDateToISO,
         formatDateDisplay,

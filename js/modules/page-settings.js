@@ -691,6 +691,7 @@ window.QLTSPageSettings.init = async function () {
     // QUẢN LÝ KHO VẬT TƯ & LINH KIỆN (inventory.html)
     // =================================================================
     function initInventoryDropdowns() {
+        const escapeHTML = (s) => (s === null || s === undefined ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'));
         const suppliesList = window.supplies || [];
         const suppliersList = window.suppliers || [];
         const usersList = window.users || [];
@@ -830,13 +831,18 @@ window.QLTSPageSettings.init = async function () {
                 await supabaseClient.from('supply_transactions').insert([{
                     code: 'PNK-' + Date.now().toString().slice(-6),
                     supply_id: createdId,
+                    supply_name: name,
                     type: 'IN',
                     quantity: initialQty,
+                    unit: unit,
                     unit_price: unitPrice,
                     supplier: supplier || 'Tồn đầu kỳ',
+                    supplier_name: supplier || 'Tồn đầu kỳ',
                     user_name: currentUserProfile?.full_name || 'Admin',
+                    created_by: currentUserProfile?.full_name || 'Admin',
                     date: typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0],
                     notes: 'Nhập số dư ban đầu khi tạo mặt hàng',
+                    reason: 'Nhập số dư ban đầu khi tạo mặt hàng',
                     created_at: new Date().toISOString()
                 }]);
             }
@@ -880,13 +886,18 @@ window.QLTSPageSettings.init = async function () {
         const { error: txErr } = await supabaseClient.from('supply_transactions').insert([{
             code: txCode,
             supply_id: supply.id,
+            supply_name: supply.name,
             type: 'IN',
             quantity: qty,
+            unit: supply.unit || 'Cái',
             unit_price: unitPrice,
             supplier: supplier,
+            supplier_name: supplier,
             user_name: currentUserProfile?.full_name || 'Admin',
+            created_by: currentUserProfile?.full_name || 'Admin',
             date: inDate,
             notes: reason,
+            reason: reason,
             created_at: new Date().toISOString()
         }]);
 
@@ -936,12 +947,17 @@ window.QLTSPageSettings.init = async function () {
         const { error: txErr } = await supabaseClient.from('supply_transactions').insert([{
             code: txCode,
             supply_id: supply.id,
+            supply_name: supply.name,
             type: 'OUT',
             quantity: qty,
+            unit: supply.unit || 'Cái',
             recipient: recipient,
+            receiver_name: recipient,
             user_name: currentUserProfile?.full_name || 'Admin',
+            created_by: currentUserProfile?.full_name || 'Admin',
             date: outDate,
             notes: reason,
+            reason: reason,
             created_at: new Date().toISOString()
         }]);
 
@@ -985,14 +1001,19 @@ window.QLTSPageSettings.init = async function () {
         const txCode = 'PDC-' + Date.now().toString().slice(-6);
         const todayStr = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
         const diffText = diff > 0 ? `+${diff}` : `${diff}`;
+        const adjustNotes = `Điều chỉnh kiểm kê: ${oldQty} -> ${actualQty} (Chênh lệch: ${diffText}). Lý do: ${reason}`;
         await supabaseClient.from('supply_transactions').insert([{
             code: txCode,
             supply_id: supply.id,
+            supply_name: supply.name,
             type: 'ADJUST',
             quantity: actualQty,
+            unit: supply.unit || 'Cái',
             user_name: currentUserProfile?.full_name || 'Admin',
+            created_by: currentUserProfile?.full_name || 'Admin',
             date: todayStr,
-            notes: `Điều chỉnh kiểm kê: ${oldQty} -> ${actualQty} (Chênh lệch: ${diffText}). Lý do: ${reason}`,
+            notes: adjustNotes,
+            reason: adjustNotes,
             created_at: new Date().toISOString()
         }]);
 

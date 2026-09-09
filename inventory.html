@@ -537,14 +537,29 @@
         </div>
     </div>
 
-    <!-- Scripts dependencies -->
-    <script src="js/localDB.js"></script>
-    <script src="js/modules/page-common.js"></script>
-    <script src="js/modules/page-data.js"></script>
-    <script src="js/modules/page-settings.js"></script>
-    <script src="js/modules/page-license.js"></script>
-    <script src="js/modules/page-dashboard.js"></script>
-    <script src="js/modules/sidebar.js"></script>
-    <script src="js/app.js"></script>
+    <!-- Modal: Tìm kiếm toàn cục -->
+    <div id="globalSearchModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[90] flex justify-center items-start pt-24 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-xl p-4 relative border dark:border-slate-700">
+            <div class="relative mb-3">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="globalSearchInput" placeholder="Tìm tài sản, license, nhân viên, vật tư..." class="w-full pl-10 pr-10 py-2.5 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" autocomplete="off">
+                <button class="close-modal absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div id="globalSearchResults" class="max-h-[60vh] overflow-y-auto"><p class="text-sm text-slate-400 text-center p-4">Nhập từ khóa để tìm kiếm...</p></div>
+        </div>
+    </div>
+
+    <!-- Scripts hệ thống -->
+    <script src="js/localDB.js?v=20260904-7"></script>
+    <script src="js/modules/script-helpers.js?v=20260825-1"></script>
+    <script src="js/modules/sidebar.js?v=20260909-4"></script>
+
+    <script src="js/modules/page-common.js?v=20260909-6"></script>
+    <script src="js/modules/page-data.js?v=20260909-6"></script>
+    <script src="js/modules/page-ui.js?v=20260825-1"></script>
+    <script src="js/modules/page-dashboard.js?v=20260909-6"></script>
+    <script src="js/modules/page-license.js?v=20260909-6"></script>
+    <script src="js/modules/page-settings.js?v=20260909-6"></script>
+    <script src="js/script.js?v=20260825-1"></script>
 </body>
 </html>

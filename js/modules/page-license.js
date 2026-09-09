@@ -333,7 +333,7 @@ window.QLTSPageLicense.init = async function () {
         // =================================================================
         // CÁC LOGIC KHÁC (Button, Close, Page...)
         // =================================================================
-        if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#btnConfirmClose') || t.closest('#cancelAddUser') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex'); if (modal) attemptCloseModal(modal.id); return; }
+        if (t.closest('.close-modal') || t.closest('#btnCancelClose') || t.closest('#btnConfirmClose') || t.closest('#cancelAddUser') || t.closest('#cancelDeleteBtn') || t.closest('#closeInfoModalBtn') || t.closest('#closeDeptModal')) { const modal = t.closest('.fixed.flex') || t.closest('.fixed'); if (modal) attemptCloseModal(modal.id); return; }
 
         const pageBtn = t.closest('a[data-page]');
         if (pageBtn) {

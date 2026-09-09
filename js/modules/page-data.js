@@ -147,10 +147,10 @@ window.QLTSPageData.init = async function () {
         // Process supplies & inventory transactions
         const rawSupplies = supplyData?.data || [];
         supplies = rawSupplies.map(s => {
-            const sup = (suppliers || []).find(sp => String(sp.id) === String(s.supplier_id));
+            const sup = (suppliers || []).find(sp => String(sp.id) === String(s.supplier_id) || sp.name === s.supplier);
             return {
                 ...s,
-                supplier_name: sup ? sup.name : '-'
+                supplier_name: sup ? sup.name : (s.supplier || s.supplier_name || '-')
             };
         });
         supplyTransactions = supplyTransData?.data || [];
@@ -1080,7 +1080,13 @@ window.QLTSPageData.init = async function () {
             }
             if (searchVal) {
                 filteredTrans = filteredTrans.filter(t => {
-                    const searchStr = normalizeString(`${t.code || ''} ${t.supply_name || ''} ${t.receiver_name || ''} ${t.supplier_name || ''} ${t.reason || ''} ${t.created_by || ''}`);
+                    const supply = allSupplies.find(s => String(s.id) === String(t.supply_id));
+                    const supplyName = t.supply_name || (supply ? supply.name : '');
+                    const rec = t.receiver_name || t.recipient || '';
+                    const sup = t.supplier_name || t.supplier || '';
+                    const rsn = t.reason || t.notes || '';
+                    const creator = t.created_by || t.user_name || '';
+                    const searchStr = normalizeString(`${t.code || ''} ${supplyName} ${rec} ${sup} ${rsn} ${creator}`);
                     return searchStr.includes(searchVal);
                 });
             }
@@ -1098,14 +1104,20 @@ window.QLTSPageData.init = async function () {
                 if (window.renderPagination) window.renderPagination('supplyTransPagination', 1, 0, pageSize, 'inventory-history');
             } else {
                 historyBody.innerHTML = pageItems.map(t => {
+                    const supply = allSupplies.find(s => String(s.id) === String(t.supply_id));
+                    const supplyName = t.supply_name || (supply ? supply.name : '-');
+                    const supplyUnit = t.unit || (supply ? supply.unit : 'chiếc');
+
                     let typeBadge = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
                     let typeText = "Nhập kho";
-                    let relatedParty = t.supplier_name ? `NCC: ${t.supplier_name}` : 'Nhập nội bộ';
+                    const supName = t.supplier_name || t.supplier;
+                    let relatedParty = supName ? `NCC: ${supName}` : 'Nhập nội bộ';
 
                     if (t.type === 'OUT') {
                         typeBadge = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
                         typeText = "Xuất kho";
-                        relatedParty = t.receiver_name ? `${t.receiver_name}${t.receiver_department ? ` (${t.receiver_department})` : ''}` : 'Xuất dùng chung';
+                        const recName = t.receiver_name || t.recipient;
+                        relatedParty = recName ? `${recName}${t.receiver_department ? ` (${t.receiver_department})` : ''}` : 'Xuất dùng chung';
                     } else if (t.type === 'ADJUST') {
                         typeBadge = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
                         typeText = "Điều chỉnh";
@@ -1128,17 +1140,17 @@ window.QLTSPageData.init = async function () {
                             </span>
                         </td>
                         <td class="p-4">
-                            <div class="font-semibold text-slate-800 dark:text-slate-100">${t.supply_name || '-'}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Số lượng: <span class="font-bold text-slate-700 dark:text-slate-200">${t.quantity || 0}</span> ${t.unit || 'chiếc'}</div>
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">${supplyName}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Số lượng: <span class="font-bold text-slate-700 dark:text-slate-200">${t.quantity || 0}</span> ${supplyUnit}</div>
                         </td>
                         <td class="p-4 text-xs text-slate-700 dark:text-slate-200">
                             ${relatedParty}
                         </td>
                         <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
-                            ${t.reason || '-'}
+                            ${t.reason || t.notes || '-'}
                         </td>
                         <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
-                            <span class="font-medium">${t.created_by || 'Admin'}</span>
+                            <span class="font-medium">${t.created_by || t.user_name || 'Admin'}</span>
                         </td>
                     </tr>`;
                 }).join('');
