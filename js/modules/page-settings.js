@@ -80,17 +80,17 @@ window.QLTSPageSettings.init = async function () {
     const ACTIVITY_TYPE_LABELS = {
         ASSET: 'Tài sản', LICENSE: 'License', USER: 'Người dùng',
         CATEGORY: 'Danh mục', DEPARTMENT: 'Phòng ban', LICENSE_TYPE: 'Loại Key',
-        MAINT: 'Bảo trì', STOCK_CHECK: 'Kiểm kê'
+        MAINT: 'Bảo trì', STOCK_CHECK: 'Kiểm kê', SUPPLY: 'Vật tư/Linh kiện'
     };
 
     function getActivitySubjectName(log, typeKey, rows) {
         const subject = (rows[typeKey] || []).find(row => String(row.id) === String(log.assetId));
         if (subject?.name || subject?.key_type || subject?.title) return subject.name || subject.key_type || subject.title;
-        const detailName = /(?:^|; )Tên(?: tài sản| đợt)?\s*:\s*([^;]+)/i.exec(log.desc || '')?.[1];
+        const detailName = /(?:^|; )Tên(?: tài sản| đợt| vật tư)?\s*:\s*([^;]+)/i.exec(log.desc || '')?.[1];
         if (detailName) return detailName.trim();
-        const actionName = /(?:Xóa tài sản|Xóa license|Xóa lịch bảo trì):\s*([^;]+)/i.exec(log.desc || '')?.[1];
+        const actionName = /(?:Xóa tài sản|Xóa license|Xóa lịch bảo trì|Xóa mặt hàng):\s*([^;]+)/i.exec(log.desc || '')?.[1];
         if (actionName) return actionName.trim();
-        const deletedLabels = { ASSET: 'Tài sản đã xóa', LICENSE: 'License đã xóa', USER: 'Nhân viên đã xóa', CATEGORY: 'Danh mục đã xóa', DEPARTMENT: 'Phòng ban đã xóa', LICENSE_TYPE: 'Loại key đã xóa', SUPPLIER: 'Nhà cung cấp đã xóa', MAINT: 'Lịch bảo trì đã xóa', STOCK_CHECK: 'Đợt kiểm kê đã xóa' };
+        const deletedLabels = { ASSET: 'Tài sản đã xóa', LICENSE: 'License đã xóa', USER: 'Nhân viên đã xóa', CATEGORY: 'Danh mục đã xóa', DEPARTMENT: 'Phòng ban đã xóa', LICENSE_TYPE: 'Loại key đã xóa', SUPPLIER: 'Nhà cung cấp đã xóa', MAINT: 'Lịch bảo trì đã xóa', STOCK_CHECK: 'Đợt kiểm kê đã xóa', SUPPLY: 'Vật tư đã xóa' };
         return deletedLabels[typeKey] || 'Bản ghi đã xóa';
     }
 
@@ -120,7 +120,7 @@ window.QLTSPageSettings.init = async function () {
             const typeKey = match ? match[1] : '';
             const actionText = match ? match[2] : (h.action || '');
             const typeLabel = ACTIVITY_TYPE_LABELS[typeKey] || typeKey || '-';
-            const subjectRows = { ASSET: assets, LICENSE: licenses, USER: users, CATEGORY: categories, DEPARTMENT: departments, LICENSE_TYPE: licenseTypes, SUPPLIER: suppliers, MAINT: assets, STOCK_CHECK: stockChecks };
+            const subjectRows = { ASSET: assets, LICENSE: licenses, USER: users, CATEGORY: categories, DEPARTMENT: departments, LICENSE_TYPE: licenseTypes, SUPPLIER: suppliers, MAINT: assets, STOCK_CHECK: stockChecks, SUPPLY: window.supplies || [] };
             const subjectName = getActivitySubjectName(h, typeKey, subjectRows);
             return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
                 <td class="p-3 text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">${h.time || ''}</td>
@@ -142,7 +142,7 @@ window.QLTSPageSettings.init = async function () {
         if (!log) return;
         const match = /^(\[\w+\])\s*(.*)$/.exec(log.action || '');
         const typeKey = match ? match[1].slice(1, -1) : '';
-        const subjectRows = { ASSET: assets, LICENSE: licenses, USER: users, CATEGORY: categories, DEPARTMENT: departments, LICENSE_TYPE: licenseTypes, SUPPLIER: suppliers, MAINT: assets, STOCK_CHECK: stockChecks };
+        const subjectRows = { ASSET: assets, LICENSE: licenses, USER: users, CATEGORY: categories, DEPARTMENT: departments, LICENSE_TYPE: licenseTypes, SUPPLIER: suppliers, MAINT: assets, STOCK_CHECK: stockChecks, SUPPLY: window.supplies || [] };
         const subjectName = getActivitySubjectName(log, typeKey, subjectRows);
         const details = (log.desc || 'Không có thông tin chi tiết.').split(';').map(item => item.trim()).filter(Boolean);
         document.getElementById('activityLogDetailContent').innerHTML = `
@@ -687,6 +687,323 @@ window.QLTSPageSettings.init = async function () {
         showInfoModal(`Đã điều chuyển "${asset.name}" sang ${toUser.name}!`, 'Điều chuyển thành công');
     });
 
+    // =================================================================
+    // QUẢN LÝ KHO VẬT TƯ & LINH KIỆN (inventory.html)
+    // =================================================================
+    function initInventoryDropdowns() {
+        const suppliesList = window.supplies || [];
+        const suppliersList = window.suppliers || [];
+        const usersList = window.users || [];
+
+        // 1. Supplier dropdown in supply modal
+        const supplySupplier = document.getElementById('supply_supplier');
+        if (supplySupplier) {
+            const curVal = supplySupplier.value;
+            supplySupplier.innerHTML = '<option value="">-- Không chỉ định --</option>' +
+                suppliersList.map(s => `<option value="${escapeHTML(s.name)}">${escapeHTML(s.name)}</option>`).join('');
+            if (curVal) supplySupplier.value = curVal;
+        }
+
+        // 2. Stock-in supply select
+        const stockinSupply = document.getElementById('stockin_supply_select');
+        if (stockinSupply) {
+            const curVal = stockinSupply.value;
+            stockinSupply.innerHTML = '<option value="">-- Chọn mặt hàng nhập kho --</option>' +
+                suppliesList.map(s => `<option value="${s.id}">[${escapeHTML(s.code || s.sku || 'VT-' + s.id)}] ${escapeHTML(s.name)} (Hiện tồn: ${s.quantity} ${escapeHTML(s.unit || '')})</option>`).join('');
+            if (curVal) stockinSupply.value = curVal;
+        }
+
+        // 3. Stock-in supplier select
+        const stockinSupplier = document.getElementById('stockin_supplier');
+        if (stockinSupplier) {
+            const curVal = stockinSupplier.value;
+            stockinSupplier.innerHTML = '<option value="">-- Chọn nhà cung cấp --</option>' +
+                suppliersList.map(s => `<option value="${escapeHTML(s.name)}">${escapeHTML(s.name)}</option>`).join('');
+            if (curVal) stockinSupplier.value = curVal;
+        }
+
+        // 4. Stock-out supply select
+        const stockoutSupply = document.getElementById('stockout_supply_select');
+        if (stockoutSupply) {
+            const curVal = stockoutSupply.value;
+            stockoutSupply.innerHTML = '<option value="">-- Chọn mặt hàng xuất kho --</option>' +
+                suppliesList.map(s => `<option value="${s.id}">[${escapeHTML(s.code || s.sku || 'VT-' + s.id)}] ${escapeHTML(s.name)} (Tồn: ${s.quantity} ${escapeHTML(s.unit || '')})</option>`).join('');
+            if (curVal) stockoutSupply.value = curVal;
+        }
+
+        // 5. Stock-out user select
+        const stockoutUser = document.getElementById('stockout_user_select');
+        if (stockoutUser) {
+            const curVal = stockoutUser.value;
+            stockoutUser.innerHTML = '<option value="">-- Chọn người nhận / bộ phận --</option>' +
+                usersList.map(u => {
+                    const dept = u.department ? ` - ${u.department}` : '';
+                    return `<option value="${escapeHTML(u.name)}">${escapeHTML(u.name)}${escapeHTML(dept)}</option>`;
+                }).join('');
+            if (curVal) stockoutUser.value = curVal;
+        }
+    }
+    window.initInventoryDropdowns = initInventoryDropdowns;
+
+    // Lắng nghe chọn mặt hàng khi xuất kho để hiển thị tồn kho và giới hạn max
+    document.getElementById('stockout_supply_select')?.addEventListener('change', (e) => {
+        const sId = e.target.value;
+        const supply = (window.supplies || []).find(s => String(s.id) === String(sId));
+        const qtyDisplay = document.getElementById('stockout_current_qty_display');
+        const qtyInput = document.getElementById('stockout_quantity');
+        if (supply) {
+            if (qtyDisplay) qtyDisplay.textContent = `${supply.quantity} ${supply.unit || ''}`;
+            if (qtyInput) {
+                qtyInput.max = supply.quantity;
+                if (parseInt(qtyInput.value) > supply.quantity) {
+                    qtyInput.value = supply.quantity > 0 ? 1 : 0;
+                }
+            }
+        } else {
+            if (qtyDisplay) qtyDisplay.textContent = '0';
+        }
+    });
+
+    // Form thêm / sửa mặt hàng vật tư
+    document.getElementById('supplyForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('supply_id')?.value;
+        const code = document.getElementById('supply_code')?.value.trim();
+        const name = document.getElementById('supply_name')?.value.trim();
+        const category = document.getElementById('supply_category')?.value;
+        const unit = document.getElementById('supply_unit')?.value.trim() || 'Cái';
+        const initialQty = parseInt(document.getElementById('supply_quantity')?.value) || 0;
+        const minQty = parseInt(document.getElementById('supply_min_quantity')?.value) || 0;
+        const location = document.getElementById('supply_location')?.value.trim() || '';
+        const unitPrice = parseFloat(document.getElementById('supply_unit_price')?.value) || 0;
+        const supplier = document.getElementById('supply_supplier')?.value || '';
+        const notes = document.getElementById('supply_notes')?.value.trim() || '';
+
+        if (!name) return showInfoModal('Vui lòng nhập tên mặt hàng vật tư.', 'Thiếu thông tin');
+
+        const isEdit = Boolean(id);
+        const autoCode = code || ('VT-' + String(Math.floor(1000 + Math.random() * 9000)));
+
+        if (isEdit) {
+            const { error } = await supabaseClient.from('supplies').update({
+                code: autoCode,
+                name: name,
+                category: category,
+                unit: unit,
+                min_quantity: minQty,
+                location: location,
+                unit_price: unitPrice,
+                supplier: supplier,
+                notes: notes,
+                updated_at: new Date().toISOString()
+            }).eq('id', id);
+
+            if (error) {
+                handleSupabaseError(error, 'cập nhật vật tư');
+                return;
+            }
+            await addLog(id, 'SUPPLY', 'Cập nhật', `Cập nhật thông tin vật tư: ${name} (${autoCode})`);
+            showInfoModal(`Cập nhật mặt hàng "${name}" thành công!`, 'Thành công');
+        } else {
+            const newSupply = {
+                code: autoCode,
+                name: name,
+                category: category,
+                unit: unit,
+                quantity: initialQty,
+                min_quantity: minQty,
+                location: location,
+                unit_price: unitPrice,
+                supplier: supplier,
+                notes: notes,
+                created_at: new Date().toISOString()
+            };
+            const { data, error } = await supabaseClient.from('supplies').insert([newSupply]);
+            if (error) {
+                handleSupabaseError(error, 'thêm mới vật tư');
+                return;
+            }
+            const createdId = (data && data[0] && data[0].id) || 'new';
+            await addLog(createdId, 'SUPPLY', 'Thêm mới', `Thêm mới mặt hàng: ${name} (${autoCode}) với tồn đầu kỳ ${initialQty} ${unit}`);
+
+            if (initialQty > 0) {
+                await supabaseClient.from('supply_transactions').insert([{
+                    code: 'PNK-' + Date.now().toString().slice(-6),
+                    supply_id: createdId,
+                    type: 'IN',
+                    quantity: initialQty,
+                    unit_price: unitPrice,
+                    supplier: supplier || 'Tồn đầu kỳ',
+                    user_name: currentUserProfile?.full_name || 'Admin',
+                    date: typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0],
+                    notes: 'Nhập số dư ban đầu khi tạo mặt hàng',
+                    created_at: new Date().toISOString()
+                }]);
+            }
+            showInfoModal(`Thêm mặt hàng "${name}" thành công!`, 'Thành công');
+        }
+
+        safeCloseModal('supplyModal');
+        document.getElementById('supplyForm').reset();
+        await refreshApp();
+    });
+
+    // Form nhập kho
+    document.getElementById('stockInForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const supplyId = document.getElementById('stockin_supply_select')?.value;
+        const qty = parseInt(document.getElementById('stockin_quantity')?.value) || 0;
+        const unitPrice = parseFloat(document.getElementById('stockin_unit_price')?.value) || 0;
+        const supplier = document.getElementById('stockin_supplier')?.value || '';
+        const inDate = document.getElementById('stockin_date')?.value || (typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0]);
+        const reason = document.getElementById('stockin_reason')?.value.trim() || 'Nhập kho';
+
+        if (!supplyId) return showInfoModal('Vui lòng chọn mặt hàng nhập kho.', 'Thiếu thông tin');
+        if (qty <= 0) return showInfoModal('Số lượng nhập phải lớn hơn 0.', 'Số lượng không hợp lệ');
+
+        const supply = (window.supplies || []).find(s => String(s.id) === String(supplyId));
+        if (!supply) return showInfoModal('Không tìm thấy thông tin mặt hàng.', 'Lỗi');
+
+        const newQty = (parseInt(supply.quantity) || 0) + qty;
+        const { error: updateErr } = await supabaseClient.from('supplies').update({
+            quantity: newQty,
+            unit_price: unitPrice > 0 ? unitPrice : (supply.unit_price || 0),
+            updated_at: new Date().toISOString()
+        }).eq('id', supply.id);
+
+        if (updateErr) {
+            handleSupabaseError(updateErr, 'nhập kho');
+            return;
+        }
+
+        const txCode = 'PNK-' + Date.now().toString().slice(-6);
+        const { error: txErr } = await supabaseClient.from('supply_transactions').insert([{
+            code: txCode,
+            supply_id: supply.id,
+            type: 'IN',
+            quantity: qty,
+            unit_price: unitPrice,
+            supplier: supplier,
+            user_name: currentUserProfile?.full_name || 'Admin',
+            date: inDate,
+            notes: reason,
+            created_at: new Date().toISOString()
+        }]);
+
+        if (txErr) console.warn('Lỗi ghi sổ kho nhập:', txErr);
+
+        await addLog(supply.id, 'SUPPLY', 'Nhập kho', `Nhập ${qty} ${supply.unit} [${supply.name}] từ ${supplier || 'NCC'} (Phiếu: ${txCode}). Tồn mới: ${newQty}`);
+
+        safeCloseModal('stockInModal');
+        document.getElementById('stockInForm').reset();
+        await refreshApp();
+        showInfoModal(`Đã nhập thành công ${qty} ${supply.unit} cho mặt hàng "${supply.name}". Tồn kho mới: ${newQty} ${supply.unit}.`, 'Nhập kho thành công');
+    });
+
+    // Form xuất kho cấp phát
+    document.getElementById('stockOutForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const supplyId = document.getElementById('stockout_supply_select')?.value;
+        const qty = parseInt(document.getElementById('stockout_quantity')?.value) || 0;
+        const outDate = document.getElementById('stockout_date')?.value || (typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0]);
+        const recipient = document.getElementById('stockout_user_select')?.value || '';
+        const reason = document.getElementById('stockout_reason')?.value.trim() || 'Cấp phát nội bộ';
+
+        if (!supplyId) return showInfoModal('Vui lòng chọn mặt hàng xuất kho.', 'Thiếu thông tin');
+        if (qty <= 0) return showInfoModal('Số lượng xuất phải lớn hơn 0.', 'Số lượng không hợp lệ');
+        if (!recipient) return showInfoModal('Vui lòng chọn hoặc nhập người nhận.', 'Thiếu thông tin');
+
+        const supply = (window.supplies || []).find(s => String(s.id) === String(supplyId));
+        if (!supply) return showInfoModal('Không tìm thấy thông tin mặt hàng.', 'Lỗi');
+
+        const currentQty = parseInt(supply.quantity) || 0;
+        if (qty > currentQty) {
+            return showInfoModal(`Số lượng xuất (${qty}) vượt quá số lượng tồn kho hiện có (${currentQty} ${supply.unit}). Vui lòng kiểm tra lại.`, 'Không đủ tồn kho');
+        }
+
+        const newQty = currentQty - qty;
+        const { error: updateErr } = await supabaseClient.from('supplies').update({
+            quantity: newQty,
+            updated_at: new Date().toISOString()
+        }).eq('id', supply.id);
+
+        if (updateErr) {
+            handleSupabaseError(updateErr, 'xuất kho');
+            return;
+        }
+
+        const txCode = 'PXK-' + Date.now().toString().slice(-6);
+        const { error: txErr } = await supabaseClient.from('supply_transactions').insert([{
+            code: txCode,
+            supply_id: supply.id,
+            type: 'OUT',
+            quantity: qty,
+            recipient: recipient,
+            user_name: currentUserProfile?.full_name || 'Admin',
+            date: outDate,
+            notes: reason,
+            created_at: new Date().toISOString()
+        }]);
+
+        if (txErr) console.warn('Lỗi ghi sổ kho xuất:', txErr);
+
+        await addLog(supply.id, 'SUPPLY', 'Xuất kho', `Xuất ${qty} ${supply.unit} [${supply.name}] cho ${recipient} (Phiếu: ${txCode}). Tồn còn: ${newQty}`);
+
+        safeCloseModal('stockOutModal');
+        document.getElementById('stockOutForm').reset();
+        await refreshApp();
+        showInfoModal(`Đã xuất kho thành công ${qty} ${supply.unit} "${supply.name}" cho ${recipient}. Tồn kho còn lại: ${newQty} ${supply.unit}.`, 'Xuất kho thành công');
+    });
+
+    // Form điều chỉnh kiểm kê tồn kho
+    document.getElementById('stockAdjustForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const supplyId = document.getElementById('adjust_supply_id')?.value;
+        const actualQty = parseInt(document.getElementById('adjust_actual_qty')?.value);
+        const reason = document.getElementById('adjust_reason')?.value.trim();
+
+        if (!supplyId) return showInfoModal('Thiếu thông tin mặt hàng điều chỉnh.', 'Lỗi');
+        if (isNaN(actualQty) || actualQty < 0) return showInfoModal('Số lượng thực tế phải là số không âm.', 'Số lượng không hợp lệ');
+        if (!reason) return showInfoModal('Vui lòng nêu lý do hoặc căn cứ điều chỉnh kiểm kê.', 'Thiếu thông tin');
+
+        const supply = (window.supplies || []).find(s => String(s.id) === String(supplyId));
+        if (!supply) return showInfoModal('Không tìm thấy thông tin mặt hàng.', 'Lỗi');
+
+        const oldQty = parseInt(supply.quantity) || 0;
+        const diff = actualQty - oldQty;
+
+        const { error: updateErr } = await supabaseClient.from('supplies').update({
+            quantity: actualQty,
+            updated_at: new Date().toISOString()
+        }).eq('id', supply.id);
+
+        if (updateErr) {
+            handleSupabaseError(updateErr, 'điều chỉnh tồn kho');
+            return;
+        }
+
+        const txCode = 'PDC-' + Date.now().toString().slice(-6);
+        const todayStr = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+        const diffText = diff > 0 ? `+${diff}` : `${diff}`;
+        await supabaseClient.from('supply_transactions').insert([{
+            code: txCode,
+            supply_id: supply.id,
+            type: 'ADJUST',
+            quantity: actualQty,
+            user_name: currentUserProfile?.full_name || 'Admin',
+            date: todayStr,
+            notes: `Điều chỉnh kiểm kê: ${oldQty} -> ${actualQty} (Chênh lệch: ${diffText}). Lý do: ${reason}`,
+            created_at: new Date().toISOString()
+        }]);
+
+        await addLog(supply.id, 'SUPPLY', 'Điều chỉnh tồn', `Điều chỉnh tồn kho [${supply.name}]: từ ${oldQty} thành ${actualQty} ${supply.unit} (${diffText}). Lý do: ${reason}`);
+
+        safeCloseModal('stockAdjustModal');
+        document.getElementById('stockAdjustForm').reset();
+        await refreshApp();
+        showInfoModal(`Đã điều chỉnh tồn kho mặt hàng "${supply.name}" thành công (${actualQty} ${supply.unit})!`, 'Điều chỉnh thành công');
+    });
+
     async function refreshApp(resetFilters = false) {
         await autoRestoreFromSupabaseIfNeeded();
 
@@ -751,6 +1068,9 @@ window.QLTSPageSettings.init = async function () {
         }
         if (document.getElementById('assignmentContent')) {
             if (typeof renderAssignmentList === 'function') renderAssignmentList();
+        }
+        if (document.getElementById('inventoryContent')) {
+            if (typeof renderInventoryList === 'function') renderInventoryList();
         }
         if (document.getElementById('licenseTableBody')) { 
             if (resetFilters) resetLicenseFilters(); 

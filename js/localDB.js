@@ -16,6 +16,8 @@ const LocalDB = {
         STOCK_CHECKS: 'qlts_stock_checks',
         STOCK_CHECK_ITEMS: 'qlts_stock_check_items',
         SUPPLIERS: 'qlts_suppliers',
+        SUPPLIES: 'qlts_supplies',
+        SUPPLY_TRANSACTIONS: 'qlts_supply_transactions',
         ALERT_SETTINGS: 'qlts_alert_settings',
         WORKBOOK_DATA: 'qlts_workbook_data',
         COUNTER: 'qlts_id_counter'
@@ -63,6 +65,7 @@ const LocalDB = {
             console.log('Existing data found, skipping default data creation');
             this.ensureSeedData();
         }
+        this.seedSuppliesIfNeeded();
     },
 
     async importWorkbookDataIfNeeded() {
@@ -636,6 +639,40 @@ const LocalDB = {
         }
 
         localStorage.setItem(seedFlagKey, '1');
+    },
+
+    seedSuppliesIfNeeded() {
+        const suppliesKey = this.KEYS.SUPPLIES;
+        const transKey = this.KEYS.SUPPLY_TRANSACTIONS;
+        const existing = localStorage.getItem(suppliesKey);
+        if (!existing || JSON.parse(existing || '[]').length === 0) {
+            const now = new Date().toISOString();
+            const defaultSupplies = [
+                { id: 1, code: 'VT-RAM-001', name: 'RAM DDR4 8GB Kingston 3200MHz', category: 'Linh kiện phần cứng', unit: 'Thanh', quantity: 12, min_quantity: 5, location: 'Tủ kỹ thuật - Tầng 2', supplier_id: 1, unit_price: 520000, notes: 'Nâng cấp laptop và PC', created_at: now },
+                { id: 2, code: 'VT-SSD-001', name: 'Ổ cứng SSD NVMe 512GB Kingston NV2', category: 'Linh kiện phần cứng', unit: 'Chiếc', quantity: 6, min_quantity: 3, location: 'Tủ kỹ thuật - Tầng 2', supplier_id: 1, unit_price: 950000, notes: 'Thay thế ổ cứng hỏng', created_at: now },
+                { id: 3, code: 'VT-MOU-001', name: 'Chuột không dây Logitech B170', category: 'Thiết bị ngoại vi', unit: 'Chiếc', quantity: 24, min_quantity: 10, location: 'Kho IT - Tủ A1', supplier_id: 2, unit_price: 180000, notes: 'Cấp phát cho nhân sự mới', created_at: now },
+                { id: 4, code: 'VT-KBD-001', name: 'Bàn phím văn phòng Dell KB216', category: 'Thiết bị ngoại vi', unit: 'Chiếc', quantity: 4, min_quantity: 5, location: 'Kho IT - Tủ A1', supplier_id: 2, unit_price: 220000, notes: 'Cảnh báo sắp hết hàng', created_at: now },
+                { id: 5, code: 'VT-CAB-001', name: 'Cáp HDMI 2.0 Ugreen 1.5m (4K@60Hz)', category: 'Dây cáp & Chuyển đổi', unit: 'Sợi', quantity: 18, min_quantity: 6, location: 'Tủ cáp phụ kiện', supplier_id: 3, unit_price: 110000, notes: 'Dùng kết nối màn hình ngoài', created_at: now },
+                { id: 6, code: 'VT-NET-001', name: 'Hạt mạng RJ45 Cat6 AMP Commscope', category: 'Mạng & Viễn thông', unit: 'Hộp', quantity: 3, min_quantity: 2, location: 'Kệ vật tư mạng', supplier_id: 3, unit_price: 350000, notes: 'Hộp 100 đầu bấm mạng', created_at: now },
+                { id: 7, code: 'VT-INK-001', name: 'Hộp mực máy in Canon 2900 (Cartridge 303)', category: 'Vật tư in ấn', unit: 'Hộp', quantity: 2, min_quantity: 3, location: 'Kho thiết bị văn phòng', supplier_id: 1, unit_price: 320000, notes: 'Tồn kho thấp, cần đề xuất mua thêm', created_at: now },
+                { id: 8, code: 'VT-HUB-001', name: 'Bộ chia Type-C to HDMI/USB 3.0 Ugreen 5-in-1', category: 'Dây cáp & Chuyển đổi', unit: 'Chiếc', quantity: 8, min_quantity: 4, location: 'Tủ kỹ thuật - Tầng 2', supplier_id: 3, unit_price: 490000, notes: 'Cấp cho nhân sự dùng Macbook/Laptop mỏng nhẹ', created_at: now }
+            ];
+            localStorage.setItem(suppliesKey, JSON.stringify(defaultSupplies));
+
+            const defaultTrans = [
+                { id: 1, code: 'NK-20260901-001', type: 'IN', supply_id: 1, supply_name: 'RAM DDR4 8GB Kingston 3200MHz', quantity: 15, unit: 'Thanh', unit_price: 520000, total_amount: 7800000, date: '2026-09-01', supplier_id: 1, supplier_name: 'Công ty Máy tính Phong Vũ', reason: 'Nhập bổ sung linh kiện quý 3', created_by: 'Admin Hệ Thống', created_at: now },
+                { id: 2, code: 'XK-20260905-001', type: 'OUT', supply_id: 1, supply_name: 'RAM DDR4 8GB Kingston 3200MHz', quantity: 3, unit: 'Thanh', unit_price: 520000, total_amount: 1560000, date: '2026-09-05', receiver_user_id: 1, receiver_name: 'Nguyễn Văn A', receiver_department: 'IT', reason: 'Nâng cấp máy trạm đồ họa', created_by: 'Admin Hệ Thống', created_at: now },
+                { id: 3, code: 'NK-20260902-002', type: 'IN', supply_id: 3, supply_name: 'Chuột không dây Logitech B170', quantity: 30, unit: 'Chiếc', unit_price: 180000, total_amount: 5400000, date: '2026-09-02', supplier_id: 2, supplier_name: 'Công ty Cổ phần Bách Khoa Computer', reason: 'Nhập kho phục vụ onboarding nhân viên mới', created_by: 'Admin Hệ Thống', created_at: now },
+                { id: 4, code: 'XK-20260906-002', type: 'OUT', supply_id: 3, supply_name: 'Chuột không dây Logitech B170', quantity: 6, unit: 'Chiếc', unit_price: 180000, total_amount: 1080000, date: '2026-09-06', receiver_user_id: 2, receiver_name: 'Trần Thị B', receiver_department: 'Kế toán', reason: 'Cấp phát cho nhân sự mới', created_by: 'Admin Hệ Thống', created_at: now }
+            ];
+            localStorage.setItem(transKey, JSON.stringify(defaultTrans));
+
+            const counters = JSON.parse(localStorage.getItem(this.KEYS.COUNTER) || '{}');
+            counters.supplies = Math.max(counters.supplies || 1, 9);
+            counters.supply_transactions = Math.max(counters.supply_transactions || 1, 5);
+            localStorage.setItem(this.KEYS.COUNTER, JSON.stringify(counters));
+            console.log('LocalDB: Seeded default supplies and transactions');
+        }
     },
 
     // Set default data for new installation

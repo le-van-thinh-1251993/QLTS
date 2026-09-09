@@ -22,7 +22,7 @@ window.QLTSPageData.init = async function () {
     async function fetchAllData() {
         console.log('fetchAllData() called');
         // Fetch all data from LocalDB
-        const [deptData, catData, userData, assetData, licenseData, historyData, licTypeData, maintenanceTaskData, maintenanceEventData, stockCheckData, stockCheckItemData, supplierData, alertSettingData] = await Promise.all([
+        const [deptData, catData, userData, assetData, licenseData, historyData, licTypeData, maintenanceTaskData, maintenanceEventData, stockCheckData, stockCheckItemData, supplierData, alertSettingData, supplyData, supplyTransData] = await Promise.all([
             LocalDB.from('departments').select('*'),
             LocalDB.from('categories').select('*'),
             LocalDB.from('users').select('*'),
@@ -35,7 +35,9 @@ window.QLTSPageData.init = async function () {
             LocalDB.from('stock_checks').select('*'),
             LocalDB.from('stock_check_items').select('*'),
             LocalDB.from('suppliers').select('*'),
-            LocalDB.from('alert_settings').select('*')
+            LocalDB.from('alert_settings').select('*'),
+            LocalDB.from('supplies').select('*'),
+            LocalDB.from('supply_transactions').select('*')
         ]);
 
         console.log('Raw data from LocalDB:', {
@@ -141,6 +143,19 @@ window.QLTSPageData.init = async function () {
         stockChecks = stockCheckData.data || [];
         stockCheckItems = stockCheckItemData.data || [];
         alertSettings = alertSettingData.data || [];
+
+        // Process supplies & inventory transactions
+        const rawSupplies = supplyData?.data || [];
+        supplies = rawSupplies.map(s => {
+            const sup = (suppliers || []).find(sp => String(sp.id) === String(s.supplier_id));
+            return {
+                ...s,
+                supplier_name: sup ? sup.name : '-'
+            };
+        });
+        supplyTransactions = supplyTransData?.data || [];
+        window.supplies = supplies;
+        window.supplyTransactions = supplyTransactions;
 
         await migrateLegacyStatuses();
 
@@ -272,6 +287,10 @@ window.QLTSPageData.init = async function () {
             })
             .filter(license => !readNotifications.includes(`license_${license.id}`))
             .sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
+        } else if (document.getElementById('inventoryContent')) {
+            pageType = 'supply';
+            notificationsToShow = (window.supplies || []).filter(s => (parseInt(s.quantity) || 0) <= (parseInt(s.min_quantity) || 0))
+                .filter(s => !readNotifications.includes(`supply_${s.id}`));
         }
 
         if (notificationsToShow.length > 0) {
@@ -279,21 +298,29 @@ window.QLTSPageData.init = async function () {
             notificationCount.classList.remove('hidden');
 
             notificationList.innerHTML = notificationsToShow.map(item => {
-                const expiryDate = new Date(pageType === 'asset' ? item.warranty_expiration_date : item.expiration_date);
-                const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-                const dayText = daysLeft > 1 ? `${daysLeft} ngày` : 'hôm nay';
+                const isSupply = pageType === 'supply';
                 const notificationId = `${pageType}_${item.id}`;
-                const iconClass = pageType === 'asset' ? 'fa-box-archive' : 'fa-key';
-                const message = pageType === 'asset' ? 'Sắp hết hạn bảo hành' : 'Sắp hết hạn bản quyền';
-                // [MỚI] Tạo chuỗi hiển thị cho thông báo license
-                const titleText = pageType === 'license' ? `${item.key_type} - ${item.user || 'Chưa cấp'}` : (item.name || item.key_type);
+                const iconClass = isSupply ? 'fa-triangle-exclamation' : (pageType === 'asset' ? 'fa-box-archive' : 'fa-key');
+                let message = '';
+                let titleText = '';
+                let linkHref = `${pageType}s.html`;
+                if (isSupply) {
+                    titleText = `${item.name} (${item.code || item.sku || 'VT-' + item.id})`;
+                    message = `Tồn kho dưới mức tối thiểu: ${item.quantity}/${item.min_quantity} ${item.unit || ''}`;
+                    linkHref = 'inventory.html';
+                } else {
+                    const expiryDate = new Date(pageType === 'asset' ? item.warranty_expiration_date : item.expiration_date);
+                    const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+                    const dayText = daysLeft > 1 ? `${daysLeft} ngày` : 'hôm nay';
+                    titleText = pageType === 'license' ? `${item.key_type} - ${item.user || 'Chưa cấp'}` : (item.name || item.key_type);
+                    message = `${pageType === 'asset' ? 'Sắp hết hạn bảo hành' : 'Sắp hết hạn bản quyền'} (còn ${dayText})`;
+                }
 
                 return `
                     <li class="border-b dark:border-slate-700 last:border-b-0 group flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700">
-                        <a href="${pageType}s.html" class="flex-grow">
-                            <p class="font-semibold text-sm text-slate-800 dark:text-gray-200 flex items-center"><i class="fa-solid ${iconClass} mr-2 text-slate-400"></i> ${item.name || item.key_type}</p>
+                        <a href="${linkHref}" class="flex-grow">
                             <p class="font-semibold text-sm text-slate-800 dark:text-gray-200 flex items-center"><i class="fa-solid ${iconClass} mr-2 text-slate-400"></i> ${titleText}</p>
-                            <p class="text-xs text-red-500 pl-5">${message} (còn ${dayText})</p>
+                            <p class="text-xs text-red-500 pl-5">${message}</p>
                         </a>
                         <button data-action="mark-notif-read" data-notif-id="${notificationId}" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-opacity" title="Đánh dấu đã đọc">
                             <i class="fa-solid fa-check"></i>
@@ -856,6 +883,270 @@ window.QLTSPageData.init = async function () {
         }
     }
 
+    function renderInventoryList() {
+        const container = document.getElementById('inventoryContent');
+        if (!container) return;
+
+        const currentStockBody = document.getElementById('suppliesTableBody');
+        const historyBody = document.getElementById('stockTransactionsTableBody');
+
+        const allSupplies = (supplies || []).slice();
+        const allTrans = (supplyTransactions || []).slice();
+
+        const totalSuppliesEl = document.getElementById('statTotalSupplies');
+        const lowStockEl = document.getElementById('statLowStock');
+        const totalInEl = document.getElementById('statTotalStockIn');
+        const totalOutEl = document.getElementById('statTotalStockOut');
+        const badgeStockEl = document.getElementById('badgeStockCount');
+        const badgeTransEl = document.getElementById('badgeTransCount');
+
+        const lowStockItems = allSupplies.filter(s => Number(s.quantity || 0) <= Number(s.min_quantity || 0));
+        const stockInTrans = allTrans.filter(t => t.type === 'IN');
+        const stockOutTrans = allTrans.filter(t => t.type === 'OUT');
+
+        if (totalSuppliesEl) totalSuppliesEl.textContent = allSupplies.length;
+        if (lowStockEl) lowStockEl.textContent = lowStockItems.length;
+        if (totalInEl) totalInEl.textContent = stockInTrans.length;
+        if (totalOutEl) totalOutEl.textContent = stockOutTrans.length;
+        if (badgeStockEl) badgeStockEl.textContent = allSupplies.length;
+        if (badgeTransEl) badgeTransEl.textContent = allTrans.length;
+
+        if (typeof window.initInventoryDropdowns === 'function') {
+            window.initInventoryDropdowns();
+        }
+
+        const isHistoryTab = window.inventoryCurrentTab === 'history';
+        const viewStock = document.getElementById('viewCurrentStock');
+        const viewHistory = document.getElementById('viewStockHistory');
+        const tabBtnStock = document.getElementById('tabBtnCurrentStock');
+        const tabBtnHistory = document.getElementById('tabBtnStockHistory');
+        const historyFilterControls = document.getElementById('historyFilterControls');
+
+        if (isHistoryTab) {
+            if (viewStock) viewStock.classList.add('hidden');
+            if (viewHistory) viewHistory.classList.remove('hidden');
+            if (historyFilterControls) historyFilterControls.classList.remove('hidden');
+            if (tabBtnHistory) {
+                tabBtnHistory.className = "pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors";
+            }
+            if (tabBtnStock) {
+                tabBtnStock.className = "pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 transition-colors";
+            }
+        } else {
+            if (viewStock) viewStock.classList.remove('hidden');
+            if (viewHistory) viewHistory.classList.add('hidden');
+            if (historyFilterControls) historyFilterControls.classList.add('hidden');
+            if (tabBtnStock) {
+                tabBtnStock.className = "pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors";
+            }
+            if (tabBtnHistory) {
+                tabBtnHistory.className = "pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 transition-colors";
+            }
+        }
+
+        const searchInput = document.getElementById('filterSupplySearch') || (document.getElementById('assetTableBody') ? null : document.getElementById('searchInput'));
+        const searchVal = searchInput ? normalizeString(searchInput.value.trim()) : '';
+
+        // View 1: Current Stock
+        if (currentStockBody) {
+            let filtered = allSupplies;
+            const catFilter = document.getElementById('filterSupplyCategory')?.value;
+            const statusFilter = document.getElementById('filterSupplyStatus')?.value;
+
+            if (catFilter) {
+                filtered = filtered.filter(s => s.category === catFilter);
+            }
+            if (statusFilter === 'low') {
+                filtered = filtered.filter(s => Number(s.quantity || 0) <= Number(s.min_quantity || 0) && Number(s.quantity || 0) > 0);
+            } else if (statusFilter === 'out') {
+                filtered = filtered.filter(s => Number(s.quantity || 0) <= 0);
+            } else if (statusFilter === 'available') {
+                filtered = filtered.filter(s => Number(s.quantity || 0) > Number(s.min_quantity || 0));
+            }
+            if (searchVal) {
+                filtered = filtered.filter(s => {
+                    const searchStr = normalizeString(`${s.name || ''} ${s.code || ''} ${s.category || ''} ${s.location || ''} ${s.supplier_name || ''} ${s.notes || ''}`);
+                    return searchStr.includes(searchVal);
+                });
+            }
+
+            const sorted = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            const pageSize = 10;
+            const totalPages = Math.ceil(sorted.length / pageSize) || 1;
+            if (window.inventoryCurrentPage > totalPages) window.inventoryCurrentPage = totalPages;
+            if (window.inventoryCurrentPage < 1) window.inventoryCurrentPage = 1;
+            const start = (window.inventoryCurrentPage - 1) * pageSize;
+            const pageItems = sorted.slice(start, start + pageSize);
+
+            if (pageItems.length === 0) {
+                currentStockBody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-500 dark:text-slate-400">Không có mặt hàng vật tư nào phù hợp</td></tr>';
+                if (window.renderPagination) window.renderPagination('inventoryPagination', 1, 0, pageSize, 'inventory-stock');
+            } else {
+                currentStockBody.innerHTML = pageItems.map(s => {
+                    const qty = Number(s.quantity || 0);
+                    const minQty = Number(s.min_quantity || 0);
+                    const isLow = qty <= minQty && qty > 0;
+                    const isOut = qty <= 0;
+
+                    let qtyBadge = "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
+                    let statusLabel = "Còn hàng";
+                    if (isOut) {
+                        qtyBadge = "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300";
+                        statusLabel = "Hết hàng";
+                    } else if (isLow) {
+                        qtyBadge = "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300";
+                        statusLabel = "Sắp hết";
+                    }
+
+                    const priceStr = s.unit_price ? Number(s.unit_price).toLocaleString('vi-VN') + ' đ' : '-';
+
+                    return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <td class="p-4">
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">${s.name || '-'}</div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">${s.code || ('VT-' + s.id)}</span>
+                                ${s.notes ? `<span class="text-xs text-slate-400 truncate max-w-xs" title="${s.notes}">${s.notes}</span>` : ''}
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <span class="text-xs px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-medium">${s.category || 'Vật tư'}</span>
+                        </td>
+                        <td class="p-4 text-center font-medium text-slate-700 dark:text-slate-300">
+                            ${s.unit || 'Chiếc'}
+                        </td>
+                        <td class="p-4 text-center">
+                            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${qtyBadge}">
+                                <span>${qty}</span>
+                                <span class="text-[10px] font-normal">(${statusLabel})</span>
+                            </div>
+                        </td>
+                        <td class="p-4 text-center text-xs font-mono text-slate-500 dark:text-slate-400">
+                            ${minQty}
+                        </td>
+                        <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
+                            <i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${s.location || 'Kho chung'}
+                        </td>
+                        <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
+                            <div>${s.supplier_name || '-'}</div>
+                            ${priceStr !== '-' ? `<div class="text-[11px] text-slate-400 mt-0.5">${priceStr}</div>` : ''}
+                        </td>
+                        <td class="p-4 text-right whitespace-nowrap">
+                            <div class="flex gap-1.5 justify-end">
+                                <div class="tooltip">
+                                    <button data-action="open-stock-in" data-id="${s.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 transition-all">
+                                        <i class="fa-solid fa-arrow-down-long text-xs"></i>
+                                    </button>
+                                    <span class="tooltiptext">Nhập kho</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button data-action="open-stock-out" data-id="${s.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 transition-all">
+                                        <i class="fa-solid fa-arrow-up-long text-xs"></i>
+                                    </button>
+                                    <span class="tooltiptext">Xuất cấp phát</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button data-action="open-edit-supply" data-id="${s.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 transition-all">
+                                        <i class="fa-solid fa-pen text-xs"></i>
+                                    </button>
+                                    <span class="tooltiptext">Chỉnh sửa</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button data-action="open-adjust-supply" data-id="${s.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 transition-all">
+                                        <i class="fa-solid fa-sliders text-xs"></i>
+                                    </button>
+                                    <span class="tooltiptext">Điều chỉnh tồn</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button data-action="delete-supply" data-id="${s.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/30 dark:text-rose-400 transition-all">
+                                        <i class="fa-solid fa-trash text-xs"></i>
+                                    </button>
+                                    <span class="tooltiptext">Xóa mặt hàng</span>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+                if (window.renderPagination) window.renderPagination('inventoryPagination', window.inventoryCurrentPage, sorted.length, pageSize, 'inventory-stock');
+            }
+        }
+
+        // View 2: Stock Transactions
+        if (historyBody) {
+            let filteredTrans = allTrans;
+            const typeFilter = document.getElementById('filterTransType')?.value;
+            if (typeFilter) {
+                filteredTrans = filteredTrans.filter(t => t.type === typeFilter);
+            }
+            if (searchVal) {
+                filteredTrans = filteredTrans.filter(t => {
+                    const searchStr = normalizeString(`${t.code || ''} ${t.supply_name || ''} ${t.receiver_name || ''} ${t.supplier_name || ''} ${t.reason || ''} ${t.created_by || ''}`);
+                    return searchStr.includes(searchVal);
+                });
+            }
+
+            const sortedTrans = filteredTrans.sort((a, b) => new Date(b.date || b.created_at || 0) - new Date(a.date || a.created_at || 0));
+            const pageSize = 10;
+            const totalPages = Math.ceil(sortedTrans.length / pageSize) || 1;
+            if (window.supplyTransCurrentPage > totalPages) window.supplyTransCurrentPage = totalPages;
+            if (window.supplyTransCurrentPage < 1) window.supplyTransCurrentPage = 1;
+            const start = (window.supplyTransCurrentPage - 1) * pageSize;
+            const pageItems = sortedTrans.slice(start, start + pageSize);
+
+            if (pageItems.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-500 dark:text-slate-400">Không có giao dịch kho nào phù hợp</td></tr>';
+                if (window.renderPagination) window.renderPagination('supplyTransPagination', 1, 0, pageSize, 'inventory-history');
+            } else {
+                historyBody.innerHTML = pageItems.map(t => {
+                    let typeBadge = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+                    let typeText = "Nhập kho";
+                    let relatedParty = t.supplier_name ? `NCC: ${t.supplier_name}` : 'Nhập nội bộ';
+
+                    if (t.type === 'OUT') {
+                        typeBadge = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+                        typeText = "Xuất kho";
+                        relatedParty = t.receiver_name ? `${t.receiver_name}${t.receiver_department ? ` (${t.receiver_department})` : ''}` : 'Xuất dùng chung';
+                    } else if (t.type === 'ADJUST') {
+                        typeBadge = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+                        typeText = "Điều chỉnh";
+                        relatedParty = 'Kiểm kê định kỳ';
+                    }
+
+                    const dateStr = t.date ? formatDateDisplay(t.date) : (t.created_at ? new Date(t.created_at).toLocaleDateString('vi-VN') : '-');
+
+                    return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <td class="p-4 text-xs font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                            ${dateStr}
+                        </td>
+                        <td class="p-4 text-xs font-mono font-semibold text-slate-700 dark:text-slate-200">
+                            ${t.code || ('PK-' + t.id)}
+                        </td>
+                        <td class="p-4 text-center whitespace-nowrap">
+                            <span class="px-2.5 py-1 text-xs font-semibold rounded-full ${typeBadge}">
+                                ${typeText}
+                            </span>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">${t.supply_name || '-'}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Số lượng: <span class="font-bold text-slate-700 dark:text-slate-200">${t.quantity || 0}</span> ${t.unit || 'chiếc'}</div>
+                        </td>
+                        <td class="p-4 text-xs text-slate-700 dark:text-slate-200">
+                            ${relatedParty}
+                        </td>
+                        <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
+                            ${t.reason || '-'}
+                        </td>
+                        <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
+                            <span class="font-medium">${t.created_by || 'Admin'}</span>
+                        </td>
+                    </tr>`;
+                }).join('');
+                if (window.renderPagination) window.renderPagination('supplyTransPagination', window.supplyTransCurrentPage, sortedTrans.length, pageSize, 'inventory-history');
+            }
+        }
+    }
+
     // Ghi log hoạt động; ưu tiên Supabase, nếu lỗi thì chỉ log console để không chặn flow
     async function addLog(entityId, entityType, action, desc) {
         try {
@@ -1065,15 +1356,16 @@ window.QLTSPageData.init = async function () {
         });
     }
     // =================================================================
-    // [MỚI] TÌM KIẾM TOÀN CỤC (Tài sản + License + Nhân viên)
+    // [MỚI] TÌM KIẾM TOÀN CỤC (Tài sản + License + Nhân viên + Vật tư)
     // =================================================================
     function performGlobalSearch(term) {
         const q = normalizeString(term);
-        if (!q) return { assetsRes: [], licensesRes: [], usersRes: [] };
+        if (!q) return { assetsRes: [], licensesRes: [], usersRes: [], suppliesRes: [] };
         const assetsRes = assets.filter(a => normalizeString([a.name, a.asset_code, a.config, a.category, a.user, a.location].filter(Boolean).join(' ')).includes(q)).slice(0, 8);
         const licensesRes = licenses.filter(l => normalizeString([l.key_type, l.license_key, l.license_code, l.user, l.package_type].filter(Boolean).join(' ')).includes(q)).slice(0, 8);
         const usersRes = users.filter(u => normalizeString([u.name, u.email, u.department, u.phone].filter(Boolean).join(' ')).includes(q)).slice(0, 8);
-        return { assetsRes, licensesRes, usersRes };
+        const suppliesRes = (window.supplies || []).filter(s => normalizeString([s.name, s.code, s.sku, s.category, s.location].filter(Boolean).join(' ')).includes(q)).slice(0, 8);
+        return { assetsRes, licensesRes, usersRes, suppliesRes };
     }
 
     function renderGlobalSearchResults(term) {
@@ -1081,8 +1373,8 @@ window.QLTSPageData.init = async function () {
         if (!container) return;
         const q = (term || '').trim();
         if (!q) { container.innerHTML = '<p class="text-sm text-slate-400 text-center p-4">Nhập từ khóa để tìm kiếm...</p>'; return; }
-        const { assetsRes, licensesRes, usersRes } = performGlobalSearch(q);
-        if (!assetsRes.length && !licensesRes.length && !usersRes.length) {
+        const { assetsRes, licensesRes, usersRes, suppliesRes } = performGlobalSearch(q);
+        if (!assetsRes.length && !licensesRes.length && !usersRes.length && !(suppliesRes && suppliesRes.length)) {
             container.innerHTML = '<p class="text-sm text-slate-400 text-center p-4">Không tìm thấy kết quả nào.</p>';
             return;
         }
@@ -1100,7 +1392,8 @@ window.QLTSPageData.init = async function () {
         container.innerHTML = [
             section('Tài sản', assetsRes.map(a => row('fa-box', 'text-blue-500', a.name, [a.asset_code, a.user ? `Người dùng: ${a.user}` : null].filter(Boolean).join(' • ') || a.category || '', `assets.html?q=${escapedQ}`))),
             section('License', licensesRes.map(l => row('fa-key', 'text-green-500', l.key_type, [l.license_key, l.user ? `Người dùng: ${l.user}` : null].filter(Boolean).join(' • '), `licenses.html?q=${escapedQ}`))),
-            section('Nhân viên', usersRes.map(u => row('fa-user', 'text-indigo-500', u.name, [u.email, u.department].filter(Boolean).join(' • '), `users.html?q=${escapedQ}`)))
+            section('Nhân viên', usersRes.map(u => row('fa-user', 'text-indigo-500', u.name, [u.email, u.department].filter(Boolean).join(' • '), `users.html?q=${escapedQ}`))),
+            section('Kho vật tư', (suppliesRes || []).map(s => row('fa-boxes-packing', 'text-purple-500', s.name, [s.code || s.sku || `VT-${s.id}`, `Tồn: ${s.quantity} ${s.unit || ''}`].filter(Boolean).join(' • '), `inventory.html?q=${escapedQ}`)))
         ].join('');
     }
 
@@ -1138,11 +1431,20 @@ window.QLTSPageData.init = async function () {
             renderAssignmentList();
             return;
         }
+        if (assetInput && document.getElementById('inventoryContent')) {
+            assetInput.value = q;
+            const sub = document.getElementById('filterSupplySearch');
+            if (sub) sub.value = q;
+            window.inventoryCurrentPage = 1;
+            window.supplyTransCurrentPage = 1;
+            renderInventoryList();
+            return;
+        }
         const userInput = document.getElementById('searchUserInput');
         if (userInput) { userInput.value = q; window.applyUserFilters(); }
     }
 
-    // Lắng nghe sự kiện tìm kiếm & lọc trên trang maintenance.html, stock-checks.html, assignments.html
+    // Lắng nghe sự kiện tìm kiếm & lọc trên trang maintenance.html, stock-checks.html, assignments.html, inventory.html
     const maintSearch = document.getElementById('filterMaintenanceSearch');
     const maintStatus = document.getElementById('filterMaintenanceStatus');
     if (maintSearch) maintSearch.addEventListener('input', () => { maintenanceCurrentPage = 1; renderMaintenanceList(); });
@@ -1165,6 +1467,28 @@ window.QLTSPageData.init = async function () {
         renderAssignmentList();
     });
 
+    const supplySearch = document.getElementById('filterSupplySearch');
+    const supplyCat = document.getElementById('filterSupplyCategory');
+    const supplyStatus = document.getElementById('filterSupplyStatus');
+    const transType = document.getElementById('filterTransType');
+    if (supplySearch) supplySearch.addEventListener('input', () => {
+        window.inventoryCurrentPage = 1;
+        window.supplyTransCurrentPage = 1;
+        renderInventoryList();
+    });
+    if (supplyCat) supplyCat.addEventListener('change', () => {
+        window.inventoryCurrentPage = 1;
+        renderInventoryList();
+    });
+    if (supplyStatus) supplyStatus.addEventListener('change', () => {
+        window.inventoryCurrentPage = 1;
+        renderInventoryList();
+    });
+    if (transType) transType.addEventListener('change', () => {
+        window.supplyTransCurrentPage = 1;
+        renderInventoryList();
+    });
+
     // Top search input trên maintenance, stock-checks, assignments
     const topSearch = document.getElementById('searchInput');
     if (topSearch && !document.getElementById('assetTableBody') && !document.getElementById('licenseTableBody')) {
@@ -1179,12 +1503,12 @@ window.QLTSPageData.init = async function () {
                 if (sub) sub.value = topSearch.value;
                 stockCheckCurrentPage = 1;
                 renderStockCheckList();
-            } else if (document.getElementById('assignmentContent')) {
-                const sub = document.getElementById('filterAssignSearch');
+            } else if (document.getElementById('inventoryContent')) {
+                const sub = document.getElementById('filterSupplySearch');
                 if (sub) sub.value = topSearch.value;
-                window.assignActiveCurrentPage = 1;
-                window.assignHistoryCurrentPage = 1;
-                renderAssignmentList();
+                window.inventoryCurrentPage = 1;
+                window.supplyTransCurrentPage = 1;
+                renderInventoryList();
             }
         });
     }
@@ -1204,6 +1528,7 @@ window.QLTSPageData.init = async function () {
     window.renderMaintenanceList = renderMaintenanceList;
     window.renderStockCheckList = renderStockCheckList;
     window.renderAssignmentList = renderAssignmentList;
+    window.renderInventoryList = renderInventoryList;
     window.addLog = addLog;
     window.exportToCSV = exportToCSV;
     window.renderLicenseImportPreview = renderLicenseImportPreview;

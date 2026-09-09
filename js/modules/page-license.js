@@ -365,6 +365,12 @@ window.QLTSPageLicense.init = async function () {
             } else if (tbl === 'assign-history') {
                 window.assignHistoryCurrentPage = p;
                 if (typeof renderAssignmentList === 'function') renderAssignmentList();
+            } else if (tbl === 'inventory-stock') {
+                window.inventoryCurrentPage = p;
+                if (typeof renderInventoryList === 'function') renderInventoryList();
+            } else if (tbl === 'inventory-history') {
+                window.supplyTransCurrentPage = p;
+                if (typeof renderInventoryList === 'function') renderInventoryList();
             }
             return;
         }
@@ -379,6 +385,96 @@ window.QLTSPageLicense.init = async function () {
             window.assignCurrentTab = 'history';
             window.assignHistoryCurrentPage = 1;
             if (typeof renderAssignmentList === 'function') renderAssignmentList();
+            return;
+        }
+        if (t.closest('#tabBtnCurrentStock')) {
+            window.inventoryCurrentTab = 'stock';
+            window.inventoryCurrentPage = 1;
+            if (typeof renderInventoryList === 'function') renderInventoryList();
+            return;
+        }
+        if (t.closest('#tabBtnStockHistory')) {
+            window.inventoryCurrentTab = 'history';
+            window.supplyTransCurrentPage = 1;
+            if (typeof renderInventoryList === 'function') renderInventoryList();
+            return;
+        }
+        if (t.closest('#btnOpenAddSupplyModal')) {
+            document.getElementById('supplyForm')?.reset();
+            const supplyIdEl = document.getElementById('supply_id');
+            if (supplyIdEl) supplyIdEl.value = '';
+            const titleEl = document.getElementById('supplyModalTitle');
+            if (titleEl) titleEl.textContent = 'Thêm mặt hàng vật tư mới';
+            const initQtyCont = document.getElementById('initialQtyContainer');
+            if (initQtyCont) initQtyCont.classList.remove('hidden');
+            if (typeof window.initInventoryDropdowns === 'function') window.initInventoryDropdowns();
+            openModal('supplyModal');
+            return;
+        }
+        if (t.closest('#btnOpenStockInModal')) {
+            document.getElementById('stockInForm')?.reset();
+            if (typeof window.initInventoryDropdowns === 'function') window.initInventoryDropdowns();
+            const dateInput = document.getElementById('stockin_date');
+            if (dateInput) dateInput.value = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+            openModal('stockInModal');
+            return;
+        }
+        if (t.closest('#btnOpenStockOutModal')) {
+            document.getElementById('stockOutForm')?.reset();
+            if (typeof window.initInventoryDropdowns === 'function') window.initInventoryDropdowns();
+            const dateInput = document.getElementById('stockout_date');
+            if (dateInput) dateInput.value = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+            const qtyDisplay = document.getElementById('stockout_current_qty_display');
+            if (qtyDisplay) qtyDisplay.textContent = '0';
+            openModal('stockOutModal');
+            return;
+        }
+        if (t.closest('#exportInventoryBtn')) {
+            const isHist = window.inventoryCurrentTab === 'history';
+            if (isHist) {
+                const transData = (window.supplyTransactions || []).map(tx => {
+                    const supply = (window.supplies || []).find(s => String(s.id) === String(tx.supply_id));
+                    let typeText = 'Nhập kho';
+                    if (tx.type === 'OUT') typeText = 'Xuất kho';
+                    else if (tx.type === 'ADJUST') typeText = 'Điều chỉnh';
+                    return {
+                        'Thời gian': tx.date || (tx.created_at ? new Date(tx.created_at).toLocaleDateString('vi-VN') : ''),
+                        'Mã phiếu': tx.code || '',
+                        'Loại phiếu': typeText,
+                        'Mặt hàng': supply ? supply.name : 'N/A',
+                        'Mã vật tư': supply ? (supply.code || supply.sku || '') : '',
+                        'Số lượng': tx.quantity,
+                        'Đơn vị': supply ? supply.unit : '',
+                        'Đơn giá (VNĐ)': tx.unit_price || 0,
+                        'Thành tiền (VNĐ)': (tx.quantity || 0) * (tx.unit_price || 0),
+                        'Đối tượng': tx.recipient || tx.supplier || '',
+                        'Ghi chú / Lý do': tx.notes || '',
+                        'Người lập phiếu': tx.user_name || 'Admin'
+                    };
+                });
+                exportToExcel(transData, 'So_kho_xuat_nhap_ton.xlsx');
+            } else {
+                const stockData = (window.supplies || []).map(s => {
+                    let statusText = 'Đủ hàng';
+                    if (s.quantity === 0) statusText = 'Hết hàng';
+                    else if (s.quantity <= (s.min_quantity || 0)) statusText = 'Sắp hết';
+                    return {
+                        'Mã vật tư': s.code || s.sku || ('VT-' + s.id),
+                        'Tên mặt hàng': s.name || '',
+                        'Danh mục': s.category || '',
+                        'Tồn kho': s.quantity || 0,
+                        'Đơn vị': s.unit || '',
+                        'Mức tối thiểu': s.min_quantity || 0,
+                        'Trạng thái': statusText,
+                        'Vị trí lưu kho': s.location || '',
+                        'Đơn giá tham chiếu': s.unit_price || 0,
+                        'Giá trị tồn kho (VNĐ)': (s.quantity || 0) * (s.unit_price || 0),
+                        'Nhà cung cấp': s.supplier || '',
+                        'Ghi chú': s.notes || ''
+                    };
+                });
+                exportToExcel(stockData, 'Bao_cao_ton_kho_vat_tu.xlsx');
+            }
             return;
         }
         if (t.closest('#openNewAssignModalBtn')) {
@@ -1037,6 +1133,77 @@ window.QLTSPageLicense.init = async function () {
                 if (rSignRec) rSignRec.textContent = recName;
 
                 openModal('handoverReceiptModal');
+            }
+            else if (action === 'open-stock-in') {
+                if (typeof window.initInventoryDropdowns === 'function') window.initInventoryDropdowns();
+                const supplySelect = document.getElementById('stockin_supply_select');
+                if (supplySelect) supplySelect.value = id;
+                const inDate = document.getElementById('stockin_date');
+                if (inDate) inDate.value = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+                openModal('stockInModal');
+            }
+            else if (action === 'open-stock-out') {
+                if (typeof window.initInventoryDropdowns === 'function') window.initInventoryDropdowns();
+                const supplySelect = document.getElementById('stockout_supply_select');
+                if (supplySelect) {
+                    supplySelect.value = id;
+                    const supply = (window.supplies || []).find(s => String(s.id) === String(id));
+                    const qtyDisplay = document.getElementById('stockout_current_qty_display');
+                    const qtyInput = document.getElementById('stockout_quantity');
+                    if (supply) {
+                        if (qtyDisplay) qtyDisplay.textContent = `${supply.quantity} ${supply.unit || ''}`;
+                        if (qtyInput) {
+                            qtyInput.max = supply.quantity;
+                            qtyInput.value = supply.quantity > 0 ? 1 : 0;
+                        }
+                    }
+                }
+                const outDate = document.getElementById('stockout_date');
+                if (outDate) outDate.value = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+                openModal('stockOutModal');
+            }
+            else if (action === 'open-edit-supply') {
+                const supply = (window.supplies || []).find(s => String(s.id) === String(id));
+                if (!supply) return;
+                if (typeof window.initInventoryDropdowns === 'function') window.initInventoryDropdowns();
+                document.getElementById('supply_id').value = supply.id;
+                document.getElementById('supply_code').value = supply.code || supply.sku || '';
+                document.getElementById('supply_name').value = supply.name || '';
+                document.getElementById('supply_category').value = supply.category || 'Linh kiện phần cứng';
+                document.getElementById('supply_unit').value = supply.unit || 'Cái';
+                document.getElementById('supply_min_quantity').value = supply.min_quantity != null ? supply.min_quantity : 5;
+                document.getElementById('supply_location').value = supply.location || '';
+                document.getElementById('supply_unit_price').value = supply.unit_price || 0;
+                document.getElementById('supply_supplier').value = supply.supplier || supply.supplier_name || '';
+                document.getElementById('supply_notes').value = supply.notes || '';
+                const initQtyCont = document.getElementById('initialQtyContainer');
+                if (initQtyCont) initQtyCont.classList.add('hidden');
+                document.getElementById('supplyModalTitle').textContent = 'Chỉnh sửa mặt hàng';
+                openModal('supplyModal');
+            }
+            else if (action === 'open-adjust-supply') {
+                const supply = (window.supplies || []).find(s => String(s.id) === String(id));
+                if (!supply) return;
+                document.getElementById('adjust_supply_id').value = supply.id;
+                document.getElementById('adjust_supply_name').textContent = `[${supply.code || supply.sku || 'VT-' + supply.id}] ${supply.name}`;
+                document.getElementById('adjust_current_qty').textContent = `${supply.quantity} ${supply.unit || ''}`;
+                document.getElementById('adjust_actual_qty').value = supply.quantity;
+                document.getElementById('adjust_reason').value = '';
+                openModal('stockAdjustModal');
+            }
+            else if (action === 'delete-supply') {
+                const supply = (window.supplies || []).find(s => String(s.id) === String(id));
+                if (!supply) return;
+                showConfirmationModal(`Bạn có chắc chắn muốn xóa mặt hàng "${supply.name}" khỏi danh mục kho?`, async () => {
+                    const { error } = await supabaseClient.from('supplies').delete().eq('id', supply.id);
+                    if (error) {
+                        handleSupabaseError(error, 'xóa mặt hàng');
+                    } else {
+                        await addLog(supply.id, 'SUPPLY', 'Xóa mặt hàng', `Xóa mặt hàng: ${supply.name} (${supply.code || supply.sku || ''})`);
+                        await refreshApp();
+                        showInfoModal(`Đã xóa mặt hàng "${supply.name}" thành công!`, 'Xóa thành công');
+                    }
+                }, 'Xác nhận xóa');
             }
         }
     });

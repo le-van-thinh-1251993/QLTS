@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Security: Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https://i.pravatar.cc https://ui-avatars.com; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
+    <title>Kho vật tư & Linh kiện - Quản lý Tài sản CNTT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {}
+                }
+            }
+        }
+    </script>
+    <script>
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: auto;
+            background-color: #2d3748;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 12px;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .icon-btn {
+            width: 2rem;
+            height: 2rem;
+        }
+    </style>
+</head>
+<body class="font-sans text-slate-800 bg-slate-100 dark:bg-slate-900 dark:text-slate-100">
+
+    <div class="relative min-h-screen md:flex">
+        <!-- Mobile menu backdrop -->
+        <div id="sidebar-backdrop" class="hidden md:hidden fixed inset-0 bg-black opacity-50 z-40"></div>
+
+        <!-- Sidebar (Nội dung được render bởi js/modules/sidebar.js) -->
+        <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition duration-200 ease-in-out z-50 flex flex-col">
+        </aside>
+
+        <div class="flex-1 flex flex-col">
+            <!-- Top Header -->
+            <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-6">
+                <!-- Mobile menu button -->
+                <button id="hamburger-button" class="md:hidden text-slate-500 focus:outline-none">
+                    <i class="fa-solid fa-bars text-2xl"></i>
+                </button>
+
+                <div class="relative hidden md:block w-96">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input id="searchInput" type="text" placeholder="Tìm kiếm nhanh vật tư, mã, vị trí..." class="w-full h-10 pl-10 pr-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400">
+                </div>
+
+                <div class="flex items-center">
+                    <button id="globalSearchBtn" title="Tìm kiếm toàn cục" class="text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 mr-4">
+                        <i class="fa-solid fa-magnifying-glass text-xl"></i>
+                    </button>
+                    <div class="relative">
+                        <button id="notification-button" class="text-slate-600 hover:text-blue-600">
+                            <i class="fa-regular fa-bell text-xl"></i>
+                            <span id="notification-count" class="hidden absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">0</span>
+                        </button>
+                        <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-md shadow-lg z-20 border dark:border-slate-700">
+                            <div class="p-3 font-semibold text-sm border-b dark:text-gray-200 dark:border-slate-600">Thông báo</div>
+                            <ul id="notification-list" class="max-h-80 overflow-y-auto"></ul>
+                            <div class="p-2 border-t dark:border-slate-600 text-center">
+                                <button id="clear-read-notifications-btn" class="text-xs text-blue-600 hover:underline dark:text-blue-400 dark:hover:text-blue-300">Xem lại các thông báo đã đọc</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ml-4 md:ml-6 flex items-center relative group">
+                        <img src="https://i.pravatar.cc/40?u=admin" alt="Ảnh đại diện" class="w-10 h-10 rounded-full cursor-pointer">
+                        <div class="absolute top-full right-0 pt-2 w-48 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                            <div class="bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 border dark:border-slate-700">
+                                <div class="px-4 py-2 text-sm text-slate-700 dark:text-gray-200 border-b dark:border-slate-600">
+                                    <p class="font-semibold" id="header-user-name">Người dùng</p>
+                                    <p class="text-xs text-slate-500 dark:text-gray-400 truncate" id="header-user-email">admin@example.com</p>
+                                </div>
+                                <a href="settings.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-slate-700">Tài khoản</a>
+                                <a href="#" id="logout-button" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/50">Đăng xuất</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="flex-1 p-6 overflow-y-auto">
+                <div id="inventoryContent">
+                    <!-- Tiêu đề và Mô tả -->
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <div class="flex items-center gap-3">
+                                <span class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-boxes-packing"></i>
+                                </span>
+                                <div>
+                                    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Kho vật tư & Linh kiện</h2>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Quản lý tồn kho linh kiện thay thế, vật tư tiêu hao, phiếu nhập xuất và cảnh báo thiếu hụt</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="exportInventoryBtn" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg flex items-center gap-1.5 shadow-sm transition-all">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Xuất Sổ kho</span>
+                            </button>
+                            <button id="btnOpenStockInModal" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg flex items-center gap-1.5 shadow-sm transition-all">
+                                <i class="fa-solid fa-arrow-down-long"></i>
+                                <span>Nhập kho</span>
+                            </button>
+                            <button id="btnOpenStockOutModal" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg flex items-center gap-1.5 shadow-sm transition-all">
+                                <i class="fa-solid fa-arrow-up-long"></i>
+                                <span>Xuất cấp phát</span>
+                            </button>
+                            <button id="btnOpenAddSupplyModal" class="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg flex items-center gap-1.5 shadow-sm transition-all">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Thêm vật tư</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- KHỐI THỐNG KÊ (STAT CARDS) -->
+                    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-cubes-stacked"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mặt hàng quản lý</p>
+                                <h3 id="statTotalSupplies" class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-0.5">0</h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5">SKU đang theo dõi</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Cảnh báo sắp hết</p>
+                                <h3 id="statLowStock" class="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-0.5">0</h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Dưới ngưỡng tối thiểu</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-dolly"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lượt nhập kho</p>
+                                <h3 id="statTotalStockIn" class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-0.5">0</h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Phiếu nhập đã lưu</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-hand-holding-hand"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lượt xuất cấp phát</p>
+                                <h3 id="statTotalStockOut" class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-0.5">0</h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Phiếu xuất nhân viên</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CONTAINER TAB & BẢNG DỮ LIỆU -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <!-- Tab Headers -->
+                        <div class="border-b border-slate-200 dark:border-slate-700 px-6 pt-4 flex items-center justify-between flex-wrap gap-4">
+                            <div class="flex items-center gap-6">
+                                <button id="tabBtnCurrentStock" class="pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors">
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                    <span>Tồn kho hiện tại</span>
+                                    <span id="badgeStockCount" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">0</span>
+                                </button>
+                                <button id="tabBtnStockHistory" class="pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 transition-colors">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                    <span>Sổ kho & Lịch sử xuất/nhập</span>
+                                    <span id="badgeTransCount" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">0</span>
+                                </button>
+                            </div>
+
+                            <!-- Bộ lọc chung trên Tab bar -->
+                            <div class="flex items-center gap-3 pb-3">
+                                <div class="relative">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                    <input id="filterSupplySearch" type="text" placeholder="Tìm tên vật tư, mã, vị trí..." class="pl-8 pr-3 py-1.5 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 w-56">
+                                </div>
+                                <select id="filterSupplyCategory" class="px-2.5 py-1.5 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                                    <option value="">-- Tất cả phân loại --</option>
+                                    <option value="Linh kiện phần cứng">Linh kiện phần cứng</option>
+                                    <option value="Thiết bị ngoại vi">Thiết bị ngoại vi</option>
+                                    <option value="Dây cáp & Chuyển đổi">Dây cáp & Chuyển đổi</option>
+                                    <option value="Mạng & Viễn thông">Mạng & Viễn thông</option>
+                                    <option value="Vật tư in ấn">Vật tư in ấn</option>
+                                    <option value="Vật tư văn phòng">Vật tư văn phòng</option>
+                                </select>
+                                <select id="filterSupplyStatus" class="px-2.5 py-1.5 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                                    <option value="">-- Trạng thái tồn --</option>
+                                    <option value="low">Sắp hết hàng</option>
+                                    <option value="available">Còn hàng</option>
+                                    <option value="out">Hết hàng (0)</option>
+                                </select>
+                                <div id="historyFilterControls" class="hidden">
+                                    <select id="filterTransType" class="px-2.5 py-1.5 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                                        <option value="">-- Loại phiếu --</option>
+                                        <option value="IN">Nhập kho</option>
+                                        <option value="OUT">Xuất kho</option>
+                                        <option value="ADJUST">Điều chỉnh</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- View 1: Tồn kho hiện tại -->
+                        <div id="viewCurrentStock" class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 text-xs uppercase font-semibold border-b dark:border-slate-700">
+                                    <tr>
+                                        <th class="p-4">Mặt hàng & Mã</th>
+                                        <th class="p-4">Phân loại</th>
+                                        <th class="p-4 text-center">Đơn vị</th>
+                                        <th class="p-4 text-center">Tồn kho hiện tại</th>
+                                        <th class="p-4 text-center">Mức tối thiểu</th>
+                                        <th class="p-4">Vị trí lưu kho</th>
+                                        <th class="p-4">Nhà cung cấp</th>
+                                        <th class="p-4 text-right">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="suppliesTableBody" class="divide-y divide-slate-100 dark:divide-slate-700">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                            <div id="inventoryPagination" class="p-4 border-t dark:border-slate-700"></div>
+                        </div>
+
+                        <!-- View 2: Sổ kho & Lịch sử xuất/nhập -->
+                        <div id="viewStockHistory" class="hidden overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                                <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 text-xs uppercase font-semibold border-b dark:border-slate-700">
+                                    <tr>
+                                        <th class="p-4">Thời gian / Ngày</th>
+                                        <th class="p-4">Mã phiếu</th>
+                                        <th class="p-4 text-center">Loại giao dịch</th>
+                                        <th class="p-4">Mặt hàng & Số lượng</th>
+                                        <th class="p-4">Đối tượng liên quan</th>
+                                        <th class="p-4">Lý do & Ghi chú</th>
+                                        <th class="p-4">Người lập phiếu</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stockTransactionsTableBody" class="divide-y divide-slate-100 dark:divide-slate-700">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                            <div id="supplyTransPagination" class="p-4 border-t dark:border-slate-700"></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL: Thêm / Sửa mặt hàng vật tư -->
+    <div id="supplyModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-box-open text-purple-600"></i>
+                <span id="supplyModalTitle">Thêm mặt hàng vật tư mới</span>
+            </h3>
+            <form id="supplyForm" class="space-y-4">
+                <input type="hidden" id="supply_id">
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="col-span-1">
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Mã vật tư</label>
+                        <input type="text" id="supply_code" placeholder="Tự sinh nếu trống" class="w-full border rounded-lg p-2 text-xs font-mono outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Tên vật tư / linh kiện <span class="text-rose-500">*</span></label>
+                        <input type="text" id="supply_name" placeholder="VD: RAM DDR4 8GB Kingston..." class="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Phân loại danh mục <span class="text-rose-500">*</span></label>
+                        <select id="supply_category" class="w-full border rounded-lg p-2 text-xs bg-white outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required>
+                            <option value="Linh kiện phần cứng">Linh kiện phần cứng</option>
+                            <option value="Thiết bị ngoại vi">Thiết bị ngoại vi</option>
+                            <option value="Dây cáp & Chuyển đổi">Dây cáp & Chuyển đổi</option>
+                            <option value="Mạng & Viễn thông">Mạng & Viễn thông</option>
+                            <option value="Vật tư in ấn">Vật tư in ấn</option>
+                            <option value="Vật tư văn phòng">Vật tư văn phòng</option>
+                            <option value="Khác">Khác</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Đơn vị tính <span class="text-rose-500">*</span></label>
+                        <input type="text" id="supply_unit" placeholder="Chiếc, Thanh, Hộp, Cuộn..." class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div id="initialQtyContainer">
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Số lượng ban đầu</label>
+                        <input type="number" id="supply_quantity" min="0" value="0" class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Ngưỡng cảnh báo sắp hết <span class="text-rose-500">*</span></label>
+                        <input type="number" id="supply_min_quantity" min="0" value="5" class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Vị trí lưu kho</label>
+                        <input type="text" id="supply_location" placeholder="VD: Tủ A1, Kệ 2..." class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Đơn giá tham chiếu (VNĐ)</label>
+                        <input type="number" id="supply_unit_price" min="0" step="1000" placeholder="0" class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Nhà cung cấp thường dùng</label>
+                    <select id="supply_supplier" class="w-full border rounded-lg p-2 text-xs bg-white outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                        <option value="">-- Không chỉ định --</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Ghi chú thông số</label>
+                    <textarea id="supply_notes" rows="2" placeholder="Ghi chú kỹ thuật, tương thích..." class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t dark:border-slate-700">
+                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-xs dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-xs font-semibold shadow-sm">Lưu mặt hàng</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Phiếu Nhập kho vật tư -->
+    <div id="stockInModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-arrow-down-long text-emerald-600"></i>
+                <span>Tạo phiếu nhập kho vật tư</span>
+            </h3>
+            <form id="stockInForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Chọn mặt hàng nhập kho <span class="text-rose-500">*</span></label>
+                    <select id="stockin_supply_select" class="w-full border rounded-lg p-2.5 text-xs bg-white outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Số lượng nhập <span class="text-rose-500">*</span></label>
+                        <input type="number" id="stockin_quantity" min="1" value="1" class="w-full border rounded-lg p-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Đơn giá nhập (VNĐ)</label>
+                        <input type="number" id="stockin_unit_price" min="0" step="1000" placeholder="0" class="w-full border rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Nhà cung cấp</label>
+                        <select id="stockin_supplier" class="w-full border rounded-lg p-2 text-xs bg-white outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                            <option value="">-- Chọn nhà cung cấp --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Ngày nhập</label>
+                        <input type="date" id="stockin_date" class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Lý do nhập / Số hóa đơn / Ghi chú</label>
+                    <textarea id="stockin_reason" rows="2" placeholder="Nhập định kỳ, mua bổ sung theo đề xuất..." class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t dark:border-slate-700">
+                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-xs dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-semibold shadow-sm">Xác nhận nhập kho</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Phiếu Xuất kho cấp phát vật tư -->
+    <div id="stockOutModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-arrow-up-long text-blue-600"></i>
+                <span>Tạo phiếu xuất kho cấp phát</span>
+            </h3>
+            <form id="stockOutForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Chọn mặt hàng xuất kho <span class="text-rose-500">*</span></label>
+                    <select id="stockout_supply_select" class="w-full border rounded-lg p-2.5 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></select>
+                </div>
+
+                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-900/40 flex items-center justify-between">
+                    <span class="text-xs text-blue-700 dark:text-blue-300 font-medium">Tồn kho hiện có:</span>
+                    <span id="stockout_current_qty_display" class="font-mono font-bold text-sm text-blue-800 dark:text-blue-200">0</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Số lượng xuất <span class="text-rose-500">*</span></label>
+                        <input type="number" id="stockout_quantity" min="1" value="1" class="w-full border rounded-lg p-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Ngày xuất kho</label>
+                        <input type="date" id="stockout_date" class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Nhân sự nhận vật tư / linh kiện <span class="text-rose-500">*</span></label>
+                    <select id="stockout_user_select" class="w-full border rounded-lg p-2.5 text-xs bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Mục đích xuất / Lý do cấp phát</label>
+                    <textarea id="stockout_reason" rows="2" placeholder="Nâng cấp RAM máy trạm, cấp chuột mới cho nhân sự mới..." class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t dark:border-slate-700">
+                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-xs dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-semibold shadow-sm">Xác nhận xuất kho</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Điều chỉnh kiểm kê tồn kho -->
+    <div id="stockAdjustModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative border dark:border-slate-700">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-4 border-b pb-2 dark:text-gray-200 dark:border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-amber-500"></i>
+                <span>Điều chỉnh tồn kho thực tế</span>
+            </h3>
+            <form id="stockAdjustForm" class="space-y-4">
+                <input type="hidden" id="adjust_supply_id">
+                <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border dark:border-slate-600">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Mặt hàng điều chỉnh:</p>
+                    <p id="adjust_supply_name" class="font-bold text-slate-800 dark:text-slate-100 mt-0.5">-</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Tồn kho hiện ghi nhận: <span id="adjust_current_qty" class="font-bold font-mono text-slate-800 dark:text-slate-200">0</span></p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Số lượng tồn kho thực tế sau kiểm đếm <span class="text-rose-500">*</span></label>
+                    <input type="number" id="adjust_actual_qty" min="0" class="w-full border rounded-lg p-2.5 text-base font-bold outline-none focus:ring-2 focus:ring-amber-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold mb-1 dark:text-gray-200">Lý do điều chỉnh / Nguyên nhân chênh lệch <span class="text-rose-500">*</span></label>
+                    <textarea id="adjust_reason" rows="2" placeholder="Hao hụt kiểm kê, mất mát, sai số kiểm đếm đợt trước..." class="w-full border rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-amber-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t dark:border-slate-700">
+                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-xs dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-xs font-semibold shadow-sm">Lưu điều chỉnh</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirmationModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 text-center border dark:border-slate-700">
+            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4 text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirmationModalTitle" class="text-lg font-bold mb-2 dark:text-gray-100">Xác nhận</h3>
+            <p id="confirmationModalMessage" class="text-sm text-slate-600 dark:text-slate-300 mb-6">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+            <div class="flex justify-center gap-3">
+                <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-xs font-medium dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                <button type="button" id="btnConfirmAction" class="px-5 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-xs font-semibold shadow-sm">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="infoModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 text-center border dark:border-slate-700">
+            <h3 id="infoModalTitle" class="text-lg font-bold mb-2 dark:text-gray-100">Thông báo</h3>
+            <p id="infoModalMessage" class="text-sm text-slate-600 dark:text-slate-300 mb-6"></p>
+            <button type="button" class="close-modal px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-semibold">Đã hiểu</button>
+        </div>
+    </div>
+
+    <!-- Scripts dependencies -->
+    <script src="js/localDB.js"></script>
+    <script src="js/modules/page-common.js"></script>
+    <script src="js/modules/page-data.js"></script>
+    <script src="js/modules/page-settings.js"></script>
+    <script src="js/modules/page-license.js"></script>
+    <script src="js/modules/page-dashboard.js"></script>
+    <script src="js/modules/sidebar.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
