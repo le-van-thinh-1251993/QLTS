@@ -73,7 +73,7 @@ window.QLTSPageData.init = async function () {
         // Process users with department name join
         const usersRaw = userData.data || [];
         users = usersRaw.map(u => {
-            const dept = departments.find(d => d.id === u.department_id);
+            const dept = departments.find(d => String(d.id) === String(u.department_id));
             return {
                 ...u,
                 department: dept ? dept.name : '-'
@@ -85,9 +85,9 @@ window.QLTSPageData.init = async function () {
         // Process assets with category and user name joins
         const assetsRaw = assetData.data || [];
         assets = assetsRaw.map(a => {
-            const cat = categories.find(c => c.id === a.category_id);
-            const usr = users.find(u => u.id === a.user_id);
-            const supplier = suppliers.find(s => s.id === a.supplier_id);
+            const cat = categories.find(c => String(c.id) === String(a.category_id));
+            const usr = users.find(u => String(u.id) === String(a.user_id));
+            const supplier = suppliers.find(s => String(s.id) === String(a.supplier_id));
             return {
                 ...a,
                 category: cat ? cat.name : '-',
@@ -107,7 +107,7 @@ window.QLTSPageData.init = async function () {
         // Process licenses with user name join
         const licensesRaw = licenseData.data || [];
         licenses = licensesRaw.map(l => {
-            const usr = users.find(u => u.id === l.user_id);
+            const usr = users.find(u => String(u.id) === String(l.user_id));
             return {
                 ...l,
                 status: computeEffectiveLicenseStatus(l, usr),
@@ -122,7 +122,7 @@ window.QLTSPageData.init = async function () {
         // Process asset history with asset name join
         const historyRaw = historyData.data || [];
         assetHistory = historyRaw.map(h => {
-            const asset = assets.find(a => a.id === h.asset_id);
+            const asset = assets.find(a => String(a.id) === String(h.asset_id));
             return {
                 id: h.id,
                 created_at: h.created_at,
@@ -192,7 +192,7 @@ window.QLTSPageData.init = async function () {
         const assetCodes = assets.map(a => a.asset_code).filter(Boolean);
         for (const a of assets) {
             if (a.asset_code) continue;
-            const usr = users.find(u => u.id === a.user_id);
+            const usr = users.find(u => String(u.id) === String(a.user_id));
             const deptName = (usr && usr.department && usr.department !== '-') ? usr.department : null;
             const code = helpers.buildAssetCode(a.category, deptName, assetCodes);
             a.asset_code = code;
@@ -204,7 +204,7 @@ window.QLTSPageData.init = async function () {
         const licenseCodes = licenses.map(l => l.license_code).filter(Boolean);
         for (const l of licenses) {
             if (l.license_code) continue;
-            const usr = users.find(u => u.id === l.user_id);
+            const usr = users.find(u => String(u.id) === String(l.user_id));
             const deptName = (usr && usr.department && usr.department !== '-') ? usr.department : null;
             const code = helpers.buildLicenseCode(l.key_type, deptName, licenseCodes);
             l.license_code = code;
@@ -491,7 +491,7 @@ window.QLTSPageData.init = async function () {
         if (searchInput && searchInput.value.trim()) {
             const q = normalizeString(searchInput.value.trim());
             filtered = filtered.filter(t => {
-                const asset = assets.find(a => a.id === t.asset_id);
+                const asset = assets.find(a => String(a.id) === String(t.asset_id));
                 const assetName = asset ? `${asset.name} ${asset.asset_code || ''}` : '';
                 const searchStr = normalizeString(`${t.title || ''} ${t.note || ''} ${assetName}`);
                 return searchStr.includes(q);
@@ -513,7 +513,7 @@ window.QLTSPageData.init = async function () {
         }
 
         const rows = pageItems.map(task => {
-            const asset = assets.find(a => a.id === task.asset_id);
+            const asset = assets.find(a => String(a.id) === String(task.asset_id));
             const assetName = asset ? `${asset.name}${asset.asset_code ? ` (${asset.asset_code})` : ''}` : 'Chưa gắn thiết bị';
             const isDone = task.status === DONE_STATUS;
             const statusClass = {
@@ -618,6 +618,242 @@ window.QLTSPageData.init = async function () {
         });
         tbody.innerHTML = rows.join('');
         if (window.renderPagination) window.renderPagination('stockCheckPagination', stockCheckCurrentPage, sorted.length, pageSize, 'stock');
+    }
+
+    function renderAssignmentList() {
+        const container = document.getElementById('assignmentContent');
+        if (!container) return;
+
+        const activeTableBody = document.getElementById('activeAssignmentsTableBody');
+        const historyTableBody = document.getElementById('assignmentHistoryTableBody');
+
+        // 1. Thống kê (Stat cards)
+        const allAssets = (assets || []).slice();
+        const activeAssigned = allAssets.filter(a => a.status === 'Active');
+        const stockAssets = allAssets.filter(a => a.status === 'Stock');
+        const allHist = (assetHistory || []).slice();
+        const checkouts = allHist.filter(h => (h.action || '').includes('Cấp phát'));
+        const checkins = allHist.filter(h => (h.action || '').includes('Thu hồi'));
+        const allAssignTransactions = allHist.filter(h => {
+            const act = h.action || '';
+            return act.includes('Cấp phát') || act.includes('Thu hồi') || act.includes('Điều chuyển');
+        });
+
+        const activeCountEl = document.getElementById('assignActiveCount');
+        const stockCountEl = document.getElementById('assignStockCount');
+        const checkoutsEl = document.getElementById('assignTotalCheckouts');
+        const checkinsEl = document.getElementById('assignTotalCheckins');
+        const badgeActiveEl = document.getElementById('badgeActiveCount');
+        const badgeHistoryEl = document.getElementById('badgeHistoryCount');
+
+        if (activeCountEl) activeCountEl.textContent = activeAssigned.length;
+        if (stockCountEl) stockCountEl.textContent = stockAssets.length;
+        if (checkoutsEl) checkoutsEl.textContent = checkouts.length;
+        if (checkinsEl) checkinsEl.textContent = checkins.length;
+        if (badgeActiveEl) badgeActiveEl.textContent = activeAssigned.length;
+        if (badgeHistoryEl) badgeHistoryEl.textContent = allAssignTransactions.length;
+
+        if (typeof window.initAssignmentDropdowns === 'function') {
+            window.initAssignmentDropdowns();
+        }
+
+        // 2. Quản lý Tab hiển thị
+        const isHistoryTab = window.assignCurrentTab === 'history';
+        const viewActive = document.getElementById('viewActiveAssignments');
+        const viewHistory = document.getElementById('viewHistoryAssignments');
+        const tabBtnActive = document.getElementById('tabBtnActive');
+        const tabBtnHistory = document.getElementById('tabBtnHistory');
+        const historyFilterControls = document.getElementById('historyFilterControls');
+
+        if (isHistoryTab) {
+            if (viewActive) viewActive.classList.add('hidden');
+            if (viewHistory) viewHistory.classList.remove('hidden');
+            if (historyFilterControls) historyFilterControls.classList.remove('hidden');
+
+            if (tabBtnHistory) {
+                tabBtnHistory.className = "pb-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 dark:text-blue-400 dark:border-blue-400 flex items-center gap-2";
+            }
+            if (tabBtnActive) {
+                tabBtnActive.className = "pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2";
+            }
+        } else {
+            if (viewActive) viewActive.classList.remove('hidden');
+            if (viewHistory) viewHistory.classList.add('hidden');
+            if (historyFilterControls) historyFilterControls.classList.add('hidden');
+
+            if (tabBtnActive) {
+                tabBtnActive.className = "pb-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 dark:text-blue-400 dark:border-blue-400 flex items-center gap-2";
+            }
+            if (tabBtnHistory) {
+                tabBtnHistory.className = "pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2";
+            }
+        }
+
+        // Tìm kiếm chung
+        const searchInput = document.getElementById('filterAssignSearch') || (document.getElementById('assetTableBody') ? null : document.getElementById('searchInput'));
+        const searchVal = searchInput ? normalizeString(searchInput.value.trim()) : '';
+
+        // 3. Render View 1: Thiết bị đang cấp phát
+        if (activeTableBody) {
+            let filteredActive = activeAssigned;
+            if (searchVal) {
+                filteredActive = filteredActive.filter(a => {
+                    const u = (users || []).find(u => String(u.id) === String(a.user_id)) || {};
+                    const uName = u.name || a.user || '';
+                    const uDept = u.department || '';
+                    const searchStr = normalizeString(`${a.name || ''} ${a.asset_code || ''} ${a.category || ''} ${a.location || ''} ${uName} ${uDept}`);
+                    return searchStr.includes(searchVal);
+                });
+            }
+
+            const sortedActive = filteredActive.sort((a, b) => new Date(b.assigned_date || b.created_at || 0) - new Date(a.assigned_date || a.created_at || 0));
+            const pageSize = 10;
+            const totalPages = Math.ceil(sortedActive.length / pageSize) || 1;
+            if (window.assignActiveCurrentPage > totalPages) window.assignActiveCurrentPage = totalPages;
+            if (window.assignActiveCurrentPage < 1) window.assignActiveCurrentPage = 1;
+            const start = (window.assignActiveCurrentPage - 1) * pageSize;
+            const pageItems = sortedActive.slice(start, start + pageSize);
+
+            if (pageItems.length === 0) {
+                activeTableBody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500 dark:text-slate-400">Không có thiết bị đang cấp phát nào phù hợp</td></tr>';
+                if (window.renderPagination) window.renderPagination('activeAssignmentsPagination', 1, 0, pageSize, 'assign-active');
+            } else {
+                activeTableBody.innerHTML = pageItems.map(asset => {
+                    const u = (users || []).find(user => String(user.id) === String(asset.user_id)) || {};
+                    const userName = u.name || asset.user || 'Chưa rõ';
+                    const userEmail = u.email || '';
+                    const userDept = u.department || 'Chưa phân bổ';
+                    const location = asset.location || 'Văn phòng chính';
+                    const code = asset.asset_code || asset.id;
+                    const dateStr = asset.assigned_date ? formatDateDisplay(asset.assigned_date) : 'Chưa ghi nhận';
+
+                    return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <td class="p-4">
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">${asset.name || '-'}</div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">${code}</span>
+                                <span class="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-medium">${asset.category || 'Thiết bị'}</span>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-medium text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                <i class="fa-solid fa-user text-xs text-slate-400"></i>
+                                <span>${userName}</span>
+                            </div>
+                            ${userEmail ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${userEmail}</div>` : ''}
+                        </td>
+                        <td class="p-4 text-slate-600 dark:text-slate-300">
+                            <div>${userDept}</div>
+                            <div class="text-xs text-slate-400 mt-0.5"><i class="fa-solid fa-location-dot text-[10px] mr-1"></i>${location}</div>
+                        </td>
+                        <td class="p-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
+                            ${dateStr}
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
+                                Đang sử dụng
+                            </span>
+                        </td>
+                        <td class="p-4 text-right whitespace-nowrap">
+                            <div class="flex gap-2 justify-end">
+                                <div class="tooltip">
+                                    <button data-action="open-return-asset" data-id="${asset.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 transition-all">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                    <span class="tooltiptext">Thu hồi về kho</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button data-action="open-transfer-asset" data-id="${asset.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 transition-all">
+                                        <i class="fa-solid fa-shuffle"></i>
+                                    </button>
+                                    <span class="tooltiptext">Điều chuyển</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button data-action="view-receipt" data-id="${asset.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 transition-all">
+                                        <i class="fa-solid fa-file-invoice"></i>
+                                    </button>
+                                    <span class="tooltiptext">In biên bản</span>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+                if (window.renderPagination) window.renderPagination('activeAssignmentsPagination', window.assignActiveCurrentPage, sortedActive.length, pageSize, 'assign-active');
+            }
+        }
+
+        // 4. Render View 2: Lịch sử bàn giao / thu hồi
+        if (historyTableBody) {
+            let filteredHistory = allAssignTransactions;
+            const typeFilter = document.getElementById('filterAssignType')?.value;
+            if (typeFilter) {
+                filteredHistory = filteredHistory.filter(h => (h.action || '').includes(typeFilter));
+            }
+            if (searchVal) {
+                filteredHistory = filteredHistory.filter(h => {
+                    const asset = (assets || []).find(a => String(a.id) === String(h.assetId));
+                    const code = asset?.asset_code || '';
+                    const searchStr = normalizeString(`${h.assetName || ''} ${code} ${h.action || ''} ${h.desc || ''} ${h.createdBy || ''}`);
+                    return searchStr.includes(searchVal);
+                });
+            }
+
+            const sortedHistory = filteredHistory.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+            const pageSize = 10;
+            const totalPages = Math.ceil(sortedHistory.length / pageSize) || 1;
+            if (window.assignHistoryCurrentPage > totalPages) window.assignHistoryCurrentPage = totalPages;
+            if (window.assignHistoryCurrentPage < 1) window.assignHistoryCurrentPage = 1;
+            const start = (window.assignHistoryCurrentPage - 1) * pageSize;
+            const pageItems = sortedHistory.slice(start, start + pageSize);
+
+            if (pageItems.length === 0) {
+                historyTableBody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500 dark:text-slate-400">Không có lịch sử giao dịch phù hợp</td></tr>';
+                if (window.renderPagination) window.renderPagination('assignmentPagination', 1, 0, pageSize, 'assign-history');
+            } else {
+                historyTableBody.innerHTML = pageItems.map(h => {
+                    const asset = (assets || []).find(a => String(a.id) === String(h.assetId));
+                    const code = asset?.asset_code || '';
+                    const act = h.action || '';
+                    let badgeClass = "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300";
+                    let actionText = act.replace(/^\[.*?\]\s*/, '');
+                    if (act.includes('Cấp phát')) badgeClass = "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300";
+                    else if (act.includes('Thu hồi')) badgeClass = "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300";
+                    else if (act.includes('Điều chuyển')) badgeClass = "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300";
+
+                    return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <td class="p-4 text-xs font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                            ${h.time || (h.created_at ? new Date(h.created_at).toLocaleString('vi-VN') : '-')}
+                        </td>
+                        <td class="p-4">
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">${h.assetName || '-'}</div>
+                            ${code ? `<span class="text-xs font-mono text-slate-500 dark:text-slate-400">${code}</span>` : ''}
+                        </td>
+                        <td class="p-4 text-center whitespace-nowrap">
+                            <span class="px-2.5 py-1 text-xs font-semibold rounded-full ${badgeClass}">
+                                ${actionText}
+                            </span>
+                        </td>
+                        <td class="p-4 text-slate-700 dark:text-slate-200 text-xs">
+                            ${h.desc || '-'}
+                        </td>
+                        <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
+                            <span class="font-medium">${h.createdBy || 'Admin'}</span>
+                        </td>
+                        <td class="p-4 text-right whitespace-nowrap">
+                            <div class="tooltip">
+                                <button data-action="view-receipt-history" data-id="${h.assetId}" data-log-id="${h.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 transition-all">
+                                    <i class="fa-solid fa-file-invoice"></i>
+                                </button>
+                                <span class="tooltiptext">Xem biên bản</span>
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+                if (window.renderPagination) window.renderPagination('assignmentPagination', window.assignHistoryCurrentPage, sortedHistory.length, pageSize, 'assign-history');
+            }
+        }
     }
 
     // Ghi log hoạt động; ưu tiên Supabase, nếu lỗi thì chỉ log console để không chặn flow
@@ -893,11 +1129,20 @@ window.QLTSPageData.init = async function () {
             renderStockCheckList();
             return;
         }
+        if (assetInput && document.getElementById('assignmentContent')) {
+            assetInput.value = q;
+            const sub = document.getElementById('filterAssignSearch');
+            if (sub) sub.value = q;
+            window.assignActiveCurrentPage = 1;
+            window.assignHistoryCurrentPage = 1;
+            renderAssignmentList();
+            return;
+        }
         const userInput = document.getElementById('searchUserInput');
         if (userInput) { userInput.value = q; window.applyUserFilters(); }
     }
 
-    // Lắng nghe sự kiện tìm kiếm & lọc trên trang maintenance.html và stock-checks.html
+    // Lắng nghe sự kiện tìm kiếm & lọc trên trang maintenance.html, stock-checks.html, assignments.html
     const maintSearch = document.getElementById('filterMaintenanceSearch');
     const maintStatus = document.getElementById('filterMaintenanceStatus');
     if (maintSearch) maintSearch.addEventListener('input', () => { maintenanceCurrentPage = 1; renderMaintenanceList(); });
@@ -908,7 +1153,19 @@ window.QLTSPageData.init = async function () {
     if (stockSearch) stockSearch.addEventListener('input', () => { stockCheckCurrentPage = 1; renderStockCheckList(); });
     if (stockStatus) stockStatus.addEventListener('change', () => { stockCheckCurrentPage = 1; renderStockCheckList(); });
 
-    // Top search input trên maintenance và stock-checks
+    const assignSearch = document.getElementById('filterAssignSearch');
+    const assignType = document.getElementById('filterAssignType');
+    if (assignSearch) assignSearch.addEventListener('input', () => {
+        window.assignActiveCurrentPage = 1;
+        window.assignHistoryCurrentPage = 1;
+        renderAssignmentList();
+    });
+    if (assignType) assignType.addEventListener('change', () => {
+        window.assignHistoryCurrentPage = 1;
+        renderAssignmentList();
+    });
+
+    // Top search input trên maintenance, stock-checks, assignments
     const topSearch = document.getElementById('searchInput');
     if (topSearch && !document.getElementById('assetTableBody') && !document.getElementById('licenseTableBody')) {
         topSearch.addEventListener('input', () => {
@@ -922,6 +1179,12 @@ window.QLTSPageData.init = async function () {
                 if (sub) sub.value = topSearch.value;
                 stockCheckCurrentPage = 1;
                 renderStockCheckList();
+            } else if (document.getElementById('assignmentContent')) {
+                const sub = document.getElementById('filterAssignSearch');
+                if (sub) sub.value = topSearch.value;
+                window.assignActiveCurrentPage = 1;
+                window.assignHistoryCurrentPage = 1;
+                renderAssignmentList();
             }
         });
     }
@@ -940,6 +1203,7 @@ window.QLTSPageData.init = async function () {
     window.formatDateDisplay = formatDateDisplay;
     window.renderMaintenanceList = renderMaintenanceList;
     window.renderStockCheckList = renderStockCheckList;
+    window.renderAssignmentList = renderAssignmentList;
     window.addLog = addLog;
     window.exportToCSV = exportToCSV;
     window.renderLicenseImportPreview = renderLicenseImportPreview;

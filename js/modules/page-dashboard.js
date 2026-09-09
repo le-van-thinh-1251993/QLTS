@@ -584,18 +584,18 @@ window.QLTSPageDashboard.init = async function () {
         const deptData = {};
         assets.forEach(a => {
             let dName = 'Kho';
-            if (a.user_id) { const u = users.find(user => user.id === a.user_id); dName = u ? u.department : 'Chưa phân bổ'; }
+            if (a.user_id) { const u = users.find(user => String(user.id) === String(a.user_id)); dName = u ? u.department : 'Chưa phân bổ'; }
             deptData[dName] = (deptData[dName] || 0) + 1;
         });
         chartDepartment = drawChart('departmentAssetChart', chartDepartment, 'bar', Object.keys(deptData), Object.values(deptData), '#8b5cf6', 'Thiết bị', (clickedLabel) => {
-            let filtered = clickedLabel === 'Kho' ? assets.filter(a => !a.user_id) : assets.filter(a => { const u = users.find(user => user.id === a.user_id); return u && u.department === clickedLabel; });
+            let filtered = clickedLabel === 'Kho' ? assets.filter(a => !a.user_id) : assets.filter(a => { const u = users.find(user => String(user.id) === String(a.user_id)); return u && u.department === clickedLabel; });
             showDrillDown(`Phòng ban: ${clickedLabel}`, filtered, 'asset');
         });
 
-        const uAssetCounts = users.map(u => ({ name: u.name, count: assets.filter(a => a.user_id === u.id).length })).filter(u => u.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
+        const uAssetCounts = users.map(u => ({ name: u.name, count: assets.filter(a => String(a.user_id) === String(u.id)).length })).filter(u => u.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
         chartUserAsset = drawChart('userAssetChart', chartUserAsset, 'bar', uAssetCounts.map(u => u.name), uAssetCounts.map(u => u.count), '#f59e0b', 'Thiết bị', (clickedLabel) => {
             const u = users.find(user => user.name === clickedLabel);
-            if (u) showDrillDown(`Tài sản của: ${u.name}`, assets.filter(a => a.user_id === u.id), 'asset');
+            if (u) showDrillDown(`Tài sản của: ${u.name}`, assets.filter(a => String(a.user_id) === String(u.id)), 'asset');
         });
 
         // Biểu đồ xu hướng hoạt động với Empty State
@@ -1506,11 +1506,15 @@ window.QLTSPageDashboard.init = async function () {
         if (document.getElementById('userTableBody')) applyUserFilters();
         if (document.getElementById('maintenanceTableBody') && typeof renderMaintenanceList === 'function') renderMaintenanceList();
         if (document.getElementById('stockCheckTableBody') && typeof renderStockCheckList === 'function') renderStockCheckList();
+        if (document.getElementById('assignmentContent') && typeof renderAssignmentList === 'function') renderAssignmentList();
         if (document.getElementById('supplierListContainer')) renderLists();
     }
 
     if (document.getElementById('dashboardContent')) {
         updateDashboard();
+    }
+    if (document.getElementById('assignmentContent') && typeof renderAssignmentList === 'function') {
+        renderAssignmentList();
     }
 
     if (document.getElementById('filterAssetUser') || document.getElementById('filterLicenseUser') || document.getElementById('assetTableBody') || document.getElementById('licenseTableBody')) {

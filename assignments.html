@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Security: Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https://i.pravatar.cc https://ui-avatars.com; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
+    <title>Cấp phát & Bàn giao tài sản - Quản lý Tài sản CNTT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {}
+                }
+            }
+        }
+    </script>
+    <script>
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: auto;
+            background-color: #2d3748;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 12px;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .icon-btn {
+            width: 2.25rem;
+            height: 2.25rem;
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printableReceipt, #printableReceipt * {
+                visibility: visible;
+            }
+            #printableReceipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+                color: black;
+                padding: 20px;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="font-sans text-slate-800 bg-slate-100 dark:bg-slate-900 dark:text-slate-100">
+
+    <div class="relative min-h-screen md:flex">
+        <!-- Mobile menu backdrop -->
+        <div id="sidebar-backdrop" class="hidden md:hidden fixed inset-0 bg-black opacity-50 z-40"></div>
+
+        <!-- Sidebar (Nội dung được render bởi js/modules/sidebar.js) -->
+        <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition duration-200 ease-in-out z-50 flex flex-col">
+        </aside>
+
+        <div class="flex-1 flex flex-col">
+            <!-- Top Header -->
+            <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-6">
+                <!-- Mobile menu button -->
+                <button id="hamburger-button" class="md:hidden text-slate-500 focus:outline-none">
+                    <i class="fa-solid fa-bars text-2xl"></i>
+                </button>
+
+                <div class="relative hidden md:block w-96">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input id="searchInput" type="text" placeholder="Tìm kiếm nhanh tài sản, nhân sự..." class="w-full h-10 pl-10 pr-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:placeholder-gray-400">
+                </div>
+
+                <div class="flex items-center">
+                    <button id="globalSearchBtn" title="Tìm kiếm toàn cục" class="text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 mr-4">
+                        <i class="fa-solid fa-magnifying-glass text-xl"></i>
+                    </button>
+                    <div class="relative">
+                        <button id="notification-button" class="text-slate-600 hover:text-blue-600">
+                            <i class="fa-regular fa-bell text-xl"></i>
+                            <span id="notification-count" class="hidden absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">0</span>
+                        </button>
+                        <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-md shadow-lg z-20 border dark:border-slate-700">
+                            <div class="p-3 font-semibold text-sm border-b dark:text-gray-200 dark:border-slate-600">Thông báo</div>
+                            <ul id="notification-list" class="max-h-80 overflow-y-auto"></ul>
+                            <div class="p-2 border-t dark:border-slate-600 text-center">
+                                <button id="clear-read-notifications-btn" class="text-xs text-blue-600 hover:underline dark:text-blue-400 dark:hover:text-blue-300">Xem lại các thông báo đã đọc</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ml-4 md:ml-6 flex items-center relative group">
+                        <img src="https://i.pravatar.cc/40?u=admin" alt="Ảnh đại diện" class="w-10 h-10 rounded-full cursor-pointer">
+                        <div class="absolute top-full right-0 pt-2 w-48 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                            <div class="bg-white dark:bg-slate-800 rounded-md shadow-lg py-1 border dark:border-slate-700">
+                                <div class="px-4 py-2 text-sm text-slate-700 dark:text-gray-200 border-b dark:border-slate-600">
+                                    <p class="font-semibold" id="header-user-name">Người dùng</p>
+                                    <p class="text-xs text-slate-500 dark:text-gray-400 truncate" id="header-user-email">admin@example.com</p>
+                                </div>
+                                <a href="settings.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-slate-700">Tài khoản</a>
+                                <a href="#" id="logout-button" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/50">Đăng xuất</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="flex-1 p-6 overflow-y-auto">
+                <div id="assignmentContent">
+                    <!-- Tiêu đề và Mô tả -->
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <div class="flex items-center gap-3">
+                                <span class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl">
+                                    <i class="fa-solid fa-hand-holding-hand"></i>
+                                </span>
+                                <div>
+                                    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Cấp phát & Bàn giao tài sản</h2>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Quản lý vòng đời cấp phát thiết bị, điều chuyển, thu hồi và in biên bản bàn giao</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="exportAssignmentBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 shadow-sm transition-all">
+                                <i class="fa-solid fa-file-export"></i>
+                                <span>Xuất Excel</span>
+                            </button>
+                            <button id="openNewAssignModalBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg flex items-center gap-2 shadow-sm transition-all">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Cấp phát thiết bị</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- KHỐI THỐNG KÊ (STAT CARDS) -->
+                    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <!-- Đang cấp phát -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-l-4 border-l-green-500">
+                            <div class="flex items-center justify-between">
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Đang cấp phát</p>
+                                <span class="p-2 bg-green-50 dark:bg-green-900/30 text-green-500 rounded-lg text-sm"><i class="fa-solid fa-desktop"></i></span>
+                            </div>
+                            <p id="assignActiveCount" class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">0</p>
+                        </div>
+                        <!-- Sẵn sàng trong kho -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-l-4 border-l-blue-500">
+                            <div class="flex items-center justify-between">
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sẵn sàng trong kho</p>
+                                <span class="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-500 rounded-lg text-sm"><i class="fa-solid fa-boxes-stacked"></i></span>
+                            </div>
+                            <p id="assignStockCount" class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">0</p>
+                        </div>
+                        <!-- Lượt bàn giao -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-l-4 border-l-indigo-500">
+                            <div class="flex items-center justify-between">
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lượt bàn giao</p>
+                                <span class="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-lg text-sm"><i class="fa-solid fa-handshake"></i></span>
+                            </div>
+                            <p id="assignTotalCheckouts" class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">0</p>
+                        </div>
+                        <!-- Lượt thu hồi -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-l-4 border-l-amber-500">
+                            <div class="flex items-center justify-between">
+                                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lượt thu hồi về kho</p>
+                                <span class="p-2 bg-amber-50 dark:bg-amber-900/30 text-amber-500 rounded-lg text-sm"><i class="fa-solid fa-rotate-left"></i></span>
+                            </div>
+                            <p id="assignTotalCheckins" class="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">0</p>
+                        </div>
+                    </div>
+
+                    <!-- TABS ĐIỀU HƯỚNG NỘI BỘ -->
+                    <div class="flex border-b border-slate-200 dark:border-slate-700 mb-6 gap-6">
+                        <button id="tabBtnActive" class="pb-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 dark:text-blue-400 dark:border-blue-400 flex items-center gap-2">
+                            <i class="fa-solid fa-user-check"></i>
+                            <span>Thiết bị đang cấp phát</span>
+                            <span id="badgeActiveCount" class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">0</span>
+                        </button>
+                        <button id="tabBtnHistory" class="pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <span>Lịch sử bàn giao / Thu hồi</span>
+                            <span id="badgeHistoryCount" class="px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">0</span>
+                        </button>
+                    </div>
+
+                    <!-- BỘ LỌC & TÌM KIẾM -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                        <div class="flex-1 relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="filterAssignSearch" placeholder="Tìm theo tên thiết bị, mã TS, nhân viên, phòng ban..." class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                        </div>
+                        <div id="historyFilterControls" class="hidden flex items-center gap-3">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Loại giao dịch:</label>
+                            <select id="filterAssignType" class="border rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Tất cả giao dịch</option>
+                                <option value="Cấp phát">Cấp phát mới</option>
+                                <option value="Thu hồi">Thu hồi về kho</option>
+                                <option value="Điều chuyển">Điều chuyển</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- VIEW 1: THIẾT BỊ ĐANG CẤP PHÁT -->
+                    <div id="viewActiveAssignments" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 dark:bg-slate-700/60 text-slate-500 dark:text-slate-300 uppercase text-xs font-bold border-b dark:border-slate-700">
+                                    <tr>
+                                        <th class="p-4">Thiết bị & Mã TS</th>
+                                        <th class="p-4">Người đang sử dụng</th>
+                                        <th class="p-4">Phòng ban / Vị trí</th>
+                                        <th class="p-4">Ngày cấp phát</th>
+                                        <th class="p-4">Tình trạng</th>
+                                        <th class="p-4 text-right">Hành động</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activeAssignmentsTableBody" class="divide-y divide-slate-100 dark:divide-slate-700">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="activeAssignmentsPagination" class="p-4 flex justify-between items-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800"></div>
+                    </div>
+
+                    <!-- VIEW 2: LỊCH SỬ BÀN GIAO / THU HỒI (HIDDEN MẶC ĐỊNH) -->
+                    <div id="viewHistoryAssignments" class="hidden bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-slate-50 dark:bg-slate-700/60 text-slate-500 dark:text-slate-300 uppercase text-xs font-bold border-b dark:border-slate-700">
+                                    <tr>
+                                        <th class="p-4">Thời gian</th>
+                                        <th class="p-4">Thiết bị liên quan</th>
+                                        <th class="p-4 text-center">Giao dịch</th>
+                                        <th class="p-4">Chi tiết & Đối tượng</th>
+                                        <th class="p-4">Người thực hiện</th>
+                                        <th class="p-4 text-right">Biên bản</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="assignmentHistoryTableBody" class="divide-y divide-slate-100 dark:divide-slate-700">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="assignmentPagination" class="p-4 flex justify-between items-center border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal: Cấp phát thiết bị mới -->
+    <div id="newAssignModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700 max-h-[85vh] overflow-y-auto">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-hand-holding-hand text-blue-600"></i>
+                <span>Cấp phát thiết bị cho nhân sự</span>
+            </h3>
+            <form id="newAssignForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Chọn thiết bị trong kho <span class="text-rose-500">*</span></label>
+                    <select id="assign_asset_select" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Nhân sự nhận thiết bị <span class="text-rose-500">*</span></label>
+                    <select id="assign_user_select" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ngày bàn giao</label>
+                        <input type="date" id="assign_date" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Tình trạng thiết bị</label>
+                        <select id="assign_condition" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                            <option value="Mới 100%">Mới 100%</option>
+                            <option value="Hoạt động tốt" selected>Hoạt động tốt</option>
+                            <option value="Trầy xước nhẹ">Trầy xước nhẹ</option>
+                            <option value="Đã qua sử dụng">Đã qua sử dụng</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Phụ kiện đi kèm</label>
+                    <input type="text" id="assign_accessories" placeholder="VD: Sạc zin, Chuột không dây, Túi chống sốc..." class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ghi chú bàn giao</label>
+                    <textarea id="assign_notes" rows="2" placeholder="Cam kết sử dụng, mục đích công việc..." class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-3 border-t dark:border-slate-700">
+                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-sm">Xác nhận cấp phát</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Thu hồi thiết bị về kho -->
+    <div id="returnAssetModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-rotate-left text-amber-500"></i>
+                <span>Thu hồi thiết bị về kho</span>
+            </h3>
+            <form id="returnAssetForm" class="space-y-4">
+                <input type="hidden" id="return_asset_id">
+                <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border dark:border-slate-600">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Thiết bị thu hồi:</p>
+                    <p id="return_asset_name" class="font-bold text-slate-800 dark:text-slate-100 mt-0.5">-</p>
+                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-1" id="return_asset_current_user">Từ người dùng: -</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ngày thu hồi</label>
+                        <input type="date" id="return_date" class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Tình trạng sau thu hồi</label>
+                        <select id="return_condition" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-amber-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
+                            <option value="Bình thường (Nhập kho)">Bình thường (Nhập kho)</option>
+                            <option value="Hỏng nhẹ (Chuyển sửa)">Hỏng nhẹ (Chuyển sửa)</option>
+                            <option value="Hỏng nặng (Cần kiểm định)">Hỏng nặng (Cần kiểm định)</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Ghi chú thu hồi</label>
+                    <textarea id="return_notes" rows="2" placeholder="Tình trạng thân vỏ, màn hình, phụ kiện trả lại..." class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-3 border-t dark:border-slate-700">
+                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-semibold shadow-sm">Xác nhận thu hồi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Điều chuyển thiết bị -->
+    <div id="transferAssetModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 relative border dark:border-slate-700">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times text-2xl"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-b pb-2 dark:text-gray-200 dark:border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-shuffle text-purple-600"></i>
+                <span>Điều chuyển thiết bị</span>
+            </h3>
+            <form id="transferAssetForm" class="space-y-4">
+                <input type="hidden" id="transfer_asset_id">
+                <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border dark:border-slate-600">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Thiết bị điều chuyển:</p>
+                    <p id="transfer_asset_name" class="font-bold text-slate-800 dark:text-slate-100 mt-0.5">-</p>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 mt-1" id="transfer_from_user">Đang sử dụng bởi: -</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Chuyển sang nhân sự mới <span class="text-rose-500">*</span></label>
+                    <select id="transfer_to_user_select" class="w-full border rounded-lg p-2.5 bg-white outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" required></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1 dark:text-gray-200">Lý do & Ghi chú chuyển giao</label>
+                    <textarea id="transfer_notes" rows="2" placeholder="Chuyển dự án, thay đổi bộ phận..." class="w-full border rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-3 border-t dark:border-slate-700">
+                    <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                    <button type="submit" class="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold shadow-sm">Xác nhận chuyển</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Xem & In Biên bản Bàn giao (Handover Receipt) khổ chuẩn A4 -->
+    <div id="handoverReceiptModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl p-6 relative border dark:border-slate-700 max-h-[90vh] flex flex-col">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600 no-print"><i class="fa-solid fa-times text-2xl"></i></button>
+            <div class="flex items-center justify-between pb-3 border-b dark:border-slate-700 mb-4 no-print">
+                <h3 class="text-lg font-bold dark:text-gray-200 flex items-center gap-2">
+                    <i class="fa-solid fa-file-invoice text-blue-600"></i>
+                    <span>Biên bản bàn giao thiết bị</span>
+                </h3>
+                <div class="flex gap-2">
+                    <button onclick="window.print()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-print"></i>
+                        <span>In biên bản (A4)</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Nội dung văn bản in A4 -->
+            <div id="printableReceipt" class="overflow-y-auto flex-1 p-6 bg-white text-slate-900 border rounded-lg font-serif">
+                <div class="text-center mb-6">
+                    <p class="font-bold text-xs uppercase tracking-wider">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                    <p class="text-xs font-semibold underline">Độc lập - Tự do - Hạnh phúc</p>
+                    <h2 class="text-xl font-bold uppercase mt-6 tracking-wide">BIÊN BẢN BÀN GIAO THIẾT BỊ CNTT</h2>
+                    <p class="text-xs italic text-slate-600 mt-1" id="receiptDateStr">Hà Nội, ngày ... tháng ... năm ...</p>
+                </div>
+
+                <div class="space-y-4 text-sm leading-relaxed">
+                    <div>
+                        <p class="font-bold">I. ĐẠI DIỆN BÊN GIAO (PHÒNG CNTT / QUẢN TRỊ THIẾT BỊ):</p>
+                        <p id="receiptGiverName" class="ml-4">- Họ và tên: Admin Hệ Thống</p>
+                        <p class="ml-4">- Bộ phận: Quản trị Hạ tầng & Thiết bị CNTT</p>
+                    </div>
+
+                    <div>
+                        <p class="font-bold">II. ĐẠI DIỆN BÊN NHẬN (NGƯỜI SỬ DỤNG):</p>
+                        <p id="receiptReceiverName" class="ml-4">- Họ và tên: -</p>
+                        <p id="receiptReceiverDept" class="ml-4">- Phòng ban / Bộ phận: -</p>
+                        <p id="receiptReceiverEmail" class="ml-4">- Email: -</p>
+                    </div>
+
+                    <div>
+                        <p class="font-bold">III. THÔNG TIN THIẾT BỊ BÀN GIAO:</p>
+                        <table class="w-full border-collapse border border-slate-400 mt-2 text-xs">
+                            <thead>
+                                <tr class="bg-slate-100 text-center font-bold">
+                                    <th class="border border-slate-400 p-2">Tên thiết bị</th>
+                                    <th class="border border-slate-400 p-2">Mã tài sản</th>
+                                    <th class="border border-slate-400 p-2">Cấu hình chi tiết</th>
+                                    <th class="border border-slate-400 p-2">Tình trạng bàn giao</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="border border-slate-400 p-2 font-semibold" id="receiptAssetName">-</td>
+                                    <td class="border border-slate-400 p-2 text-center font-mono" id="receiptAssetCode">-</td>
+                                    <td class="border border-slate-400 p-2" id="receiptAssetConfig">-</td>
+                                    <td class="border border-slate-400 p-2 text-center" id="receiptAssetCondition">Hoạt động tốt</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div>
+                        <p class="font-bold">IV. CAM KẾT SỬ DỤNG:</p>
+                        <p class="italic text-xs text-slate-700">Bên nhận cam kết sử dụng thiết bị đúng mục đích công việc, tuân thủ các quy định bảo mật và an toàn thông tin của công ty. Khi có sự cố hoặc chuyển giao công việc, có trách nhiệm hoàn trả thiết bị nguyên vẹn cho Bộ phận CNTT.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 text-center mt-12 pt-6">
+                        <div>
+                            <p class="font-bold uppercase text-xs">ĐẠI DIỆN BÊN GIAO</p>
+                            <p class="text-xs italic text-slate-500">(Ký và ghi rõ họ tên)</p>
+                            <div class="h-20"></div>
+                            <p class="font-semibold text-xs" id="receiptSignGiver">Quản trị viên</p>
+                        </div>
+                        <div>
+                            <p class="font-bold uppercase text-xs">ĐẠI DIỆN BÊN NHẬN</p>
+                            <p class="text-xs italic text-slate-500">(Ký và ghi rõ họ tên)</p>
+                            <div class="h-20"></div>
+                            <p class="font-semibold text-xs" id="receiptSignReceiver">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end pt-3 border-t dark:border-slate-700 no-print mt-2">
+                <button class="close-modal px-5 py-2 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-gray-200">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Xác nhận -->
+    <div id="confirmationModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[60] flex justify-center items-center backdrop-blur-sm">
+        <div class="relative mx-auto p-6 border w-full max-w-sm shadow-lg rounded-xl bg-white dark:bg-slate-800 dark:border-slate-700 text-center">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2" id="confirmationModalTitle">Xác nhận</h3>
+            <p class="text-sm text-gray-600 dark:text-slate-300 mb-6" id="confirmationModalMessage">Bạn có chắc chắn muốn thực hiện?</p>
+            <div class="flex justify-center gap-3">
+                <button id="cancelDeleteBtn" class="close-modal px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-slate-700 dark:text-gray-200">Hủy</button>
+                <button id="confirmDeleteBtn" class="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Đồng ý</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Thông báo -->
+    <div id="infoModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[60] flex justify-center items-center backdrop-blur-sm">
+        <div class="relative mx-auto p-6 border w-full max-w-sm shadow-lg rounded-xl bg-white dark:bg-slate-800 dark:border-slate-700 text-center">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2" id="infoModalTitle">Thông báo</h3>
+            <p class="text-sm text-gray-600 dark:text-slate-300 mb-6" id="infoModalMessage"></p>
+            <button id="closeInfoModalBtn" class="close-modal px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Đã hiểu</button>
+        </div>
+    </div>
+
+    <!-- Modal: Tìm kiếm toàn cục -->
+    <div id="globalSearchModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[90] flex justify-center items-start pt-24 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-xl p-4 relative border dark:border-slate-700">
+            <div class="relative mb-3">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="globalSearchInput" placeholder="Tìm tài sản, license, nhân viên..." class="w-full pl-10 pr-10 py-2.5 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" autocomplete="off">
+                <button class="close-modal absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div id="globalSearchResults" class="max-h-[60vh] overflow-y-auto"><p class="text-sm text-slate-400 text-center p-4">Nhập từ khóa để tìm kiếm...</p></div>
+        </div>
+    </div>
+
+    <!-- Scripts hệ thống -->
+    <script src="js/localDB.js?v=20260904-7"></script>
+    <script src="js/modules/script-helpers.js?v=20260825-1"></script>
+    <script src="js/modules/sidebar.js?v=20260909-4"></script>
+
+    <script src="js/modules/page-common.js?v=20260909-6"></script>
+    <script src="js/modules/page-data.js?v=20260909-6"></script>
+    <script src="js/modules/page-ui.js?v=20260825-1"></script>
+    <script src="js/modules/page-dashboard.js?v=20260909-6"></script>
+    <script src="js/modules/page-license.js?v=20260909-6"></script>
+    <script src="js/modules/page-settings.js?v=20260909-6"></script>
+    <script src="js/script.js?v=20260825-1"></script>
+</body>
+</html>

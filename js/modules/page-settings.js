@@ -527,9 +527,165 @@ window.QLTSPageSettings.init = async function () {
         });
     });
 
-    document.getElementById('btnConfirmAssign')?.addEventListener('click', async () => { const u = users.find(u => u.name === assignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const asset = assets.find(a => a.id === tempId); const assetName = asset?.name || 'tài sản'; if (asset && ['Repair', 'Broken'].includes(asset.status)) return showInfoModal('Thiết bị đang ở trạng thái "Sửa chữa"/"Hỏng" nên không thể cấp phát. Vui lòng cập nhật lại trạng thái trước.', 'Không thể cấp phát'); await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); addLog(tempId, 'ASSET', 'Cấp phát', u.name); safeCloseModal('checkOutModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${assetName}" cho ${u.name}!`, 'Cấp phát thành công'); });
-    document.getElementById('btnConfirmAssignLicense')?.addEventListener('click', async () => { const u = users.find(u => u.name === licenseAssignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const license = licenses.find(l => l.id === tempId); const licenseName = license?.key_type || 'license'; if (license && license.status === 'Expired') return showInfoModal('License đã hết hạn nên không thể cấp phát. Vui lòng gia hạn trước.', 'Không thể cấp phát'); await supabaseClient.from('licenses').update({ user_id: u.id, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); addLog(tempId, 'LICENSE', 'Cấp phát', u.name); safeCloseModal('checkOutLicenseModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${licenseName}" cho ${u.name}!`, 'Cấp phát thành công'); });
-    document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const assetName = assets.find(a => a.id === tempId)?.name || 'tài sản'; const { error } = await supabaseClient.from('assets').update({ user_id: u.id, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); showInfoModal(`Đã chuyển "${assetName}" sang ${u.name}!`, 'Chuyển đổi thành công'); } });
+    document.getElementById('btnConfirmAssign')?.addEventListener('click', async () => { const u = users.find(u => u.name === assignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const asset = assets.find(a => String(a.id) === String(tempId)); const assetName = asset?.name || 'tài sản'; if (asset && ['Repair', 'Broken'].includes(asset.status)) return showInfoModal('Thiết bị đang ở trạng thái "Sửa chữa"/"Hỏng" nên không thể cấp phát. Vui lòng cập nhật lại trạng thái trước.', 'Không thể cấp phát'); await supabaseClient.from('assets').update({ user_id: u.id, user: u.name, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); addLog(tempId, 'ASSET', 'Cấp phát', u.name); safeCloseModal('checkOutModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${assetName}" cho ${u.name}!`, 'Cấp phát thành công'); });
+    document.getElementById('btnConfirmAssignLicense')?.addEventListener('click', async () => { const u = users.find(u => u.name === licenseAssignUserChoicesInstance.getValue(true)); if (!u) return showInfoModal("Chọn người nhận"); const license = licenses.find(l => String(l.id) === String(tempId)); const licenseName = license?.key_type || 'license'; if (license && license.status === 'Expired') return showInfoModal('License đã hết hạn nên không thể cấp phát. Vui lòng gia hạn trước.', 'Không thể cấp phát'); await supabaseClient.from('licenses').update({ user_id: u.id, user: u.name, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); addLog(tempId, 'LICENSE', 'Cấp phát', u.name); safeCloseModal('checkOutLicenseModal'); await refreshApp(); showInfoModal(`Đã cấp phát "${licenseName}" cho ${u.name}!`, 'Cấp phát thành công'); });
+    document.getElementById('btnConfirmTransfer')?.addEventListener('click', async () => { const u = users.find(u => u.name === (transferUserChoicesInstance ? transferUserChoicesInstance.getValue(true) : document.getElementById('transferNewUserSelect').value)); if (!u) return showInfoModal("Chọn người nhận"); const assetName = assets.find(a => String(a.id) === String(tempId))?.name || 'tài sản'; const { error } = await supabaseClient.from('assets').update({ user_id: u.id, user: u.name, status: 'Active', assigned_date: getTodayDateStr() }).eq('id', tempId); if (error) handleSupabaseError(error); else { addLog(tempId, 'ASSET', 'Điều chuyển', u.name); safeCloseModal('transferModal'); await refreshApp(); showInfoModal(`Đã chuyển "${assetName}" sang ${u.name}!`, 'Chuyển đổi thành công'); } });
+
+    function initAssignmentDropdowns() {
+        const assetSelect = document.getElementById('assign_asset_select');
+        const userSelect = document.getElementById('assign_user_select');
+        const dateInput = document.getElementById('assign_date');
+
+        if (dateInput && !dateInput.value) {
+            dateInput.value = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+        }
+
+        if (assetSelect) {
+            const stockAssets = (assets || []).filter(a => a.status === 'Stock');
+            if (stockAssets.length === 0) {
+                assetSelect.innerHTML = '<option value="">-- Không có thiết bị sẵn sàng trong kho --</option>';
+            } else {
+                assetSelect.innerHTML = '<option value="">-- Chọn thiết bị trong kho --</option>' + stockAssets.map(a => {
+                    const code = a.asset_code ? `[${a.asset_code}] ` : '';
+                    const cat = a.category ? ` (${a.category})` : '';
+                    return `<option value="${a.id}">${code}${a.name}${cat}</option>`;
+                }).join('');
+            }
+        }
+
+        if (userSelect) {
+            const allUsers = (users || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            userSelect.innerHTML = '<option value="">-- Chọn nhân sự nhận thiết bị --</option>' + allUsers.map(u => {
+                const dept = u.department ? ` - ${u.department}` : '';
+                return `<option value="${u.id}">${u.name}${dept}</option>`;
+            }).join('');
+        }
+    }
+    window.initAssignmentDropdowns = initAssignmentDropdowns;
+
+    document.getElementById('newAssignForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const assetId = document.getElementById('assign_asset_select')?.value;
+        const userId = document.getElementById('assign_user_select')?.value;
+        const assignDate = document.getElementById('assign_date')?.value || (typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0]);
+        const condition = document.getElementById('assign_condition')?.value || 'Hoạt động tốt';
+        const accessories = document.getElementById('assign_accessories')?.value?.trim();
+        const notes = document.getElementById('assign_notes')?.value?.trim();
+
+        if (!assetId) return showInfoModal('Vui lòng chọn thiết bị cần cấp phát.', 'Thiếu thông tin');
+        if (!userId) return showInfoModal('Vui lòng chọn nhân sự nhận thiết bị.', 'Thiếu thông tin');
+
+        const asset = (assets || []).find(a => String(a.id) === String(assetId));
+        const user = (users || []).find(u => String(u.id) === String(userId));
+        if (!asset) return showInfoModal('Không tìm thấy thiết bị đã chọn.', 'Lỗi');
+        if (!user) return showInfoModal('Không tìm thấy nhân sự đã chọn.', 'Lỗi');
+
+        if (['Repair', 'Broken', 'Disposed'].includes(asset.status)) {
+            return showInfoModal('Thiết bị đang ở trạng thái "' + asset.status + '" nên không thể cấp phát.', 'Không thể cấp phát');
+        }
+
+        const updatePayload = {
+            user_id: user.id,
+            user: user.name,
+            status: 'Active',
+            assigned_date: assignDate
+        };
+
+        const { error } = await supabaseClient.from('assets').update(updatePayload).eq('id', asset.id);
+        if (error) {
+            handleSupabaseError(error, 'cấp phát');
+            return;
+        }
+
+        const logDesc = `Bàn giao cho: ${user.name}${user.department ? ` (${user.department})` : ''} | Tình trạng: ${condition}${accessories ? ` | Phụ kiện: ${accessories}` : ''}${notes ? ` | Ghi chú: ${notes}` : ''}`;
+        await addLog(asset.id, 'ASSET', 'Cấp phát', logDesc);
+
+        safeCloseModal('newAssignModal');
+        document.getElementById('newAssignForm').reset();
+        await refreshApp();
+
+        showInfoModal(`Đã cấp phát thành công "${asset.name}" cho ${user.name}! Bạn có thể xem và in biên bản bàn giao.`, 'Cấp phát thành công');
+    });
+
+    document.getElementById('returnAssetForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const assetId = document.getElementById('return_asset_id')?.value;
+        const returnDate = document.getElementById('return_date')?.value || (typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0]);
+        const conditionChoice = document.getElementById('return_condition')?.value || 'Bình thường (Nhập kho)';
+        const notes = document.getElementById('return_notes')?.value?.trim();
+
+        const asset = (assets || []).find(a => String(a.id) === String(assetId));
+        if (!asset) return showInfoModal('Không tìm thấy thiết bị cần thu hồi.', 'Lỗi');
+
+        const prevUser = (users || []).find(u => String(u.id) === String(asset.user_id));
+        const prevUserName = prevUser?.name || asset.user || 'Người dùng';
+
+        let newStatus = 'Stock';
+        if (conditionChoice.includes('Hỏng nhẹ')) newStatus = 'Repair';
+        else if (conditionChoice.includes('Hỏng nặng')) newStatus = 'Broken';
+
+        const updatePayload = {
+            user_id: null,
+            user: null,
+            status: newStatus,
+            assigned_date: null
+        };
+
+        const { error } = await supabaseClient.from('assets').update(updatePayload).eq('id', asset.id);
+        if (error) {
+            handleSupabaseError(error, 'thu hồi');
+            return;
+        }
+
+        const logDesc = `Thu hồi từ: ${prevUserName} | Tình trạng sau thu hồi: ${conditionChoice}${notes ? ` | Ghi chú: ${notes}` : ''} | Ngày thu hồi: ${formatDateDisplay(returnDate)}`;
+        await addLog(asset.id, 'ASSET', 'Thu hồi', logDesc);
+
+        safeCloseModal('returnAssetModal');
+        document.getElementById('returnAssetForm').reset();
+        await refreshApp();
+
+        showInfoModal(`Đã thu hồi thành công thiết bị "${asset.name}" về kho (Trạng thái: ${newStatus})!`, 'Thu hồi thành công');
+    });
+
+    document.getElementById('transferAssetForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const assetId = document.getElementById('transfer_asset_id')?.value;
+        const toUserId = document.getElementById('transfer_to_user_select')?.value;
+        const notes = document.getElementById('transfer_notes')?.value?.trim();
+
+        if (!toUserId) return showInfoModal('Vui lòng chọn nhân sự tiếp nhận.', 'Thiếu thông tin');
+
+        const asset = (assets || []).find(a => String(a.id) === String(assetId));
+        if (!asset) return showInfoModal('Không tìm thấy thiết bị.', 'Lỗi');
+
+        const fromUser = (users || []).find(u => String(u.id) === String(asset.user_id));
+        const fromUserName = fromUser?.name || asset.user || 'Người dùng cũ';
+        const toUser = (users || []).find(u => String(u.id) === String(toUserId));
+        if (!toUser) return showInfoModal('Không tìm thấy nhân sự tiếp nhận.', 'Lỗi');
+
+        const todayStr = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+        const updatePayload = {
+            user_id: toUser.id,
+            user: toUser.name,
+            status: 'Active',
+            assigned_date: todayStr
+        };
+
+        const { error } = await supabaseClient.from('assets').update(updatePayload).eq('id', asset.id);
+        if (error) {
+            handleSupabaseError(error, 'điều chuyển');
+            return;
+        }
+
+        const logDesc = `Điều chuyển từ [${fromUserName}] sang [${toUser.name}${toUser.department ? ` - ${toUser.department}` : ''}]${notes ? ` | Lý do: ${notes}` : ''}`;
+        await addLog(asset.id, 'ASSET', 'Điều chuyển', logDesc);
+
+        safeCloseModal('transferAssetModal');
+        document.getElementById('transferAssetForm').reset();
+        await refreshApp();
+
+        showInfoModal(`Đã điều chuyển "${asset.name}" sang ${toUser.name}!`, 'Điều chuyển thành công');
+    });
 
     async function refreshApp(resetFilters = false) {
         await autoRestoreFromSupabaseIfNeeded();
@@ -592,6 +748,9 @@ window.QLTSPageSettings.init = async function () {
         }
         if (document.getElementById('stockCheckTableBody')) {
             if (typeof renderStockCheckList === 'function') renderStockCheckList();
+        }
+        if (document.getElementById('assignmentContent')) {
+            if (typeof renderAssignmentList === 'function') renderAssignmentList();
         }
         if (document.getElementById('licenseTableBody')) { 
             if (resetFilters) resetLicenseFilters(); 

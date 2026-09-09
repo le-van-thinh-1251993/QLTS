@@ -359,6 +359,66 @@ window.QLTSPageLicense.init = async function () {
             } else if (tbl === 'activity') {
                 activityLogCurrentPage = p;
                 if (typeof window.renderActivityLog === 'function') window.renderActivityLog();
+            } else if (tbl === 'assign-active') {
+                window.assignActiveCurrentPage = p;
+                if (typeof renderAssignmentList === 'function') renderAssignmentList();
+            } else if (tbl === 'assign-history') {
+                window.assignHistoryCurrentPage = p;
+                if (typeof renderAssignmentList === 'function') renderAssignmentList();
+            }
+            return;
+        }
+
+        if (t.closest('#tabBtnActive')) {
+            window.assignCurrentTab = 'active';
+            window.assignActiveCurrentPage = 1;
+            if (typeof renderAssignmentList === 'function') renderAssignmentList();
+            return;
+        }
+        if (t.closest('#tabBtnHistory')) {
+            window.assignCurrentTab = 'history';
+            window.assignHistoryCurrentPage = 1;
+            if (typeof renderAssignmentList === 'function') renderAssignmentList();
+            return;
+        }
+        if (t.closest('#openNewAssignModalBtn')) {
+            if (typeof window.initAssignmentDropdowns === 'function') window.initAssignmentDropdowns();
+            openModal('newAssignModal');
+            return;
+        }
+        if (t.closest('#exportAssignmentBtn')) {
+            const isHist = window.assignCurrentTab === 'history';
+            if (isHist) {
+                const hist = (assetHistory || []).filter(h => {
+                    const act = h.action || '';
+                    return act.includes('Cấp phát') || act.includes('Thu hồi') || act.includes('Điều chuyển');
+                }).map(h => {
+                    const asset = (assets || []).find(a => String(a.id) === String(h.assetId));
+                    return {
+                        'Thời gian': h.time || (h.created_at ? new Date(h.created_at).toLocaleString('vi-VN') : ''),
+                        'Mã tài sản': asset?.asset_code || '',
+                        'Tên thiết bị': h.assetName || '',
+                        'Giao dịch': (h.action || '').replace(/^\[.*?\]\s*/, ''),
+                        'Chi tiết': h.desc || '',
+                        'Người thực hiện': h.createdBy || 'Admin'
+                    };
+                });
+                exportToCSV(hist, 'Lich_su_ban_giao_thu_hoi.csv');
+            } else {
+                const active = (assets || []).filter(a => a.status === 'Active').map(a => {
+                    const u = (users || []).find(u => String(u.id) === String(a.user_id)) || {};
+                    return {
+                        'Mã tài sản': a.asset_code || a.id,
+                        'Tên thiết bị': a.name || '',
+                        'Danh mục': a.category || '',
+                        'Người sử dụng': u.name || a.user || '',
+                        'Email': u.email || '',
+                        'Phòng ban': u.department || '',
+                        'Vị trí': a.location || '',
+                        'Ngày cấp phát': a.assigned_date ? formatDateDisplay(a.assigned_date) : ''
+                    };
+                });
+                exportToCSV(active, 'Danh_sach_thiet_bi_dang_cap_phat.csv');
             }
             return;
         }
@@ -614,38 +674,38 @@ window.QLTSPageLicense.init = async function () {
             }
 
             if (action === 'delete-asset') {
-                const assetToDelete = assets.find(a => a.id === id);
+                const assetToDelete = assets.find(a => String(a.id) === String(id));
                 if (assetToDelete && assetToDelete.status !== 'Stock') {
                     return showInfoModal('Tài sản đang sử dụng hoặc hỏng hóc. Vui lòng thu hồi về kho trước khi xóa.', 'Không thể xóa');
                 }
                 const assetName = assetToDelete?.name || 'tài sản';
                 showConfirmationModal("Xóa tài sản này?", async () => { const { error } = await supabaseClient.from('assets').delete().eq('id', id); if (error) handleSupabaseError(error, 'xóa'); else { await addLog(id, 'ASSET', 'Xóa', `Xóa tài sản: ${assetName}`); await refreshApp(); showInfoModal(`Đã xóa "${assetName}"!`, 'Xóa thành công'); } });
             }
-            else if (action === 'edit-asset') { const item = assets.find(a => a.id === id); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); document.getElementById('modal_assetPurchaseDate').value = item.purchase_date ? item.purchase_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetCost').value = item.cost || 0; document.getElementById('modal_assetSalvage').value = item.salvage_value || 0; document.getElementById('modal_assetLife').value = item.useful_life_months || ''; document.getElementById('modal_assetDepMethod').value = item.depreciation_method || 'straight_line'; document.getElementById('modal_assetInvoiceNumber').value = item.invoice_number || ''; document.getElementById('modal_assetDisposedDate').value = item.disposed_date ? item.disposed_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetDisposedReason').value = item.disposed_reason || ''; document.getElementById('assetDisposedFields').classList.toggle('hidden', item.status !== 'Disposed'); updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modal_assetSupplier').value = item.supplier_id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
+            else if (action === 'edit-asset') { const item = assets.find(a => String(a.id) === String(id)); if (item) { document.getElementById('modal_assetId').value = item.id;['modal_assetName', 'modal_assetConfig', 'modal_assetLocation', 'modal_assetStatus', 'modal_assetNotes'].forEach(k => document.getElementById(k).value = item[k.replace('modal_asset', '').toLowerCase()] || ''); document.getElementById('modal_assetPurchaseDate').value = item.purchase_date ? item.purchase_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetCost').value = item.cost || 0; document.getElementById('modal_assetSalvage').value = item.salvage_value || 0; document.getElementById('modal_assetLife').value = item.useful_life_months || ''; document.getElementById('modal_assetDepMethod').value = item.depreciation_method || 'straight_line'; document.getElementById('modal_assetInvoiceNumber').value = item.invoice_number || ''; document.getElementById('modal_assetDisposedDate').value = item.disposed_date ? item.disposed_date.toString().substring(0, 10) : ''; document.getElementById('modal_assetDisposedReason').value = item.disposed_reason || ''; document.getElementById('assetDisposedFields').classList.toggle('hidden', item.status !== 'Disposed'); updateDropdowns(); document.getElementById('modal_assetCategory').value = categories.find(c => c.name === item.category)?.id || ''; document.getElementById('modal_assetSupplier').value = item.supplier_id || ''; document.getElementById('modalTitle').textContent = 'Sửa tài sản'; initAllUserDropdowns(item.user); openModal('assetModal'); } }
             else if (action === 'checkout-asset') {
-                const assetToAssign = assets.find(a => a.id === id);
+                const assetToAssign = assets.find(a => String(a.id) === String(id));
                 if (assetToAssign && ['Repair', 'Broken'].includes(assetToAssign.status)) {
                     return showInfoModal('Thiết bị đang ở trạng thái "Sửa chữa"/"Hỏng" nên không thể cấp phát. Vui lòng cập nhật lại trạng thái trước.', 'Không thể cấp phát');
                 }
                 tempId = id; document.getElementById('assignAssetName').textContent = assetToAssign?.name; initAllUserDropdowns(); openModal('checkOutModal');
             }
             else if (action === 'checkin-asset') {
-                const assetToCheckIn = assets.find(a => a.id === id);
+                const assetToCheckIn = assets.find(a => String(a.id) === String(id));
                 const fromUser = assetToCheckIn?.user || 'Không rõ';
                 const assetName = assetToCheckIn?.name || 'tài sản';
                 showConfirmationModal(`Thu hồi tài sản từ ${fromUser}?`, async () => {
-                    await supabaseClient.from('assets').update({ status: 'Stock', user_id: null, assigned_date: null }).eq('id', id);
+                    await supabaseClient.from('assets').update({ status: 'Stock', user_id: null, user: null, assigned_date: null }).eq('id', id);
                     // SỬA LỖI: Thêm tên người dùng vào log để lịch sử chi tiết hơn
                     await addLog(id, 'ASSET', 'Thu hồi', `Từ người dùng: ${fromUser}`);
                     await refreshApp();
                     showInfoModal(`Đã thu hồi "${assetName}" từ ${fromUser}!`, 'Thu hồi thành công');
                 });
             }
-            else if (action === 'transfer') { tempId = id; document.getElementById('transferAssetName').textContent = assets.find(a => a.id === id)?.name; document.getElementById('transferCurrentUser').value = assets.find(a => a.id === id)?.user || 'Chưa có'; initAllUserDropdowns(); openModal('transferModal'); }
+            else if (action === 'transfer') { tempId = id; document.getElementById('transferAssetName').textContent = assets.find(a => String(a.id) === String(id))?.name; document.getElementById('transferCurrentUser').value = assets.find(a => String(a.id) === String(id))?.user || 'Chưa có'; initAllUserDropdowns(); openModal('transferModal'); }
             else if (action === 'history-asset') {
-                const item = assets.find(a => a.id === id);
+                const item = assets.find(a => String(a.id) === String(id));
                 document.getElementById('historyModalTitle').textContent = `Lịch sử tài sản: ${item?.name}`;
-                const logs = assetHistory.filter(l => l.assetId === id);
+                const logs = assetHistory.filter(l => String(l.assetId) === String(id));
                 historyExportBuffer = logs;
                 document.getElementById('historyTableBody').innerHTML = logs.length
                     ? logs.map(l => `<tr class="border-b hover:bg-slate-50"><td class="p-3">${l.time}</td><td class="p-3">${l.assetName}</td><td class="p-3 font-bold">${l.action}</td><td class="p-3">${l.desc}</td></tr>`).join('')
@@ -887,6 +947,96 @@ window.QLTSPageLicense.init = async function () {
                     item.status = newStatus;
                     renderStockCheckDetail(item.stock_check_id);
                 }
+            }
+            else if (action === 'open-return-asset') {
+                const asset = (assets || []).find(a => String(a.id) === String(id));
+                if (!asset) return;
+                const u = (users || []).find(user => String(user.id) === String(asset.user_id));
+                const retId = document.getElementById('return_asset_id');
+                const retName = document.getElementById('return_asset_name');
+                const retUser = document.getElementById('return_asset_current_user');
+                const retDate = document.getElementById('return_date');
+                if (retId) retId.value = asset.id;
+                if (retName) retName.textContent = `${asset.name} (${asset.asset_code || asset.id})`;
+                if (retUser) retUser.textContent = `Từ người dùng: ${u ? `${u.name}${u.department ? ` (${u.department})` : ''}` : (asset.user || 'Chưa rõ')}`;
+                if (retDate) retDate.value = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
+                openModal('returnAssetModal');
+            }
+            else if (action === 'open-transfer-asset') {
+                const asset = (assets || []).find(a => String(a.id) === String(id));
+                if (!asset) return;
+                const u = (users || []).find(user => String(user.id) === String(asset.user_id));
+                const transId = document.getElementById('transfer_asset_id');
+                const transName = document.getElementById('transfer_asset_name');
+                const transFrom = document.getElementById('transfer_from_user');
+                const transToSelect = document.getElementById('transfer_to_user_select');
+                if (transId) transId.value = asset.id;
+                if (transName) transName.textContent = `${asset.name} (${asset.asset_code || asset.id})`;
+                if (transFrom) transFrom.textContent = `Đang sử dụng bởi: ${u ? `${u.name}${u.department ? ` (${u.department})` : ''}` : (asset.user || 'Chưa rõ')}`;
+                if (transToSelect) {
+                    const others = (users || []).filter(user => String(user.id) !== String(asset.user_id));
+                    transToSelect.innerHTML = '<option value="">-- Chọn nhân sự tiếp nhận --</option>' + others.map(user => {
+                        return `<option value="${user.id}">${user.name}${user.department ? ` (${user.department})` : ''}</option>`;
+                    }).join('');
+                }
+                openModal('transferAssetModal');
+            }
+            else if (action === 'view-receipt' || action === 'view-receipt-history') {
+                const asset = (assets || []).find(a => String(a.id) === String(id)) || {};
+                let receiverUser = null;
+                let receiptDate = new Date();
+                let conditionText = 'Hoạt động tốt';
+
+                if (action === 'view-receipt-history') {
+                    const logId = actionBtn.dataset.logId;
+                    const log = (assetHistory || []).find(l => String(l.id) === String(logId));
+                    if (log && log.created_at) receiptDate = new Date(log.created_at);
+                    if (log && log.desc) {
+                        const matchUser = (users || []).find(u => log.desc.includes(u.name));
+                        if (matchUser) receiverUser = matchUser;
+                        if (log.desc.includes('Tình trạng:')) {
+                            const m = log.desc.match(/Tình trạng:\s*([^|]+)/);
+                            if (m) conditionText = m[1].trim();
+                        }
+                    }
+                }
+                if (!receiverUser && asset.user_id) {
+                    receiverUser = (users || []).find(u => String(u.id) === String(asset.user_id));
+                }
+
+                const d = receiptDate.getDate();
+                const m = receiptDate.getMonth() + 1;
+                const y = receiptDate.getFullYear();
+                const dateStr = `Hà Nội, ngày ${d < 10 ? '0' + d : d} tháng ${m < 10 ? '0' + m : m} năm ${y}`;
+
+                const rDate = document.getElementById('receiptDateStr');
+                const rGiver = document.getElementById('receiptGiverName');
+                const rRecName = document.getElementById('receiptReceiverName');
+                const rRecDept = document.getElementById('receiptReceiverDept');
+                const rRecEmail = document.getElementById('receiptReceiverEmail');
+                const rAssetName = document.getElementById('receiptAssetName');
+                const rAssetCode = document.getElementById('receiptAssetCode');
+                const rAssetConfig = document.getElementById('receiptAssetConfig');
+                const rAssetCond = document.getElementById('receiptAssetCondition');
+                const rSignGiver = document.getElementById('receiptSignGiver');
+                const rSignRec = document.getElementById('receiptSignReceiver');
+
+                const giverName = currentUserProfile?.full_name || currentUserProfile?.email || 'Admin Hệ Thống';
+                const recName = receiverUser?.name || asset.user || 'Nhân viên tiếp nhận';
+
+                if (rDate) rDate.textContent = dateStr;
+                if (rGiver) rGiver.textContent = `- Họ và tên: ${giverName}`;
+                if (rRecName) rRecName.textContent = `- Họ và tên: ${recName}`;
+                if (rRecDept) rRecDept.textContent = `- Phòng ban / Bộ phận: ${receiverUser?.department || asset.location || 'Chưa cập nhật'}`;
+                if (rRecEmail) rRecEmail.textContent = `- Email: ${receiverUser?.email || 'Chưa cập nhật'}`;
+                if (rAssetName) rAssetName.textContent = asset.name || '-';
+                if (rAssetCode) rAssetCode.textContent = asset.asset_code || asset.id || '-';
+                if (rAssetConfig) rAssetConfig.textContent = asset.config || asset.specs || asset.category || '-';
+                if (rAssetCond) rAssetCond.textContent = conditionText;
+                if (rSignGiver) rSignGiver.textContent = giverName;
+                if (rSignRec) rSignRec.textContent = recName;
+
+                openModal('handoverReceiptModal');
             }
         }
     });
