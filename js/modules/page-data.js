@@ -957,11 +957,13 @@ window.QLTSPageData.init = async function () {
         const tabBtnStock = document.getElementById('tabBtnCurrentStock');
         const tabBtnHistory = document.getElementById('tabBtnStockHistory');
         const historyFilterControls = document.getElementById('historyFilterControls');
+        const currentStockFilterControls = document.getElementById('currentStockFilterControls');
 
         if (isHistoryTab) {
             if (viewStock) viewStock.classList.add('hidden');
             if (viewHistory) viewHistory.classList.remove('hidden');
             if (historyFilterControls) historyFilterControls.classList.remove('hidden');
+            if (currentStockFilterControls) currentStockFilterControls.classList.add('hidden');
             if (tabBtnHistory) {
                 tabBtnHistory.className = "pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors";
             }
@@ -972,6 +974,7 @@ window.QLTSPageData.init = async function () {
             if (viewStock) viewStock.classList.remove('hidden');
             if (viewHistory) viewHistory.classList.add('hidden');
             if (historyFilterControls) historyFilterControls.classList.add('hidden');
+            if (currentStockFilterControls) currentStockFilterControls.classList.remove('hidden');
             if (tabBtnStock) {
                 tabBtnStock.className = "pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors";
             }
@@ -1572,6 +1575,13 @@ window.QLTSPageData.init = async function () {
     document.getElementById('cardStatLowStock')?.addEventListener('click', () => {
         const currentVal = supplyStatus ? supplyStatus.value : '';
         syncStockFilterUI(currentVal === 'low' ? '' : 'low');
+    });
+
+    document.getElementById('btnResetInventoryFilter')?.addEventListener('click', () => {
+        if (supplySearch) supplySearch.value = '';
+        if (supplyCat) supplyCat.value = '';
+        if (transType) transType.value = '';
+        syncStockFilterUI('');
     });
 
     if (transType) transType.addEventListener('change', () => {
