@@ -23,6 +23,7 @@ const LocalDB = {
         NETWORK_REMOTES: 'qlts_network_remotes',
         NETWORK_TARGETS: 'qlts_network_targets',
         NETWORK_LINES: 'qlts_network_lines',
+        NETWORK_DIAGRAMS: 'qlts_network_diagrams',
         ALERT_SETTINGS: 'qlts_alert_settings',
         WORKBOOK_DATA: 'qlts_workbook_data',
         COUNTER: 'qlts_id_counter'
@@ -6131,6 +6132,7 @@ REAL_DATA: {
             {
                 id: 1,
                 ssid: "NewdayMedia_5G",
+                asset_id: 5,
                 password: "NDM@Office#2026",
                 band: "5GHz",
                 security: "WPA2/WPA3 Personal",
@@ -6145,6 +6147,7 @@ REAL_DATA: {
             {
                 id: 2,
                 ssid: "NewdayMedia_2.4G",
+                asset_id: 5,
                 password: "NDM@Office#2026",
                 band: "2.4GHz",
                 security: "WPA2 Personal",
@@ -6189,6 +6192,7 @@ REAL_DATA: {
             {
                 id: 1,
                 rule_name: "Camera NVR Web & Stream",
+                asset_id: 4,
                 wan_ip: "113.190.45.120 (WAN 1)",
                 wan_port: "8000",
                 lan_ip: "192.168.1.200",
@@ -6202,6 +6206,7 @@ REAL_DATA: {
             {
                 id: 2,
                 rule_name: "Synology NAS DSM & Drive",
+                asset_id: 3,
                 wan_ip: "113.190.45.120 (WAN 1)",
                 wan_port: "5001",
                 lan_ip: "192.168.1.250",
@@ -6215,6 +6220,7 @@ REAL_DATA: {
             {
                 id: 3,
                 rule_name: "OpenVPN Gateway Inbound",
+                asset_id: 1,
                 wan_ip: "113.190.45.120 (WAN 1)",
                 wan_port: "1194",
                 lan_ip: "192.168.1.1",
@@ -6243,6 +6249,7 @@ REAL_DATA: {
             {
                 id: 1,
                 name: "VPN SSL Văn phòng chính",
+                asset_id: 1,
                 connection_type: "SSL-VPN",
                 address: "vpn.newdaymedia.com.vn:443",
                 protocol: "SSL/TLS",
@@ -6273,6 +6280,7 @@ REAL_DATA: {
             {
                 id: 3,
                 name: "UltraViewer Quản trị Server Render",
+                asset_id: 13,
                 connection_type: "UltraViewer",
                 address: "ID: 28 491 802",
                 protocol: "UltraViewer Desktop",
@@ -6288,6 +6296,7 @@ REAL_DATA: {
             {
                 id: 4,
                 name: "RDP Máy chủ File Synology DSM",
+                asset_id: 3,
                 connection_type: "RDP / Web Management",
                 address: "192.168.1.250:5001",
                 protocol: "HTTPS",
@@ -6305,6 +6314,7 @@ REAL_DATA: {
             {
                 id: 1,
                 name: "Router DrayTek Vigor 2927 (Gateway)",
+                asset_id: 1,
                 target_type: "Router",
                 address: "192.168.1.1",
                 port: 80,
@@ -6318,6 +6328,7 @@ REAL_DATA: {
             {
                 id: 2,
                 name: "Core Switch Ruijie RG-NBS3100-24GT4SFP",
+                asset_id: 2,
                 target_type: "Switch",
                 address: "192.168.1.2",
                 port: 80,
@@ -6331,6 +6342,7 @@ REAL_DATA: {
             {
                 id: 3,
                 name: "Máy chủ NAS Synology DS920+",
+                asset_id: 3,
                 target_type: "Server",
                 address: "192.168.1.250",
                 port: 5000,
@@ -6344,6 +6356,7 @@ REAL_DATA: {
             {
                 id: 4,
                 name: "Đầu ghi Camera NVR Hikvision",
+                asset_id: 4,
                 target_type: "Camera",
                 address: "192.168.1.200",
                 port: 8000,
@@ -6407,6 +6420,31 @@ REAL_DATA: {
                 notes: "Cổng thông tin thương hiệu Newday Media"
             }
         ],
+        
+        network_diagrams: [
+            {
+                id: 1,
+                name: "Sơ đồ Cấu trúc Mạng Tổng thể Văn phòng (Topology v2.0)",
+                version: "2.0",
+                format: "drawio",
+                author: "Admin IT",
+                updated_at: "2026-09-10T08:00:00.000Z",
+                file_name: "So_do_ha_tang_mang_NewdayMedia_v2.drawio",
+                description: "Kiến trúc Dual-WAN Load Balancing (Viettel + FPT), Core Switch Ruijie, VLAN phân tách và các tầng Access Point.",
+                file_content: "data:application/xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48bXhmaWxlPjxkaWFncmFtIG5hbWU9Ik5ldHdvcmtUb3BvbG9neSIgaWQ9Im5ldHdvcmstdG9wb2xvZ3kiPjwvbXhmaWxlPg=="
+            },
+            {
+                id: 2,
+                name: "Sơ đồ Bố trí Tủ Rack & Cổng Mạng Tầng 2",
+                version: "1.2",
+                format: "png",
+                author: "Admin IT",
+                updated_at: "2026-09-08T14:30:00.000Z",
+                file_name: "So_do_tu_rack_tang_2.png",
+                description: "Vị trí lắp đặt Router DrayTek, Switch Ruijie, Patch Panel 24 port, NVR Camera và NAS Synology.",
+                file_content: ""
+            }
+        ],
         network_lines: [
             {
                 id: 1,
@@ -6460,6 +6498,7 @@ REAL_DATA: {
             ensureTable(this.KEYS.NETWORK_REMOTES, net.network_remotes);
             ensureTable(this.KEYS.NETWORK_TARGETS, net.network_targets);
             ensureTable(this.KEYS.NETWORK_LINES, net.network_lines);
+            ensureTable(this.KEYS.NETWORK_DIAGRAMS, net.network_diagrams);
         } catch (e) {
             console.error('LocalDB: Error seeding network data:', e);
         }
@@ -7116,7 +7155,8 @@ REAL_DATA: {
             network_nats: this.KEYS.NETWORK_NATS,
             network_remotes: this.KEYS.NETWORK_REMOTES,
             network_targets: this.KEYS.NETWORK_TARGETS,
-            network_lines: this.KEYS.NETWORK_LINES
+            network_lines: this.KEYS.NETWORK_LINES,
+            network_diagrams: this.KEYS.NETWORK_DIAGRAMS
         };
 
         const netData = this.REAL_NETWORK_DATA || {};
@@ -7146,6 +7186,7 @@ REAL_DATA: {
             network_remotes: (netData.network_remotes || []).length + 1,
             network_targets: (netData.network_targets || []).length + 1,
             network_lines: (netData.network_lines || []).length + 1,
+            network_diagrams: (netData.network_diagrams || []).length + 1,
             alert_settings: 2
         };
         localStorage.setItem(this.KEYS.COUNTER, JSON.stringify(counters));

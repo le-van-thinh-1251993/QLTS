@@ -14,7 +14,9 @@
             nats: [],
             remotes: [],
             targets: [],
-            lines: []
+            lines: [],
+            diagrams: [],
+            assets: []
         },
         revealedSecrets: new Set(), // Chứa các ID đang mở xem mật khẩu tạm thời
 
@@ -41,12 +43,14 @@
             }
 
             try {
-                const [wifisRes, natsRes, remotesRes, targetsRes, linesRes] = await Promise.all([
+                const [wifisRes, natsRes, remotesRes, targetsRes, linesRes, diagramsRes, assetsRes] = await Promise.all([
                     db.from('network_wifis').select('*'),
                     db.from('network_nats').select('*'),
                     db.from('network_remotes').select('*'),
                     db.from('network_targets').select('*'),
-                    db.from('network_lines').select('*')
+                    db.from('network_lines').select('*'),
+                    db.from('network_diagrams').select('*'),
+                    db.from('assets').select('*')
                 ]);
 
                 this.cache.wifis = wifisRes?.data || [];
@@ -54,6 +58,9 @@
                 this.cache.remotes = remotesRes?.data || [];
                 this.cache.targets = targetsRes?.data || [];
                 this.cache.lines = linesRes?.data || [];
+                this.cache.diagrams = diagramsRes?.data || [];
+                this.cache.assets = assetsRes?.data || [];
+                this.populateAssetDropdowns();
             } catch (err) {
                 console.error('Lỗi nạp dữ liệu mạng:', err);
             }
@@ -107,7 +114,7 @@
                     'tab-nat': 'Thêm quy tắc NAT',
                     'tab-remote': 'Thêm kết nối VPN',
                     'tab-ping': 'Thêm mục tiêu Ping',
-                    'tab-topology': 'Thêm đường truyền'
+                    'tab-topology': 'Thêm đường truyền WAN'
                 };
                 btnAddNewText.textContent = labelMap[tabId] || 'Thêm mới';
             }
@@ -178,13 +185,25 @@
             if (btnExportExcel) {
                 btnExportExcel.addEventListener('click', () => this.exportCurrentTabExcel());
             }
+
+            // Nút "Thêm đường truyền WAN"
+            const btnAddNewLine = document.getElementById('btnAddNewLine');
+            if (btnAddNewLine) {
+                btnAddNewLine.addEventListener('click', () => this.openCreateLineModal());
+            }
+
+            // Nút "Đính kèm bản vẽ sơ đồ"
+            const btnUploadDiag = document.getElementById('btnOpenUploadDiagramModal');
+            if (btnUploadDiag) {
+                btnUploadDiag.addEventListener('click', () => this.openUploadDiagramModal());
+            }
         },
 
         setupModals() {
             // Xử lý đóng tất cả modals
             document.querySelectorAll('.btn-close-modal').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    document.querySelectorAll('#modalWifi, #modalNat, #modalRemote, #modalPing').forEach(m => m.classList.add('hidden'));
+                    document.querySelectorAll('#modalWifi, #modalNat, #modalRemote, #modalPing, #modalNetworkLine, #modalNodeDetail, #modalUploadDiagram, #modalPreviewDiagram, #modalAssetQuickView').forEach(m => m.classList.add('hidden'));
                 });
             });
 
@@ -221,6 +240,24 @@
                 formPing.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     await this.savePing();
+                });
+            }
+
+            // Form Đường truyền WAN
+            const formLine = document.getElementById('formNetworkLine');
+            if (formLine) {
+                formLine.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.saveLine();
+                });
+            }
+
+            // Form Đính kèm Bản vẽ
+            const formDiag = document.getElementById('formUploadDiagram');
+            if (formDiag) {
+                formDiag.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.saveDiagram();
                 });
             }
         },
@@ -303,6 +340,7 @@
                     break;
                 case 'tab-topology':
                     this.renderLinesAndTopology();
+                    this.renderDiagramTable();
                     break;
             }
         },
@@ -377,6 +415,9 @@
                         </td>
                         <td class="p-3 text-slate-500 dark:text-slate-400">
                             ${this.escapeHtml(w.location || '—')}
+                        </td>
+                        <td class="p-3">
+                            ${this.renderAssetBadge(w.asset_id)}
                         </td>
                         <td class="p-3">
                             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${w.status === 'Active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}">
@@ -642,6 +683,9 @@
                         <td class="p-3 text-center">
                             ${latencyBadge}
                         </td>
+                        <td class="p-3">
+                            ${this.renderAssetBadge(t.asset_id)}
+                        </td>
                         <td class="p-3 text-slate-400 text-[11px]">
                             ${t.last_checked ? new Date(t.last_checked).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Vừa xong'}
                         </td>
@@ -691,9 +735,19 @@
                                     <p class="text-[11px] text-slate-400">${this.escapeHtml(l.provider)}</p>
                                 </div>
                             </div>
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${roleBadge}">
-                                ${this.escapeHtml(l.line_role || 'Chính')}
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${roleBadge}">
+                                    ${this.escapeHtml(l.line_role || 'Chính')}
+                                </span>
+                                <div class="flex items-center">
+                                    <button onclick="QLTSPageNetwork.openEditLineModal(${l.id})" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors" title="Chỉnh sửa">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <button onclick="QLTSPageNetwork.deleteItem('network_lines', ${l.id}, '${this.escapeJsString(l.name)}')" class="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50 dark:hover:bg-slate-700 transition-colors ml-0.5" title="Xóa">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3 text-xs pt-3 border-t border-slate-100 dark:border-slate-700">
@@ -887,7 +941,7 @@
                     this.openEditPingModal(null);
                     break;
                 case 'tab-topology':
-                    this.showToast('Thông tin đường truyền được quản lý bởi Hợp đồng ISP.', 'info');
+                    this.openCreateLineModal();
                     break;
             }
         },
@@ -913,6 +967,7 @@
                     document.getElementById('wifiDevice').value = item.device_name || '';
                     document.getElementById('wifiLocation').value = item.location || '';
                     document.getElementById('wifiNotes').value = item.notes || '';
+                    if (document.getElementById('wifiAssetId')) document.getElementById('wifiAssetId').value = item.asset_id || '';
                 }
             } else {
                 title.innerHTML = '<i class="fa-solid fa-wifi text-indigo-500"></i><span>Thêm Mạng Wi-Fi Mới</span>';
@@ -933,6 +988,7 @@
                 device_name: document.getElementById('wifiDevice').value.trim(),
                 location: document.getElementById('wifiLocation').value.trim(),
                 notes: document.getElementById('wifiNotes').value.trim(),
+                asset_id: Number(document.getElementById('wifiAssetId')?.value) || null,
                 status: 'Active'
             };
 
@@ -974,6 +1030,7 @@
                     document.getElementById('natStatus').value = item.status || 'Active';
                     document.getElementById('natTargetDevice').value = item.target_device || '';
                     document.getElementById('natPurpose').value = item.purpose || '';
+                    if (document.getElementById('natAssetId')) document.getElementById('natAssetId').value = item.asset_id || '';
                 }
             } else {
                 title.innerHTML = '<i class="fa-solid fa-arrows-split-up-and-left text-purple-500"></i><span>Thêm Quy tắc NAT / Port Forwarding</span>';
@@ -994,7 +1051,8 @@
                 protocol: document.getElementById('natProtocol').value,
                 status: document.getElementById('natStatus').value,
                 target_device: document.getElementById('natTargetDevice').value.trim(),
-                purpose: document.getElementById('natPurpose').value.trim()
+                purpose: document.getElementById('natPurpose').value.trim(),
+                asset_id: Number(document.getElementById('natAssetId')?.value) || null
             };
 
             const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
@@ -1034,6 +1092,7 @@
                     document.getElementById('remoteOwner').value = item.owner || '';
                     document.getElementById('remoteStatus').value = item.status || 'Active';
                     document.getElementById('remoteNotes').value = item.notes || '';
+                    if (document.getElementById('remoteAssetId')) document.getElementById('remoteAssetId').value = item.asset_id || '';
                 }
             } else {
                 title.innerHTML = '<i class="fa-solid fa-shield-halved text-amber-500"></i><span>Thêm Kết nối VPN / Remote</span>';
@@ -1053,6 +1112,7 @@
                 owner: document.getElementById('remoteOwner').value.trim(),
                 status: document.getElementById('remoteStatus').value,
                 notes: document.getElementById('remoteNotes').value.trim(),
+                asset_id: Number(document.getElementById('remoteAssetId')?.value) || null,
                 last_verified_at: new Date().toISOString()
             };
 
@@ -1091,6 +1151,7 @@
                     document.getElementById('pingPort').value = item.port || '80';
                     document.getElementById('pingLocation').value = item.location || '';
                     document.getElementById('pingNotes').value = item.notes || '';
+                    if (document.getElementById('pingAssetId')) document.getElementById('pingAssetId').value = item.asset_id || '';
                 }
             } else {
                 title.innerHTML = '<i class="fa-solid fa-heart-pulse text-emerald-500"></i><span>Thêm Thiết bị Giám sát Ping</span>';
@@ -1295,6 +1356,668 @@
                     }
                 }, 300);
             }, 3000);
+        },
+
+        
+        // ==========================================
+        // Phase B: Asset Linking & Quick View Helpers
+        // ==========================================
+        getAssetInfo(assetId) {
+            if (!assetId) return null;
+            return this.cache.assets.find(a => Number(a.id) === Number(assetId)) || null;
+        },
+
+        renderAssetBadge(assetId) {
+            const asset = this.getAssetInfo(assetId);
+            if (!asset) return '<span class="text-slate-300 dark:text-slate-600 text-[11px]">—</span>';
+            const code = asset.code || ('TS-' + asset.id);
+            return `
+                <button type="button" onclick="event.stopPropagation(); QLTSPageNetwork.openAssetQuickView(${asset.id})" 
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors" 
+                    title="Xem chi tiết tài sản: ${this.escapeHtml(asset.name)} (${this.escapeHtml(asset.location || '')})">
+                    <i class="fa-solid fa-link text-[10px]"></i>
+                    <span>${this.escapeHtml(code)}</span>
+                </button>
+            `;
+        },
+
+        populateAssetDropdowns() {
+            const selects = document.querySelectorAll('.asset-link-select');
+            if (!selects.length || !this.cache.assets.length) return;
+
+            const optionsHtml = `
+                <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                ${this.cache.assets.map(a => {
+                    const code = a.code || ('TS-' + a.id);
+                    const loc = a.location || a.department || 'Kho';
+                    return `<option value="${a.id}">[${this.escapeHtml(code)}] ${this.escapeHtml(a.name)} - ${this.escapeHtml(loc)}</option>`;
+                }).join('')}
+            `;
+
+            selects.forEach(sel => {
+                const curVal = sel.value;
+                sel.innerHTML = optionsHtml;
+                if (curVal) sel.value = curVal;
+            });
+
+            // Auto-suggest event listeners
+            const wifiSelect = document.getElementById('wifiAssetId');
+            if (wifiSelect && !wifiSelect.dataset.listener) {
+                wifiSelect.dataset.listener = 'true';
+                wifiSelect.addEventListener('change', () => {
+                    const a = this.getAssetInfo(wifiSelect.value);
+                    if (a) {
+                        const locInput = document.getElementById('wifiLocation');
+                        const devInput = document.getElementById('wifiDevice');
+                        if (locInput && !locInput.value) locInput.value = a.location || '';
+                        if (devInput && !devInput.value) devInput.value = a.name || '';
+                    }
+                });
+            }
+
+            const natSelect = document.getElementById('natAssetId');
+            if (natSelect && !natSelect.dataset.listener) {
+                natSelect.dataset.listener = 'true';
+                natSelect.addEventListener('change', () => {
+                    const a = this.getAssetInfo(natSelect.value);
+                    if (a) {
+                        const targetInput = document.getElementById('natTargetDevice');
+                        if (targetInput) targetInput.value = a.name || '';
+                    }
+                });
+            }
+
+            const remoteSelect = document.getElementById('remoteAssetId');
+            if (remoteSelect && !remoteSelect.dataset.listener) {
+                remoteSelect.dataset.listener = 'true';
+                remoteSelect.addEventListener('change', () => {
+                    const a = this.getAssetInfo(remoteSelect.value);
+                    if (a) {
+                        const ownerInput = document.getElementById('remoteOwner');
+                        if (ownerInput) ownerInput.value = a.user || a.department || 'BP Kỹ thuật';
+                    }
+                });
+            }
+
+            const pingSelect = document.getElementById('pingAssetId');
+            if (pingSelect && !pingSelect.dataset.listener) {
+                pingSelect.dataset.listener = 'true';
+                pingSelect.addEventListener('change', () => {
+                    const a = this.getAssetInfo(pingSelect.value);
+                    if (a) {
+                        const nameInput = document.getElementById('pingName');
+                        const locInput = document.getElementById('pingLocation');
+                        if (nameInput && !nameInput.value) nameInput.value = a.name || '';
+                        if (locInput && !locInput.value) locInput.value = a.location || '';
+                    }
+                });
+            }
+        },
+
+        openAssetQuickView(assetId) {
+            const asset = this.getAssetInfo(assetId);
+            if (!asset) return;
+
+            const container = document.getElementById('assetQuickViewBody');
+            if (!container) return;
+
+            const code = asset.code || ('TS-' + asset.id);
+            const priceFormatted = Number(asset.price || asset.cost || 0).toLocaleString('vi-VN') + ' đ';
+
+            container.innerHTML = `
+                <div class="flex items-center gap-3 p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                    <div class="w-12 h-12 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xl font-bold shrink-0">
+                        <i class="fa-solid fa-server"></i>
+                    </div>
+                    <div>
+                        <span class="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-xs rounded">
+                            ${this.escapeHtml(code)}
+                        </span>
+                        <h4 class="text-sm font-bold text-slate-800 dark:text-white mt-1">${this.escapeHtml(asset.name)}</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">${this.escapeHtml(asset.category || 'Thiết bị CNTT')}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="p-2.5 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                        <span class="text-slate-400 text-[11px] block">Người quản lý / Sử dụng</span>
+                        <span class="font-semibold text-slate-800 dark:text-slate-200">${this.escapeHtml(asset.user || 'Kho CNTT')}</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                        <span class="text-slate-400 text-[11px] block">Phòng ban</span>
+                        <span class="font-semibold text-slate-800 dark:text-slate-200">${this.escapeHtml(asset.department || 'HCNS & Kỹ thuật')}</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                        <span class="text-slate-400 text-[11px] block">Vị trí lắp đặt</span>
+                        <span class="font-semibold text-slate-800 dark:text-slate-200">${this.escapeHtml(asset.location || 'Văn phòng chính')}</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                        <span class="text-slate-400 text-[11px] block">Trạng thái</span>
+                        <span class="font-semibold text-emerald-600 dark:text-emerald-400">${this.escapeHtml(asset.status || 'Active')}</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                        <span class="text-slate-400 text-[11px] block">Nguyên giá</span>
+                        <span class="font-semibold text-slate-800 dark:text-slate-200">${priceFormatted}</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                        <span class="text-slate-400 text-[11px] block">Số Serial / Model</span>
+                        <span class="font-mono text-slate-800 dark:text-slate-200">${this.escapeHtml(asset.serial || asset.model || '—')}</span>
+                    </div>
+                </div>
+
+                <div class="pt-2 text-right">
+                    <a href="assets.html?search=${encodeURIComponent(code)}" class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-bold inline-flex items-center gap-1">
+                        <span>Mở trong Kho tài sản</span>
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                    </a>
+                </div>
+            `;
+
+            if (typeof window.openModal === 'function') {
+                window.openModal('modalAssetQuickView');
+            } else {
+                document.getElementById('modalAssetQuickView')?.classList.remove('hidden');
+            }
+        },
+
+        // ==========================================
+        // Phase B: WAN Lines CRUD Handlers
+        // ==========================================
+        openCreateLineModal() {
+            const form = document.getElementById('formNetworkLine');
+            if (form) form.reset();
+            document.getElementById('lineId').value = '';
+            document.getElementById('modalLineTitle').querySelector('span').textContent = 'Thêm Đường truyền Internet WAN';
+            if (typeof window.openModal === 'function') {
+                window.openModal('modalNetworkLine');
+            } else {
+                document.getElementById('modalNetworkLine')?.classList.remove('hidden');
+            }
+        },
+
+        openEditLineModal(id) {
+            const line = this.cache.lines.find(l => l.id === Number(id));
+            if (!line) return;
+
+            document.getElementById('lineId').value = line.id;
+            document.getElementById('lineName').value = line.name || '';
+            document.getElementById('lineProvider').value = line.provider || 'Viettel';
+            document.getElementById('lineRole').value = line.line_role || 'Primary (Chính)';
+            document.getElementById('lineWanIp').value = line.wan_ip || '';
+            document.getElementById('lineBandwidth').value = line.bandwidth || '';
+            document.getElementById('lineContractNo').value = line.contract_no || '';
+            document.getElementById('lineRouterPort').value = line.router_port || '';
+            document.getElementById('lineHotline').value = line.hotline || '';
+            document.getElementById('lineStatus').value = line.status || 'Active';
+            document.getElementById('lineNotes').value = line.notes || '';
+
+            document.getElementById('modalLineTitle').querySelector('span').textContent = 'Chỉnh sửa Đường truyền WAN';
+            if (typeof window.openModal === 'function') {
+                window.openModal('modalNetworkLine');
+            } else {
+                document.getElementById('modalNetworkLine')?.classList.remove('hidden');
+            }
+        },
+
+        async saveLine() {
+            const id = document.getElementById('lineId')?.value;
+            const name = document.getElementById('lineName')?.value.trim();
+            const provider = document.getElementById('lineProvider')?.value;
+            const line_role = document.getElementById('lineRole')?.value;
+            const wan_ip = document.getElementById('lineWanIp')?.value.trim();
+            const bandwidth = document.getElementById('lineBandwidth')?.value.trim();
+            const contract_no = document.getElementById('lineContractNo')?.value.trim();
+            const router_port = document.getElementById('lineRouterPort')?.value.trim();
+            const hotline = document.getElementById('lineHotline')?.value.trim();
+            const status = document.getElementById('lineStatus')?.value;
+            const notes = document.getElementById('lineNotes')?.value.trim();
+
+            if (!name || !wan_ip) {
+                this.showToast('Vui lòng điền các trường bắt buộc (*)', 'error');
+                return;
+            }
+
+            const payload = {
+                name, provider, line_role, wan_ip, bandwidth, contract_no, router_port, hotline, status, notes
+            };
+
+            const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
+            if (!db) return;
+
+            if (id) {
+                await db.from('network_lines').update(payload).eq('id', Number(id));
+                this.showToast('Đã cập nhật đường truyền thành công!', 'success');
+            } else {
+                await db.from('network_lines').insert([payload]);
+                this.showToast('Đã thêm đường truyền mới thành công!', 'success');
+            }
+
+            document.getElementById('modalNetworkLine')?.classList.add('hidden');
+            await this.loadData();
+            this.renderLinesAndTopology();
+            this.renderKPIs();
+        },
+
+        // ==========================================
+        // Phase B: Topology Node Details
+        // ==========================================
+        openNodeDetail(nodeKey) {
+            const titleEl = document.getElementById('nodeDetailTitle');
+            const subEl = document.getElementById('nodeDetailSubtitle');
+            const iconEl = document.getElementById('nodeDetailIcon');
+            const bodyEl = document.getElementById('nodeDetailBody');
+            if (!bodyEl) return;
+
+            switch (nodeKey) {
+                case 'wan1': {
+                    const line = this.cache.lines.find(l => l.line_role && l.line_role.includes('Primary')) || this.cache.lines[0];
+                    titleEl.textContent = line?.name || 'Đường truyền Viettel FTTH (Chính)';
+                    subEl.textContent = `${line?.provider || 'Viettel'} • ${line?.bandwidth || '300 Mbps'}`;
+                    iconEl.innerHTML = '<i class="fa-solid fa-tower-broadcast text-rose-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900">
+                                <span class="text-[11px] text-rose-700 dark:text-rose-300 font-bold uppercase block mb-1">Cấu hình WAN</span>
+                                <div class="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                    <div>IP WAN Tĩnh: <strong class="font-mono text-indigo-600 dark:text-indigo-400">${line?.wan_ip || '113.190.45.120'}</strong></div>
+                                    <div>Gateway: <strong class="font-mono">${line?.gateway || '113.190.45.1'}</strong></div>
+                                    <div>DNS Server: <strong class="font-mono">${line?.dns || '203.113.131.1, 8.8.8.8'}</strong></div>
+                                    <div>Cổng Router: <strong>${line?.router_port || 'WAN 1 (Gigabit)'}</strong></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                                <span class="text-[11px] text-slate-400 block mb-1">Thông tin Hợp đồng & Hỗ trợ</span>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>Số hợp đồng: <strong>${line?.contract_no || 'VT-NDM-2024-08'}</strong></div>
+                                    <div>Hotline kỹ thuật: <strong class="text-emerald-600">${line?.hotline || '1800 8000'}</strong></div>
+                                </div>
+                            </div>
+                            <p class="text-slate-500 dark:text-slate-400 text-[11px]">${line?.notes || 'Đường truyền ưu tiên cao nhất phục vụ toàn bộ kết nối làm việc và VPN.'}</p>
+                        </div>
+                    `;
+                    break;
+                }
+                case 'wan2': {
+                    const line = this.cache.lines.find(l => l.line_role && l.line_role.includes('Backup')) || this.cache.lines[1];
+                    titleEl.textContent = line?.name || 'Đường truyền FPT Backup (Dự phòng)';
+                    subEl.textContent = `${line?.provider || 'FPT Telecom'} • ${line?.bandwidth || '250 Mbps'}`;
+                    iconEl.innerHTML = '<i class="fa-solid fa-tower-broadcast text-orange-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-orange-50 dark:bg-orange-950/40 rounded-lg border border-orange-200 dark:border-orange-900">
+                                <span class="text-[11px] text-orange-700 dark:text-orange-300 font-bold uppercase block mb-1">Cấu hình Failover</span>
+                                <div class="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                    <div>IP WAN Tĩnh: <strong class="font-mono text-indigo-600 dark:text-indigo-400">${line?.wan_ip || '1.55.88.92'}</strong></div>
+                                    <div>Gateway: <strong class="font-mono">${line?.gateway || '1.55.88.1'}</strong></div>
+                                    <div>DNS Server: <strong class="font-mono">${line?.dns || '210.245.24.20'}</strong></div>
+                                    <div>Cổng Router: <strong>${line?.router_port || 'WAN 2 (Gigabit)'}</strong></div>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                                <span class="text-[11px] text-slate-400 block mb-1">Thông tin Hợp đồng & Hỗ trợ</span>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>Số hợp đồng: <strong>${line?.contract_no || 'FPT-NDM-2024-11'}</strong></div>
+                                    <div>Hotline kỹ thuật: <strong class="text-emerald-600">${line?.hotline || '1900 6600'}</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                }
+                case 'router': {
+                    const target = this.cache.targets.find(t => t.target_type === 'Router') || {};
+                    const asset = this.getAssetInfo(target.asset_id || 1);
+                    titleEl.textContent = "Router DrayTek Vigor 2927 (Core Gateway)";
+                    subEl.textContent = "IP Gateway: 192.168.1.1 • Dual-WAN Load Balance & NAT Firewall";
+                    iconEl.innerHTML = '<i class="fa-solid fa-server text-indigo-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                                <span class="text-[11px] text-indigo-700 dark:text-indigo-300 font-bold uppercase block mb-1">Thông số hoạt động</span>
+                                <div class="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                    <div>Cổng LAN: <strong class="font-mono">192.168.1.1 /24</strong></div>
+                                    <div>DHCP Range: <strong class="font-mono">192.168.1.50 - 240</strong></div>
+                                    <div>NAT Rules đang mở: <strong>${this.cache.nats.length} quy tắc</strong></div>
+                                    <div>Kênh VPN hỗ trợ: <strong>SSL, WireGuard, IPsec</strong></div>
+                                </div>
+                            </div>
+                            ${asset ? `
+                            <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                                <span class="text-[11px] text-slate-400 block mb-1">Tài sản liên kết trong kho</span>
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">[${asset.code || 'TS-' + asset.id}]</span>
+                                        <strong class="ml-1">${asset.name}</strong>
+                                        <div class="text-[11px] text-slate-500">${asset.location || 'Tủ Rack Tầng 2'}</div>
+                                    </div>
+                                    <button onclick="QLTSPageNetwork.openAssetQuickView(${asset.id})" class="px-2.5 py-1 bg-indigo-600 text-white rounded text-xs font-semibold">Xem tài sản</button>
+                                </div>
+                            </div>` : ''}
+                        </div>
+                    `;
+                    break;
+                }
+                case 'switch': {
+                    const target = this.cache.targets.find(t => t.target_type === 'Switch') || {};
+                    const asset = this.getAssetInfo(target.asset_id || 2);
+                    titleEl.textContent = "Core Switch Ruijie RG-NBS3100-24GT4SFP";
+                    subEl.textContent = "IP Quản lý: 192.168.1.2 • 24 Port Gigabit PoE (370W) + 4 SFP Uplink";
+                    iconEl.innerHTML = '<i class="fa-solid fa-network-wired text-sky-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-sky-50 dark:bg-sky-950/40 rounded-lg border border-sky-200 dark:border-sky-800">
+                                <span class="text-[11px] text-sky-700 dark:text-sky-300 font-bold uppercase block mb-1">Cấu hình VLAN Trunking</span>
+                                <div class="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                    <div>VLAN 10: <strong>Nội bộ nhân viên (LAN)</strong></div>
+                                    <div>VLAN 20: <strong>Mạng Khách (Guest Isolate)</strong></div>
+                                    <div>VLAN 30: <strong>Camera & NVR an ninh</strong></div>
+                                    <div>PoE Budget: <strong>370W cấp điện AP & Cam</strong></div>
+                                </div>
+                            </div>
+                            ${asset ? `
+                            <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                                <span class="text-[11px] text-slate-400 block mb-1">Tài sản liên kết trong kho</span>
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="font-mono font-bold text-sky-600 dark:text-sky-400">[${asset.code || 'TS-' + asset.id}]</span>
+                                        <strong class="ml-1">${asset.name}</strong>
+                                        <div class="text-[11px] text-slate-500">${asset.location || 'Tủ Rack Tầng 2'}</div>
+                                    </div>
+                                    <button onclick="QLTSPageNetwork.openAssetQuickView(${asset.id})" class="px-2.5 py-1 bg-sky-600 text-white rounded text-xs font-semibold">Xem tài sản</button>
+                                </div>
+                            </div>` : ''}
+                        </div>
+                    `;
+                    break;
+                }
+                case 'nas': {
+                    const target = this.cache.targets.find(t => t.name && t.name.includes('NAS')) || {};
+                    const asset = this.getAssetInfo(target.asset_id || 3);
+                    titleEl.textContent = "Máy chủ NAS Synology DS920+";
+                    subEl.textContent = "IP: 192.168.1.250 • Dung lượng 40TB RAID 5 • File Media Server";
+                    iconEl.innerHTML = '<i class="fa-solid fa-hard-drive text-purple-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-purple-50 dark:bg-purple-950/40 rounded-lg border border-purple-200 dark:border-purple-800">
+                                <span class="text-[11px] text-purple-700 dark:text-purple-300 font-bold uppercase block mb-1">Dịch vụ & Lưu trữ</span>
+                                <div class="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                    <div>Quản trị DSM: <strong class="font-mono">Port 5000 / 5001 (SSL)</strong></div>
+                                    <div>Chia sẻ file: <strong class="font-mono">SMB / NFS / Synology Drive</strong></div>
+                                    <div>Backup tự động: <strong>Hàng ngày 02:00 AM</strong></div>
+                                    <div>Trạng thái RAID: <strong class="text-emerald-600">Healthy (4 x 10TB)</strong></div>
+                                </div>
+                            </div>
+                            ${asset ? `
+                            <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                                <span class="text-[11px] text-slate-400 block mb-1">Tài sản liên kết trong kho</span>
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="font-mono font-bold text-purple-600 dark:text-purple-400">[${asset.code || 'TS-' + asset.id}]</span>
+                                        <strong class="ml-1">${asset.name}</strong>
+                                        <div class="text-[11px] text-slate-500">${asset.location || 'Tủ Rack Tầng 2'}</div>
+                                    </div>
+                                    <button onclick="QLTSPageNetwork.openAssetQuickView(${asset.id})" class="px-2.5 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Xem tài sản</button>
+                                </div>
+                            </div>` : ''}
+                        </div>
+                    `;
+                    break;
+                }
+                case 'camera': {
+                    const target = this.cache.targets.find(t => t.name && t.name.includes('Camera')) || {};
+                    const asset = this.getAssetInfo(target.asset_id || 4);
+                    titleEl.textContent = "Đầu ghi Camera NVR Hikvision 32 Kênh";
+                    subEl.textContent = "IP: 192.168.1.200 • Port 8000 (Stream), Port 80 (Web) • VLAN 30";
+                    iconEl.innerHTML = '<i class="fa-solid fa-video text-emerald-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                <span class="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold uppercase block mb-1">Hạ tầng Giám sát</span>
+                                <div class="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                    <div>Số lượng Camera: <strong>16 Camera IP PoE</strong></div>
+                                    <div>Lưu trữ NVR: <strong>2 x 6TB WD Purple (Ghi 30 ngày)</strong></div>
+                                    <div>NAT Remote Stream: <strong class="text-indigo-600">Port 8000 -> 113.190.45.120</strong></div>
+                                    <div>VLAN Cách ly: <strong>VLAN 30 (Không thông LAN 10)</strong></div>
+                                </div>
+                            </div>
+                            ${asset ? `
+                            <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border dark:border-slate-700">
+                                <span class="text-[11px] text-slate-400 block mb-1">Tài sản liên kết trong kho</span>
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">[${asset.code || 'TS-' + asset.id}]</span>
+                                        <strong class="ml-1">${asset.name}</strong>
+                                        <div class="text-[11px] text-slate-500">${asset.location || 'Phòng An ninh'}</div>
+                                    </div>
+                                    <button onclick="QLTSPageNetwork.openAssetQuickView(${asset.id})" class="px-2.5 py-1 bg-emerald-600 text-white rounded text-xs font-semibold">Xem tài sản</button>
+                                </div>
+                            </div>` : ''}
+                        </div>
+                    `;
+                    break;
+                }
+                case 'wifi-ap': {
+                    titleEl.textContent = "Hệ thống Access Point Ruijie Wi-Fi 6";
+                    subEl.textContent = "4 Bộ phát Ruijie RG-RAP2260(E) PoE tại Tầng 1, Tầng 2, Tầng 3, Tầng 4";
+                    iconEl.innerHTML = '<i class="fa-solid fa-wifi text-blue-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-800">
+                                <span class="text-[11px] text-blue-700 dark:text-blue-300 font-bold uppercase block mb-1">Cấu hình Băng tần & SSID</span>
+                                <div class="space-y-1.5 text-slate-700 dark:text-slate-300">
+                                    <div>• <strong>NewdayMedia_5G</strong>: Băng tần 5GHz Wi-Fi 6 (VLAN 10 Nội bộ)</div>
+                                    <div>• <strong>NewdayMedia_2.4G</strong>: Băng tần 2.4GHz (Sóng xa & Máy in Wi-Fi)</div>
+                                    <div>• <strong>NewdayMedia_Guest</strong>: Băng tần Kép, cách ly thiết bị (VLAN 20)</div>
+                                    <div>• <strong>Newday_IoT_Camera</strong>: Dành cho cảm biến và cam phụ trợ (VLAN 30)</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                }
+                case 'workstations': {
+                    titleEl.textContent = "Cụm Thiết bị Workstation & Văn phòng";
+                    subEl.textContent = "196 Máy tính bàn PC, Laptop, Máy in và Thiết bị ngoại vi kết nối mạng LAN/Wi-Fi";
+                    iconEl.innerHTML = '<i class="fa-solid fa-desktop text-amber-500"></i>';
+                    bodyEl.innerHTML = `
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-800">
+                                <span class="text-[11px] text-amber-700 dark:text-amber-300 font-bold uppercase block mb-1">Phân bổ Thiết bị</span>
+                                <div class="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                    <div>Tổng số tài sản: <strong>196 thiết bị</strong></div>
+                                    <div>PC & Laptop: <strong>56 máy</strong></div>
+                                    <div>Dải IP cấp phát: <strong class="font-mono">192.168.1.50 - 240</strong></div>
+                                    <div>Phòng ban trọng yếu: <strong>Creative, Video, Kế toán, MKT</strong></div>
+                                </div>
+                            </div>
+                            <div class="pt-2 text-right">
+                                <a href="assets.html" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold">Mở Kho tài sản toàn công ty &rarr;</a>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                }
+            }
+
+            if (typeof window.openModal === 'function') {
+                window.openModal('modalNodeDetail');
+            } else {
+                document.getElementById('modalNodeDetail')?.classList.remove('hidden');
+            }
+        },
+
+        // ==========================================
+        // Phase B: Network Diagrams Management
+        // ==========================================
+        renderDiagramTable() {
+            const tbody = document.getElementById('diagramTableBody');
+            if (!tbody) return;
+
+            if (!this.cache.diagrams || this.cache.diagrams.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400 text-xs">Chưa có bản vẽ sơ đồ nào được đính kèm. Bấm nút "+ Đính kèm bản vẽ mới" để tải lên file .drawio hoặc ảnh sơ đồ.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = this.cache.diagrams.map(d => {
+                const isDrawio = d.format === 'drawio' || (d.file_name && d.file_name.endsWith('.drawio'));
+                const isPdf = d.format === 'pdf' || (d.file_name && d.file_name.endsWith('.pdf'));
+                let formatBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">.drawio</span>';
+                if (isPdf) formatBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">PDF</span>';
+                else if (!isDrawio) formatBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">Image</span>';
+
+                return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td class="p-3 font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-file-diagram text-indigo-500 text-sm"></i>
+                            <span>${this.escapeHtml(d.name)}</span>
+                        </td>
+                        <td class="p-3">${formatBadge}</td>
+                        <td class="p-3 font-mono font-bold text-slate-600 dark:text-slate-300">${this.escapeHtml(d.version || 'v1.0')}</td>
+                        <td class="p-3 text-slate-600 dark:text-slate-300">${this.escapeHtml(d.author || 'Admin IT')}</td>
+                        <td class="p-3 text-slate-400 text-[11px]">${d.updated_at ? new Date(d.updated_at).toLocaleDateString('vi-VN') : '—'}</td>
+                        <td class="p-3 text-slate-500 dark:text-slate-400 max-w-xs truncate">${this.escapeHtml(d.description || '—')}</td>
+                        <td class="p-3 text-right whitespace-nowrap">
+                            <button onclick="QLTSPageNetwork.previewDiagram(${d.id})" class="px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 rounded-lg transition-colors" title="Xem trước">
+                                <i class="fa-solid fa-eye mr-1"></i> Xem
+                            </button>
+                            <button onclick="QLTSPageNetwork.downloadDiagramFile(${d.id})" class="px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 rounded-lg transition-colors ml-1" title="Tải về file gốc">
+                                <i class="fa-solid fa-download mr-1"></i> Tải về
+                            </button>
+                            <button onclick="QLTSPageNetwork.deleteItem('network_diagrams', ${d.id}, '${this.escapeJsString(d.name)}')" class="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg ml-1" title="Xóa">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        },
+
+        openUploadDiagramModal() {
+            document.getElementById('formUploadDiagram')?.reset();
+            if (typeof window.openModal === 'function') {
+                window.openModal('modalUploadDiagram');
+            } else {
+                document.getElementById('modalUploadDiagram')?.classList.remove('hidden');
+            }
+        },
+
+        async saveDiagram() {
+            const name = document.getElementById('diagName')?.value.trim();
+            const version = document.getElementById('diagVersion')?.value.trim() || 'v1.0';
+            const author = document.getElementById('diagAuthor')?.value.trim() || 'Admin IT';
+            const description = document.getElementById('diagDescription')?.value.trim() || '';
+            const fileInput = document.getElementById('diagFileInput');
+            const file = fileInput?.files?.[0];
+
+            if (!name) {
+                this.showToast('Vui lòng nhập tên bản vẽ sơ đồ', 'error');
+                return;
+            }
+
+            let fileContent = '';
+            let fileName = file?.name || 'diagram.drawio';
+            let fileFormat = fileName.split('.').pop() || 'drawio';
+
+            if (file) {
+                try {
+                    fileContent = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                } catch (err) {
+                    console.warn('Lỗi đọc file:', err);
+                }
+            }
+
+            const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
+            if (!db) return;
+
+            await db.from('network_diagrams').insert([{
+                name,
+                version,
+                format: fileFormat,
+                author,
+                file_name: fileName,
+                description,
+                file_content: fileContent,
+                updated_at: new Date().toISOString()
+            }]);
+
+            this.showToast(`Đã đính kèm bản vẽ "${name}" thành công!`, 'success');
+            document.getElementById('modalUploadDiagram')?.classList.add('hidden');
+            await this.loadData();
+            this.renderDiagramTable();
+        },
+
+        openPreviewDiagram(id) {
+            this.previewDiagram(id);
+        },
+
+        previewDiagram(id) {
+            const diag = this.cache.diagrams.find(d => d.id === Number(id));
+            if (!diag) return;
+
+            document.getElementById('previewDiagTitle').textContent = diag.name;
+            document.getElementById('previewDiagMeta').textContent = `Phiên bản ${diag.version} • Cập nhật bởi ${diag.author || 'Admin IT'} (${diag.file_name || 'draw.io'})`;
+            
+            const contentEl = document.getElementById('previewDiagContent');
+            if (!contentEl) return;
+
+            const downloadBtn = document.getElementById('btnDownloadPreviewFile');
+            if (downloadBtn) {
+                downloadBtn.onclick = () => this.downloadDiagramFile(diag.id);
+            }
+
+            const isImage = diag.file_content && diag.file_content.startsWith('data:image/');
+            if (isImage) {
+                contentEl.innerHTML = `<img src="${diag.file_content}" alt="${this.escapeHtml(diag.name)}" class="max-h-[60vh] max-w-full rounded-lg shadow-lg object-contain">`;
+            } else {
+                contentEl.innerHTML = `
+                    <div class="bg-white dark:bg-slate-800 p-8 rounded-xl border border-slate-200 dark:border-slate-700 text-center max-w-lg shadow-sm">
+                        <div class="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl mx-auto mb-4">
+                            <i class="fa-solid fa-diagram-project"></i>
+                        </div>
+                        <h4 class="text-base font-bold text-slate-800 dark:text-white mb-2">${this.escapeHtml(diag.name)}</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">${this.escapeHtml(diag.description || 'Bản vẽ kiến trúc mạng định dạng diagrams.net / draw.io')}</p>
+                        <div class="flex items-center justify-center gap-3">
+                            <button onclick="QLTSPageNetwork.downloadDiagramFile(${diag.id})" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-1.5">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Tải file .drawio về máy</span>
+                            </button>
+                            <a href="https://app.diagrams.net/" target="_blank" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold inline-flex items-center gap-1.5">
+                                <span>Mở diagrams.net online</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (typeof window.openModal === 'function') {
+                window.openModal('modalPreviewDiagram');
+            } else {
+                document.getElementById('modalPreviewDiagram')?.classList.remove('hidden');
+            }
+        },
+
+        downloadDiagramFile(id) {
+            const diag = this.cache.diagrams.find(d => d.id === Number(id));
+            if (!diag) return;
+
+            let content = diag.file_content || '';
+            if (diag.format === 'drawio' && !content) {
+                content = `data:application/xml;charset=utf-8,${encodeURIComponent(`<?xml version="1.0" encoding="UTF-8"?>\n<mxfile host="app.diagrams.net">\n  <diagram name="${diag.name}" id="diagram-1">\n    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">\n      <root>\n        <mxCell id="0" />\n        <mxCell id="1" parent="0" />\n      </root>\n    </mxGraphModel>\n  </diagram>\n</mxfile>`)}`;
+            }
+
+            const a = document.createElement('a');
+            a.href = content || `data:text/plain;charset=utf-8,${encodeURIComponent(diag.name)}`;
+            a.download = diag.file_name || `${diag.name}.drawio`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            this.showToast(`Đang tải xuống "${a.download}"...`, 'info');
         },
 
         escapeHtml(str) {

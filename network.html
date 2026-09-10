@@ -257,6 +257,7 @@
                                         <th class="p-3">Loại mạng & VLAN</th>
                                         <th class="p-3">Thiết bị phát (AP / Router)</th>
                                         <th class="p-3">Vị trí phủ sóng</th>
+                                        <th class="p-3">Tài sản liên kết</th>
                                         <th class="p-3">Trạng thái</th>
                                         <th class="p-3 text-right">Thao tác</th>
                                     </tr>
@@ -280,6 +281,7 @@
                                         <th class="p-3 text-center">Giao thức</th>
                                         <th class="p-3">Thiết bị đích liên kết</th>
                                         <th class="p-3">Mục đích sử dụng</th>
+                                        <th class="p-3">Tài sản liên kết</th>
                                         <th class="p-3">Trạng thái</th>
                                         <th class="p-3 text-right">Thao tác</th>
                                     </tr>
@@ -304,6 +306,7 @@
                                         <th class="p-3">Mật khẩu / Pre-shared Key</th>
                                         <th class="p-3">Thiết bị / Người quản trị</th>
                                         <th class="p-3">Lần xác thực cuối</th>
+                                        <th class="p-3">Tài sản liên kết</th>
                                         <th class="p-3">Trạng thái</th>
                                         <th class="p-3 text-right">Thao tác</th>
                                     </tr>
@@ -350,10 +353,16 @@
                     <div id="tab-topology" class="network-tab-content hidden p-4 space-y-6">
                         <!-- Đường truyền Internet cards -->
                         <div>
-                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-                                <i class="fa-solid fa-globe text-indigo-500"></i>
-                                <span>Đường truyền Internet Doanh nghiệp (WAN)</span>
-                            </h3>
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                    <i class="fa-solid fa-globe text-indigo-500"></i>
+                                    <span>Đường truyền Internet Doanh nghiệp (WAN)</span>
+                                </h3>
+                                <button id="btnAddNewLine" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Thêm đường truyền WAN</span>
+                                </button>
+                            </div>
                             <div id="networkLinesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <!-- Dynamic line cards -->
                             </div>
@@ -377,61 +386,136 @@
 
                             <!-- Interactive visual diagram -->
                             <div class="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center space-y-6">
+                                <div class="w-full flex items-center justify-between text-xs text-slate-400 border-b border-slate-100 dark:border-slate-700 pb-3">
+                                    <span><i class="fa-solid fa-hand-pointer text-indigo-500 mr-1"></i> Click vào từng thiết bị để xem chi tiết thông số, IP, cổng kết nối & tài sản liên kết</span>
+                                    <span class="font-mono">Topology v2.0 Dual-WAN</span>
+                                </div>
+
                                 <!-- Level 1: Internet WAN -->
                                 <div class="flex flex-wrap items-center justify-center gap-6">
-                                    <div class="px-4 py-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-center shadow-sm">
-                                        <div class="text-rose-600 dark:text-rose-400 font-bold text-xs"><i class="fa-solid fa-tower-broadcast mr-1"></i> WAN 1: Viettel FTTH</div>
-                                        <div class="text-[11px] text-slate-500">113.190.45.120 (300M/1G)</div>
+                                    <div onclick="QLTSPageNetwork.openNodeDetail('wan1')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all px-4 py-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-center shadow-sm">
+                                        <div class="text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid fa-tower-broadcast"></i>
+                                            <span>WAN 1: Viettel FTTH (Chính)</span>
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 mt-0.5">113.190.45.120 • 300 Mbps/1 Gbps</div>
                                     </div>
-                                    <div class="px-4 py-2.5 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-xl text-center shadow-sm">
-                                        <div class="text-orange-600 dark:text-orange-400 font-bold text-xs"><i class="fa-solid fa-tower-broadcast mr-1"></i> WAN 2: FPT Backup</div>
-                                        <div class="text-[11px] text-slate-500">1.55.88.92 (250 Mbps)</div>
+                                    <div onclick="QLTSPageNetwork.openNodeDetail('wan2')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all px-4 py-2.5 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-xl text-center shadow-sm">
+                                        <div class="text-orange-600 dark:text-orange-400 font-bold text-xs flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid fa-tower-broadcast"></i>
+                                            <span>WAN 2: FPT Backup (Dự phòng)</span>
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 mt-0.5">1.55.88.92 • 250 Mbps</div>
                                     </div>
                                 </div>
 
                                 <div class="text-slate-300 dark:text-slate-600 text-lg"><i class="fa-solid fa-arrow-down"></i></div>
 
                                 <!-- Level 2: Gateway Router -->
-                                <div class="px-6 py-3.5 bg-indigo-50 dark:bg-indigo-950/40 border-2 border-indigo-500/50 rounded-xl text-center shadow-md">
+                                <div onclick="QLTSPageNetwork.openNodeDetail('router')" class="cursor-pointer hover:scale-105 hover:shadow-lg transition-all px-6 py-3.5 bg-indigo-50 dark:bg-indigo-950/40 border-2 border-indigo-500/50 rounded-xl text-center shadow-md relative group">
+                                    <div class="absolute -top-2.5 right-4 px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-bold rounded-full shadow-sm">
+                                        Gateway Chính
+                                    </div>
                                     <div class="text-indigo-700 dark:text-indigo-300 font-extrabold text-sm flex items-center justify-center gap-2">
                                         <i class="fa-solid fa-server"></i>
                                         <span>Router DrayTek Vigor 2927 (Dual-WAN Load Balance)</span>
                                     </div>
                                     <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">IP Gateway: 192.168.1.1 • DHCP Server • NAT Firewall • VPN Gateway</div>
+                                    <div class="text-[11px] text-indigo-500 dark:text-indigo-400 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                                        <i class="fa-solid fa-circle-info"></i> Bấm để xem cổng, VLAN & tài sản liên kết
+                                    </div>
                                 </div>
 
                                 <div class="text-slate-300 dark:text-slate-600 text-lg"><i class="fa-solid fa-arrow-down"></i></div>
 
                                 <!-- Level 3: Core Switch -->
-                                <div class="px-6 py-3.5 bg-sky-50 dark:bg-sky-950/40 border-2 border-sky-500/50 rounded-xl text-center shadow-md">
+                                <div onclick="QLTSPageNetwork.openNodeDetail('switch')" class="cursor-pointer hover:scale-105 hover:shadow-lg transition-all px-6 py-3.5 bg-sky-50 dark:bg-sky-950/40 border-2 border-sky-500/50 rounded-xl text-center shadow-md relative group">
+                                    <div class="absolute -top-2.5 right-4 px-2 py-0.5 bg-sky-600 text-white text-[10px] font-bold rounded-full shadow-sm">
+                                        Core Distribution
+                                    </div>
                                     <div class="text-sky-700 dark:text-sky-300 font-extrabold text-sm flex items-center justify-center gap-2">
                                         <i class="fa-solid fa-network-wired"></i>
                                         <span>Core Switch Ruijie RG-NBS3100-24GT4SFP (Gigabit PoE)</span>
                                     </div>
                                     <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">IP: 192.168.1.2 • Trunking VLAN 10 (LAN), VLAN 20 (Guest), VLAN 30 (Camera)</div>
+                                    <div class="text-[11px] text-sky-500 dark:text-sky-400 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                                        <i class="fa-solid fa-circle-info"></i> Bấm để xem bảng cổng PoE & Switch tầng
+                                    </div>
                                 </div>
 
                                 <div class="text-slate-300 dark:text-slate-600 text-lg"><i class="fa-solid fa-arrow-down"></i></div>
 
                                 <!-- Level 4: Edge Distribution Nodes -->
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                                    <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border border-slate-200 dark:border-slate-600 text-center">
-                                        <div class="text-blue-600 dark:text-blue-400 font-bold text-xs"><i class="fa-solid fa-wifi mr-1"></i> Ruijie Wi-Fi 6 APs</div>
-                                        <div class="text-[11px] text-slate-500 mt-1">SSID 5G, 2.4G & Guest</div>
+                                    <div onclick="QLTSPageNetwork.openNodeDetail('wifi-ap')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
+                                        <div class="text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid fa-wifi"></i>
+                                            <span>Ruijie Wi-Fi 6 APs</span>
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 mt-1">Tầng 1, 2, 3, 4 • VLAN 10 & 20</div>
+                                        <div class="text-[10px] text-blue-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem 4 SSID & AP</div>
                                     </div>
-                                    <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border border-slate-200 dark:border-slate-600 text-center">
-                                        <div class="text-purple-600 dark:text-purple-400 font-bold text-xs"><i class="fa-solid fa-hard-drive mr-1"></i> NAS Synology DS920+</div>
+                                    <div onclick="QLTSPageNetwork.openNodeDetail('nas')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
+                                        <div class="text-purple-600 dark:text-purple-400 font-bold text-xs flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid fa-hard-drive"></i>
+                                            <span>NAS Synology DS920+</span>
+                                        </div>
                                         <div class="text-[11px] text-slate-500 mt-1">IP: 192.168.1.250 (File Media)</div>
+                                        <div class="text-[10px] text-purple-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem RAID & NAT rule</div>
                                     </div>
-                                    <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border border-slate-200 dark:border-slate-600 text-center">
-                                        <div class="text-emerald-600 dark:text-emerald-400 font-bold text-xs"><i class="fa-solid fa-video mr-1"></i> NVR Camera Hikvision</div>
+                                    <div onclick="QLTSPageNetwork.openNodeDetail('camera')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
+                                        <div class="text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid fa-video"></i>
+                                            <span>NVR Camera Hikvision</span>
+                                        </div>
                                         <div class="text-[11px] text-slate-500 mt-1">IP: 192.168.1.200 (16 Cam IP)</div>
+                                        <div class="text-[10px] text-emerald-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem Port 8000 & stream</div>
                                     </div>
-                                    <div class="p-3 bg-slate-50 dark:bg-slate-700/40 rounded-lg border border-slate-200 dark:border-slate-600 text-center">
-                                        <div class="text-amber-600 dark:text-amber-400 font-bold text-xs"><i class="fa-solid fa-desktop mr-1"></i> 196 Thiết bị Workstations</div>
+                                    <div onclick="QLTSPageNetwork.openNodeDetail('workstations')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
+                                        <div class="text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center gap-1.5">
+                                            <i class="fa-solid fa-desktop"></i>
+                                            <span>196 Thiết bị Workstation</span>
+                                        </div>
                                         <div class="text-[11px] text-slate-500 mt-1">PC, Laptop, Máy in văn phòng</div>
+                                        <div class="text-[10px] text-amber-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem phân bổ phòng ban</div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Khu vực Quản lý Bản vẽ Sơ đồ Mạng (.drawio / Ảnh / PDF) -->
+                        <div class="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                <div>
+                                    <h4 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        <i class="fa-solid fa-folder-tree text-indigo-600 dark:text-indigo-400"></i>
+                                        <span>Tài liệu & Bản vẽ Kiến trúc Mạng (.drawio / Sơ đồ Tủ Rack)</span>
+                                    </h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Quản lý các file thiết kế draw.io, sơ đồ đi dây cáp mạng và bản vẽ tủ rack server</p>
+                                </div>
+                                <button id="btnOpenUploadDiagramModal" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all self-start sm:self-auto">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                                    <span>Đính kèm bản vẽ mới</span>
+                                </button>
+                            </div>
+
+                            <div class="overflow-x-auto bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold">
+                                        <tr>
+                                            <th class="p-3">Tên bản vẽ / Sơ đồ</th>
+                                            <th class="p-3">Định dạng</th>
+                                            <th class="p-3">Phiên bản</th>
+                                            <th class="p-3">Người cập nhật</th>
+                                            <th class="p-3">Ngày cập nhật</th>
+                                            <th class="p-3">Mô tả / Ghi chú</th>
+                                            <th class="p-3 text-right">Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="diagramTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                        <!-- Dynamic diagram rows -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -483,6 +567,24 @@
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">VLAN Tag</label>
                         <input type="text" id="wifiVlan" placeholder="Ví dụ: VLAN 10" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-indigo-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động gợi ý thiết bị & vị trí</span>
+                        </label>
+                        <select id="wifiAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-indigo-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động gợi ý thiết bị & vị trí</span>
+                        </label>
+                        <select id="wifiAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Thiết bị phát sóng (AP / Router)</label>
@@ -555,6 +657,24 @@
                         </select>
                     </div>
                     <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-purple-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động gợi ý tên thiết bị đích</span>
+                        </label>
+                        <select id="natAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-purple-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động gợi ý tên thiết bị đích</span>
+                        </label>
+                        <select id="natAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Thiết bị đích liên kết</label>
                         <input type="text" id="natTargetDevice" placeholder="Ví dụ: Đầu ghi Camera Hikvision" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
                     </div>
@@ -624,6 +744,24 @@
                         </select>
                     </div>
                     <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-amber-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động gợi ý thiết bị điều khiển</span>
+                        </label>
+                        <select id="remoteAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-amber-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động gợi ý thiết bị điều khiển</span>
+                        </label>
+                        <select id="remoteAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Ghi chú</label>
                         <input type="text" id="remoteNotes" placeholder="Ghi chú về phân quyền, mục đích..." class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
                     </div>
@@ -678,6 +816,24 @@
                         <input type="text" id="pingLocation" placeholder="Tủ Rack Tầng 2" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
                     </div>
                     <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-emerald-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động điền tên, vị trí & IP</span>
+                        </label>
+                        <select id="pingAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-link text-emerald-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Tự động điền tên, vị trí & IP</span>
+                        </label>
+                        <select id="pingAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Ghi chú mục tiêu</label>
                         <input type="text" id="pingNotes" placeholder="Ghi chú giám sát..." class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
                     </div>
@@ -687,6 +843,189 @@
                     <button type="submit" class="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm">Lưu mục tiêu</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    
+    <!-- Modal: Thêm / Sửa Đường truyền Internet WAN -->
+    <div id="modalNetworkLine" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 id="modalLineTitle" class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-globe text-indigo-500"></i>
+                    <span>Thêm Đường truyền Internet WAN</span>
+                </h3>
+                <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-white"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <form id="formNetworkLine" class="p-6 space-y-4">
+                <input type="hidden" id="lineId">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tên đường truyền *</label>
+                        <input type="text" id="lineName" required placeholder="Ví dụ: Đường truyền Viettel FTTH Chính" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nhà mạng cung cấp *</label>
+                        <select id="lineProvider" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="Viettel">Viettel Telecom</option>
+                            <option value="FPT">FPT Telecom</option>
+                            <option value="VNPT">VNPT VinaPhone</option>
+                            <option value="CMC">CMC Telecom</option>
+                            <option value="Khác">Nhà mạng khác</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Vai trò đường truyền</label>
+                        <select id="lineRole" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="Primary (Chính)">Primary (Đường truyền chính)</option>
+                            <option value="Backup (Dự phòng)">Backup (Đường truyền dự phòng)</option>
+                            <option value="Load Balancing">Load Balancing (Cân bằng tải song song)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Địa chỉ IP WAN Tĩnh *</label>
+                        <input type="text" id="lineWanIp" required placeholder="113.190.45.120" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Băng thông gói cước</label>
+                        <input type="text" id="lineBandwidth" placeholder="300 Mbps / 1000 Mbps" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mã hợp đồng / Thuê bao</label>
+                        <input type="text" id="lineContractNo" placeholder="VT-NDM-2024-08" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Cổng cắm trên Router</label>
+                        <input type="text" id="lineRouterPort" placeholder="DrayTek WAN 1 (Gigabit)" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Hotline Kỹ thuật / Hỗ trợ</label>
+                        <input type="text" id="lineHotline" placeholder="1800 8000" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Trạng thái</label>
+                        <select id="lineStatus" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            <option value="Active">Đang hoạt động (Active)</option>
+                            <option value="Inactive">Mất tín hiệu / Tạm ngưng</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Ghi chú đường truyền</label>
+                        <input type="text" id="lineNotes" placeholder="Ghi chú thêm về cam kết SLA, gói cước..." class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <button type="button" class="btn-close-modal px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">Hủy</button>
+                    <button type="submit" class="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">Lưu đường truyền</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Chi tiết Thiết bị trên Sơ đồ Topology -->
+    <div id="modalNodeDetail" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div id="nodeDetailIcon" class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-server"></i>
+                    </div>
+                    <div>
+                        <h3 id="nodeDetailTitle" class="text-sm font-bold text-slate-800 dark:text-white">Router DrayTek Vigor 2927</h3>
+                        <p id="nodeDetailSubtitle" class="text-xs text-slate-500 dark:text-slate-400">Gateway / Firewall / Dual WAN Load Balancing</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-white"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div id="nodeDetailBody" class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                <!-- Dynamic content populated by JS -->
+            </div>
+            <div class="px-6 py-3 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+                <button type="button" class="btn-close-modal px-5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Đính kèm Bản vẽ Sơ đồ mạng -->
+    <div id="modalUploadDiagram" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-indigo-500"></i>
+                    <span>Đính kèm Bản vẽ Sơ đồ mạng</span>
+                </h3>
+                <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-white"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <form id="formUploadDiagram" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tên bản vẽ / Sơ đồ *</label>
+                    <input type="text" id="diagName" required placeholder="Ví dụ: Sơ đồ Mạng Văn phòng Tầng 1-4 (draw.io)" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phiên bản *</label>
+                        <input type="text" id="diagVersion" value="v1.0" required class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Người cập nhật</label>
+                        <input type="text" id="diagAuthor" placeholder="Admin IT" class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">File bản vẽ (.drawio, .png, .jpg, .pdf) *</label>
+                    <input type="file" id="diagFileInput" accept=".drawio,.xml,.png,.jpg,.jpeg,.pdf" required class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-300">
+                    <p class="text-[11px] text-slate-400 mt-1">Hỗ trợ file draw.io / diagrams.net, file ảnh sơ đồ kiến trúc tủ rack.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mô tả / Ghi chú</label>
+                    <textarea id="diagDescription" rows="2" placeholder="Ghi chú kiến trúc, các thay đổi trong phiên bản..." class="w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white"></textarea>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <button type="button" class="btn-close-modal px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">Hủy</button>
+                    <button type="submit" class="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">Lưu bản vẽ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Xem trước Bản vẽ Sơ đồ mạng -->
+    <div id="modalPreviewDiagram" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                    <h3 id="previewDiagTitle" class="text-sm font-bold text-slate-800 dark:text-white">Xem trước Bản vẽ</h3>
+                    <p id="previewDiagMeta" class="text-xs text-slate-400">Phiên bản v1.0 • draw.io diagram</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnDownloadPreviewFile" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Tải file</span>
+                    </button>
+                    <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-white p-1"><i class="fa-solid fa-times text-base"></i></button>
+                </div>
+            </div>
+            <div id="previewDiagContent" class="p-6 max-h-[70vh] overflow-y-auto flex items-center justify-center bg-slate-100 dark:bg-slate-900/50 min-h-[300px]">
+                <!-- Dynamic preview (image or draw.io card) -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Xem nhanh Chi tiết Tài sản -->
+    <div id="modalAssetQuickView" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-box-archive text-indigo-500"></i>
+                    <span>Chi tiết Tài sản Liên kết</span>
+                </h3>
+                <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-white"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div id="assetQuickViewBody" class="p-6 space-y-4">
+                <!-- Dynamic asset data -->
+            </div>
+            <div class="px-6 py-3 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+                <button type="button" class="btn-close-modal px-5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg">Đóng</button>
+            </div>
         </div>
     </div>
 
