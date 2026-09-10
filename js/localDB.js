@@ -24,6 +24,7 @@ const LocalDB = {
         NETWORK_TARGETS: 'qlts_network_targets',
         NETWORK_LINES: 'qlts_network_lines',
         NETWORK_DIAGRAMS: 'qlts_network_diagrams',
+        NETWORK_CHECK_LOGS: 'qlts_network_check_logs',
         ALERT_SETTINGS: 'qlts_alert_settings',
         WORKBOOK_DATA: 'qlts_workbook_data',
         COUNTER: 'qlts_id_counter'
@@ -6421,6 +6422,33 @@ REAL_DATA: {
             }
         ],
         
+        
+        network_check_logs: [
+            {
+                id: 1,
+                target_id: 8,
+                target_name: "Website Công ty (newdaymedia.com.vn)",
+                host: "newdaymedia.com.vn",
+                port: 443,
+                status: "Online",
+                latency_ms: 83,
+                detail: "Cổng 443 mở (TCP Connect OK)",
+                error: null,
+                checked_at: new Date(Date.now() - 300000).toISOString()
+            },
+            {
+                id: 2,
+                target_id: 1,
+                target_name: "Router DrayTek Vigor 2927 (Gateway)",
+                host: "192.168.1.1",
+                port: 80,
+                status: "Online",
+                latency_ms: 2,
+                detail: "Cổng 80 mở (TCP Connect OK)",
+                error: null,
+                checked_at: new Date(Date.now() - 600000).toISOString()
+            }
+        ],
         network_diagrams: [
             {
                 id: 1,
@@ -6499,6 +6527,7 @@ REAL_DATA: {
             ensureTable(this.KEYS.NETWORK_TARGETS, net.network_targets);
             ensureTable(this.KEYS.NETWORK_LINES, net.network_lines);
             ensureTable(this.KEYS.NETWORK_DIAGRAMS, net.network_diagrams);
+            ensureTable(this.KEYS.NETWORK_CHECK_LOGS, net.network_check_logs);
         } catch (e) {
             console.error('LocalDB: Error seeding network data:', e);
         }

@@ -215,10 +215,16 @@
             document.addEventListener('DOMContentLoaded', function () {
                 renderSidebar();
                 initSidebarToggle();
+                updateHeaderUserInfo();
+                updateHeaderNotifications();
+                initHeaderEvents();
             });
         } else {
             renderSidebar();
             initSidebarToggle();
+            updateHeaderUserInfo();
+            updateHeaderNotifications();
+            initHeaderEvents();
         }
 
         // Lắng nghe hashchange để cập nhật active indicator khi click giữa các mục anchor
@@ -226,6 +232,380 @@
             renderSidebar();
         });
     }
+
+    
+    // =================================================================
+    // UNIFIED HEADER CONTROLLER & NOTIFICATIONS
+    // Quản lý đồng bộ Tìm kiếm, Dark mode, Thông báo và User profile
+    // trên thanh menu ngang ở tất cả các trang.
+    // =================================================================
+
+    function getStorageJson(key, fallback = []) {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : fallback;
+        } catch (e) {
+            return fallback;
+        }
+    }
+
+    /**
+     * Cập nhật thông tin User trên Header
+     */
+    function updateHeaderUserInfo() {
+        const savedProfile = getStorageJson('qlts_current_user_profile', null);
+        const profile = window.currentUserProfile || savedProfile || {
+            full_name: 'Quản trị viên IT',
+            email: 'admin@newdaymedia.com',
+            role: 'admin'
+        };
+
+        const name = profile.full_name || 'Quản trị viên';
+        const email = profile.email || 'admin@newdaymedia.com';
+        const role = profile.role === 'admin' ? 'Admin IT' : (profile.role || 'Nhân viên');
+        const avatar = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4f46e5&color=fff`;
+
+        // Update elements
+        document.querySelectorAll('#header-user-name, #header-dropdown-name').forEach(el => el.textContent = name);
+        document.querySelectorAll('#header-user-email').forEach(el => el.textContent = email);
+        document.querySelectorAll('#header-user-role').forEach(el => el.textContent = role);
+        document.querySelectorAll('#userProfileBtn img, header .group img').forEach(img => {
+            if (img.src !== avatar) img.src = avatar;
+        });
+    }
+
+    /**
+     * Thu thập và hiển thị thông báo toàn hệ thống
+     */
+    function updateHeaderNotifications() {
+        const notiList = document.getElementById('notification-list');
+        const notiCount = document.getElementById('notification-count');
+        const notiBadge = document.getElementById('notification-badge');
+        if (!notiList || !notiCount) return;
+
+        const readNotifications = new Set(getStorageJson('readNotifications', []));
+        const now = new Date();
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        const thirtyDaysFromNow = new Date(now.getTime() + thirtyDaysMs);
+
+        const notifications = [];
+
+        // 1. Tài sản sắp hết hạn bảo hành
+        const assets = getStorageJson('qlts_assets', []);
+        assets.forEach(a => {
+            if (!a.warranty_expiration_date) return;
+            const exp = new Date(a.warranty_expiration_date);
+            if (exp >= now && exp <= thirtyDaysFromNow) {
+                const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+                notifications.push({
+                    id: `asset_${a.id}`,
+                    type: 'asset',
+                    icon: 'fa-box-archive text-amber-500 bg-amber-50 dark:bg-amber-950/40',
+                    title: a.name || 'Tài sản',
+                    code: a.code || ('TS-' + a.id),
+                    detail: `Hết hạn bảo hành sau ${days > 0 ? days + ' ngày' : 'hôm nay'}`,
+                    href: 'assets.html'
+                });
+            }
+        });
+
+        // 2. License phần mềm sắp hết hạn
+        const licenses = getStorageJson('qlts_licenses', []);
+        licenses.forEach(l => {
+            if (!l.expiration_date) return;
+            const exp = new Date(l.expiration_date);
+            if (exp >= now && exp <= thirtyDaysFromNow) {
+                const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+                notifications.push({
+                    id: `license_${l.id}`,
+                    type: 'license',
+                    icon: 'fa-key text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40',
+                    title: l.key_type || l.name || 'License',
+                    code: l.user || 'Chưa cấp phát',
+                    detail: `Bản quyền hết hạn sau ${days > 0 ? days + ' ngày' : 'hôm nay'}`,
+                    href: 'licenses.html'
+                });
+            }
+        });
+
+        // 3. Vật tư & Linh kiện dưới tồn kho an toàn
+        const supplies = getStorageJson('qlts_supplies', []);
+        supplies.forEach(s => {
+            const qty = Number(s.quantity || 0);
+            const minQty = Number(s.min_quantity || 5);
+            if (qty <= minQty) {
+                notifications.push({
+                    id: `supply_${s.id}`,
+                    type: 'supply',
+                    icon: 'fa-boxes-packing text-rose-500 bg-rose-50 dark:bg-rose-950/40',
+                    title: s.name || 'Vật tư',
+                    code: s.code || ('VT-' + s.id),
+                    detail: `Tồn kho thấp: ${qty}/${minQty} ${s.unit || 'cái'}`,
+                    href: 'inventory.html'
+                });
+            }
+        });
+
+        // 4. Thiết bị mạng offline
+        const targets = getStorageJson('qlts_network_targets', []);
+        targets.forEach(t => {
+            if (t.status === 'Offline') {
+                notifications.push({
+                    id: `target_${t.id}`,
+                    type: 'network',
+                    icon: 'fa-network-wired text-red-500 bg-red-50 dark:bg-red-950/40',
+                    title: t.name || 'Thiết bị mạng',
+                    code: t.address || 'Offline',
+                    detail: 'Mất kết nối mạng / Không phản hồi ping',
+                    href: 'network.html#tab-ping'
+                });
+            }
+        });
+
+        // Lọc thông báo chưa đọc
+        const unreadList = notifications.filter(n => !readNotifications.has(n.id));
+
+        if (unreadList.length > 0) {
+            notiCount.textContent = unreadList.length > 99 ? '99+' : unreadList.length;
+            notiCount.classList.remove('hidden');
+            if (notiBadge) notiBadge.textContent = `${unreadList.length} mới`;
+
+            notiList.innerHTML = unreadList.slice(0, 30).map(n => `
+                <li class="p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-start gap-2.5 group">
+                    <div class="w-7 h-7 rounded-lg ${n.icon} flex items-center justify-center text-xs shrink-0 mt-0.5">
+                        <i class="fa-solid ${n.icon.split(' ')[0]}"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <a href="${n.href}" class="block">
+                            <div class="font-bold text-slate-800 dark:text-white truncate text-xs">${n.title}</div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">${n.detail}</div>
+                        </a>
+                    </div>
+                    <button type="button" data-action="mark-notif-read" data-notif-id="${n.id}" onclick="event.stopPropagation(); window.QLTSHeader.markSingleRead('${n.id}')" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 p-1 rounded text-xs transition-opacity" title="Đánh dấu đã đọc">
+                        <i class="fa-solid fa-check"></i>
+                    </button>
+                </li>
+            `).join('');
+        } else {
+            notiCount.classList.add('hidden');
+            if (notiBadge) notiBadge.textContent = '0 mới';
+            notiList.innerHTML = '<li class="p-6 text-center text-slate-400 text-xs flex flex-col items-center gap-1.5"><i class="fa-regular fa-bell-slash text-base text-slate-300 dark:text-slate-600"></i><span>Không có cảnh báo hoặc thông báo mới.</span></li>';
+        }
+    }
+
+    /**
+     * Khởi tạo các sự kiện Header
+     */
+    function initHeaderEvents() {
+        // 1. Click delegation
+        document.addEventListener('click', function (e) {
+            // Dark mode toggle
+            const themeBtn = e.target.closest('#header-theme-toggle') || e.target.closest('#theme-toggle') || e.target.closest('#themeToggleBtn');
+            if (themeBtn) {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('darkMode', isDark ? 'true' : 'false');
+                return;
+            }
+
+            // Notification dropdown toggle
+            const notiBtn = e.target.closest('#notification-button');
+            if (notiBtn) {
+                const dropdown = document.getElementById('notification-dropdown');
+                if (dropdown) dropdown.classList.toggle('hidden');
+                return;
+            }
+
+            // Click inside notification dropdown on a link -> close dropdown
+            if (e.target.closest('#notification-dropdown a')) {
+                const dropdown = document.getElementById('notification-dropdown');
+                if (dropdown) dropdown.classList.add('hidden');
+            }
+
+            // Click outside notification dropdown
+            if (!e.target.closest('#notification-dropdown')) {
+                const dropdown = document.getElementById('notification-dropdown');
+                if (dropdown) dropdown.classList.add('hidden');
+            }
+
+            // User profile dropdown toggle
+            const userBtn = e.target.closest('#userProfileBtn');
+            if (userBtn) {
+                const userDropdown = userBtn.closest('.group')?.querySelector('.absolute');
+                if (userDropdown) {
+                    const isShown = userDropdown.classList.contains('!opacity-100');
+                    document.querySelectorAll('header .group .absolute').forEach(d => d.classList.remove('!opacity-100', '!visible', '!pointer-events-auto'));
+                    if (!isShown) {
+                        userDropdown.classList.add('!opacity-100', '!visible', '!pointer-events-auto');
+                    }
+                }
+                return;
+            }
+
+            // Click outside user profile dropdown
+            if (!e.target.closest('.group')) {
+                document.querySelectorAll('header .group .absolute').forEach(d => {
+                    d.classList.remove('!opacity-100', '!visible', '!pointer-events-auto');
+                });
+            }
+
+            // Mark single notification read (delegated)
+            const markBtn = e.target.closest('#notification-list [data-action="mark-notif-read"]') || e.target.closest('#notification-list button[onclick*="markSingleRead"]');
+            if (markBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const notifId = markBtn.dataset.notifId || (markBtn.getAttribute('onclick') || '').match(/markSingleRead\(['"]([^'"]+)['"]\)/)?.[1];
+                if (notifId && window.QLTSHeader) {
+                    window.QLTSHeader.markSingleRead(notifId);
+                }
+                return;
+            }
+
+            // Clear all notifications
+            const clearNotiBtn = e.target.closest('#clear-read-notifications-btn');
+            if (clearNotiBtn) {
+                e.preventDefault();
+                const notiItems = document.querySelectorAll('#notification-list [data-action="mark-notif-read"], #notification-list button[onclick*="markSingleRead"]');
+                const readNotifications = getStorageJson('readNotifications', []);
+                // Mark all notifications read
+                const assets = getStorageJson('qlts_assets', []);
+                const licenses = getStorageJson('qlts_licenses', []);
+                const supplies = getStorageJson('qlts_supplies', []);
+                const targets = getStorageJson('qlts_network_targets', []);
+                const allIds = [
+                    ...assets.map(a => 'asset_' + a.id),
+                    ...licenses.map(l => 'license_' + l.id),
+                    ...supplies.map(s => 'supply_' + s.id),
+                    ...targets.map(t => 'target_' + t.id)
+                ];
+                const updated = Array.from(new Set([...readNotifications, ...allIds]));
+                localStorage.setItem('readNotifications', JSON.stringify(updated));
+                updateHeaderNotifications();
+                return;
+            }
+
+            // Global search modal open
+            const gsBtn = e.target.closest('#globalSearchBtn') || e.target.closest('#search-button');
+            if (gsBtn) {
+                const modal = document.getElementById('globalSearchModal');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    const inp = document.getElementById('globalSearchInput');
+                    if (inp) {
+                        inp.value = '';
+                        setTimeout(() => inp.focus(), 50);
+                    }
+                    if (typeof window.renderGlobalSearchResults === 'function') {
+                        window.renderGlobalSearchResults('');
+                    }
+                }
+                return;
+            }
+
+            // Logout button
+            const logoutBtn = e.target.closest('#logout-button');
+            if (logoutBtn) {
+                e.preventDefault();
+                const performLogout = () => {
+                    localStorage.removeItem('qlts_current_user_profile');
+                    localStorage.removeItem('supabase.auth.token');
+                    window.location.href = 'login.html';
+                };
+                if (typeof window.showConfirmationModal === 'function') {
+                    window.showConfirmationModal('Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?', performLogout, 'Xác nhận Đăng xuất');
+                } else {
+                    performLogout();
+                }
+                return;
+            }
+        });
+
+        // 2. Global search input live typing inside modal
+        const globalSearchInput = document.getElementById('globalSearchInput');
+        if (globalSearchInput && !globalSearchInput._hasLiveSearch) {
+            globalSearchInput._hasLiveSearch = true;
+            globalSearchInput.addEventListener('input', function (e) {
+                if (typeof window.renderGlobalSearchResults === 'function') {
+                    window.renderGlobalSearchResults(e.target.value.trim());
+                }
+            });
+        }
+
+        // 3. Quick search input in header (#searchInput) - Pressing Enter or typing
+        const headerSearchInput = document.getElementById('searchInput');
+        if (headerSearchInput && !headerSearchInput._hasHeaderSearch) {
+            headerSearchInput._hasHeaderSearch = true;
+            headerSearchInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    const val = headerSearchInput.value.trim();
+                    if (!val) return;
+                    // If current page doesn't have local search handler, open global search modal
+                    const modal = document.getElementById('globalSearchModal');
+                    if (modal) {
+                        modal.classList.remove('hidden');
+                        modal.classList.add('flex');
+                        const inp = document.getElementById('globalSearchInput');
+                        if (inp) {
+                            inp.value = val;
+                            setTimeout(() => inp.focus(), 50);
+                        }
+                        if (typeof window.renderGlobalSearchResults === 'function') {
+                            window.renderGlobalSearchResults(val);
+                        }
+                    }
+                }
+            });
+        }
+
+        // 4. Global keyboard shortcuts (/ for quick search, Ctrl+K for global search, Esc to close)
+        document.addEventListener('keydown', function (e) {
+            // Ctrl+K -> Global Search Modal
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                const modal = document.getElementById('globalSearchModal');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    const inp = document.getElementById('globalSearchInput');
+                    if (inp) {
+                        inp.value = '';
+                        setTimeout(() => inp.focus(), 50);
+                    }
+                }
+            }
+            // "/" -> Focus #searchInput if not already editing a field
+            if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+                const searchInp = document.getElementById('searchInput');
+                if (searchInp) {
+                    e.preventDefault();
+                    searchInp.focus();
+                }
+            }
+            // Escape -> Close dropdowns and modal
+            if (e.key === 'Escape') {
+                const dd = document.getElementById('notification-dropdown');
+                if (dd) dd.classList.add('hidden');
+                const modal = document.getElementById('globalSearchModal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }
+            }
+        });
+    }
+
+    // Export header controller
+    window.QLTSHeader = {
+        updateHeaderUserInfo: updateHeaderUserInfo,
+        updateHeaderNotifications: updateHeaderNotifications,
+        initHeaderEvents: initHeaderEvents,
+        markSingleRead: function(id) {
+            const readNotifications = getStorageJson('readNotifications', []);
+            readNotifications.push(id);
+            localStorage.setItem('readNotifications', JSON.stringify(Array.from(new Set(readNotifications))));
+            updateHeaderNotifications();
+        }
+    };
 
     // Export cho các module khác có thể gọi lại nếu cần
     window.QLTSSidebar = {

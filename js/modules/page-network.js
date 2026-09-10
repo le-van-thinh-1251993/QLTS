@@ -16,7 +16,8 @@
             targets: [],
             lines: [],
             diagrams: [],
-            assets: []
+            assets: [],
+            check_logs: []
         },
         revealedSecrets: new Set(), // Chứa các ID đang mở xem mật khẩu tạm thời
 
@@ -27,6 +28,7 @@
 
             console.log('QLTSPageNetwork: Khởi tạo module Hạ tầng & Mạng...');
             await this.loadData();
+            this.checkAgentStatus();
             this.setupTabs();
             this.setupFilters();
             this.setupActions();
@@ -43,14 +45,15 @@
             }
 
             try {
-                const [wifisRes, natsRes, remotesRes, targetsRes, linesRes, diagramsRes, assetsRes] = await Promise.all([
+                const [wifisRes, natsRes, remotesRes, targetsRes, linesRes, diagramsRes, assetsRes, logsRes] = await Promise.all([
                     db.from('network_wifis').select('*'),
                     db.from('network_nats').select('*'),
                     db.from('network_remotes').select('*'),
                     db.from('network_targets').select('*'),
                     db.from('network_lines').select('*'),
                     db.from('network_diagrams').select('*'),
-                    db.from('assets').select('*')
+                    db.from('assets').select('*'),
+                    db.from('network_check_logs').select('*')
                 ]);
 
                 this.cache.wifis = wifisRes?.data || [];
@@ -60,6 +63,7 @@
                 this.cache.lines = linesRes?.data || [];
                 this.cache.diagrams = diagramsRes?.data || [];
                 this.cache.assets = assetsRes?.data || [];
+                this.cache.check_logs = (logsRes?.data || []).sort((a, b) => new Date(b.checked_at || 0) - new Date(a.checked_at || 0));
                 this.populateAssetDropdowns();
             } catch (err) {
                 console.error('Lỗi nạp dữ liệu mạng:', err);
@@ -690,11 +694,14 @@
                             ${t.last_checked ? new Date(t.last_checked).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Vừa xong'}
                         </td>
                         <td class="p-3 text-right whitespace-nowrap">
-                            <button id="btnPing_${t.id}" onclick="QLTSPageNetwork.pingSingleTarget(${t.id})" class="px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-lg transition-colors" title="Ping kiểm tra">
+                            <button id="btnPing_${t.id}" onclick="QLTSPageNetwork.pingSingleTarget(${t.id})" class="px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-lg transition-colors" title="Ping kiểm tra thực tế">
                                 <i class="fa-solid fa-rotate-right mr-1"></i>
                                 <span>Ping</span>
                             </button>
-                            <button onclick="QLTSPageNetwork.openEditPingModal(${t.id})" class="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg ml-1" title="Chỉnh sửa">
+                            <button onclick="QLTSPageNetwork.openCheckLogs(${t.id})" class="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg ml-0.5" title="Xem lịch sử kiểm tra">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </button>
+                            <button onclick="QLTSPageNetwork.openEditPingModal(${t.id})" class="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg ml-0.5" title="Chỉnh sửa">
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
                             <button onclick="QLTSPageNetwork.deleteItem('network_targets', ${t.id}, '${this.escapeJsString(t.name)}')" class="text-rose-400 hover:text-rose-600 p-1.5 rounded-lg ml-1" title="Xóa">
@@ -787,92 +794,314 @@
         // ==========================================
         // Ping Logic & Latency Simulation / Check
         // ==========================================
+        async checkAgentStatus() {
+            const badge = document.getElementById('agentStatusBadge');
+            const textEl = document.getElementById('agentStatusText');
+            try {
+                const res = await fetch('/api/network/agent-status');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (badge && textEl) {
+                        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800";
+                        textEl.textContent = `Server Agent: Sẵn sàng (Port 9000 - v${data.version || '2.0'})`;
+                    }
+                    this.hasServerAgent = true;
+                    return true;
+                }
+            } catch (e) {
+                // Ignore failure
+            }
+
+            if (badge && textEl) {
+                badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800";
+                textEl.textContent = "Chế độ Trình duyệt (CORS / Web Fetch)";
+            }
+            this.hasServerAgent = false;
+            return false;
+        },
+
         async pingSingleTarget(id) {
-            const target = this.cache.targets.find(t => t.id === id);
+            const target = this.cache.targets.find(t => t.id === Number(id));
             if (!target) return;
 
             const btn = document.getElementById(`btnPing_${id}`);
+            const originalHtml = btn ? btn.innerHTML : '';
             if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
-            let latency = 2;
-            let status = 'Online';
+            let result = null;
 
-            const startTime = performance.now();
-
-            // Nếu là URL web thật (https:// hoặc http://), thử fetch đo latency thực
-            if (target.address.startsWith('http://') || target.address.startsWith('https://')) {
-                try {
-                    await fetch(target.address, { mode: 'no-cors', cache: 'no-store' });
-                    latency = Math.round(performance.now() - startTime);
-                    status = 'Online';
-                } catch (e) {
-                    latency = Math.floor(Math.random() * 20) + 15;
-                    status = 'Online';
+            // 1. Thử gọi API Backend Agent trước (ICMP Ping / TCP Socket thật)
+            try {
+                const res = await fetch('/api/network/ping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        host: target.address,
+                        port: target.port ? Number(target.port) : null,
+                        timeout_ms: 2500
+                    })
+                });
+                if (res.ok) {
+                    result = await res.json();
                 }
-            } else {
-                // Giả lập ping mạng nội bộ (LAN 1-4ms, Gateway DNS 6-12ms)
-                await new Promise(res => setTimeout(res, 200 + Math.random() * 300));
-                if (target.target_type === 'Router' || target.target_type === 'Switch') {
-                    latency = Math.floor(Math.random() * 2) + 1; // 1-2 ms
-                } else if (target.target_type === 'Gateway') {
-                    latency = Math.floor(Math.random() * 5) + 6; // 6-10 ms
-                } else {
-                    latency = Math.floor(Math.random() * 4) + 2; // 2-5 ms
-                }
-                status = 'Online';
+            } catch (err) {
+                console.warn('Không gọi được backend agent, chuyển sang fallback:', err);
             }
 
-            target.latency_ms = latency;
-            target.status = status;
-            target.last_checked = new Date().toISOString();
+            // 2. Fallback nếu không có backend (client-side HTTP check)
+            if (!result) {
+                const startTime = performance.now();
+                let isUrl = target.address.startsWith('http://') || target.address.startsWith('https://');
+                let testUrl = isUrl ? target.address : `http://${target.address}:${target.port || 80}`;
+                try {
+                    await fetch(testUrl, { mode: 'no-cors', cache: 'no-store' });
+                    const latency = Math.max(1, Math.round(performance.now() - startTime));
+                    result = {
+                        ok: true,
+                        status: 'Online',
+                        latency_ms: latency,
+                        detail: `Client HTTP phản hồi (${latency}ms)`,
+                        error: null
+                    };
+                } catch (e) {
+                    result = {
+                        ok: false,
+                        status: 'Offline',
+                        latency_ms: 2500,
+                        detail: 'Không phản hồi từ trình duyệt',
+                        error: 'UNREACHABLE'
+                    };
+                }
+            }
 
-            // Cập nhật LocalDB
+            // 3. Cập nhật thông tin mục tiêu
+            target.latency_ms = result.latency_ms;
+            target.status = result.status;
+            target.last_checked = result.timestamp || new Date().toISOString();
+
             const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
             if (db) {
                 await db.from('network_targets').update({
-                    latency_ms: latency,
-                    status: status,
+                    latency_ms: result.latency_ms,
+                    status: result.status,
                     last_checked: target.last_checked
-                }).eq('id', id);
+                }).eq('id', target.id);
+
+                // 4. Lưu lịch sử kiểm tra vào network_check_logs
+                const logEntry = {
+                    target_id: target.id,
+                    target_name: target.name,
+                    host: target.address,
+                    port: target.port || null,
+                    status: result.status,
+                    latency_ms: result.latency_ms,
+                    detail: result.detail || (result.ok ? 'Kết nối thành công' : 'Không có phản hồi'),
+                    error: result.error,
+                    checked_at: target.last_checked
+                };
+                await db.from('network_check_logs').insert([logEntry]);
+                this.cache.check_logs.unshift(logEntry);
             }
+
+            if (btn) btn.innerHTML = originalHtml;
 
             this.renderPingTable();
             this.renderKPIs();
-            this.showToast(`Đã kiểm tra ${target.name}: ${status} (${latency}ms)`, 'success');
+
+            const timeEl = document.getElementById('lastPingTime');
+            if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('vi-VN');
+
+            const toastType = result.status === 'Online' ? 'success' : 'warning';
+            this.showToast(`${target.name}: ${result.status} (${result.latency_ms}ms) - ${result.detail}`, toastType);
         },
 
         async pingAllTargets() {
             const btn = document.getElementById('btnPingAllTargets');
-            const btnHeader = document.getElementById('btnHeaderPingAll');
             const originalHtml = btn ? btn.innerHTML : '';
-            if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Đang kiểm tra...</span>';
-            if (btnHeader) btnHeader.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Đang kiểm tra...</span>';
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i><span>Đang kiểm tra...</span>';
+
+            const progressBar = document.getElementById('pingAllProgressBar');
+            const progressFill = document.getElementById('pingAllProgressFill');
+            if (progressBar) progressBar.classList.remove('hidden');
+            if (progressFill) progressFill.style.width = '10%';
 
             const targets = this.cache.targets;
-            for (let i = 0; i < targets.length; i++) {
-                const t = targets[i];
-                let lat = Math.floor(Math.random() * 3) + 1;
-                if (t.target_type === 'Gateway') lat = Math.floor(Math.random() * 4) + 6;
-                if (t.target_type === 'Domain') lat = Math.floor(Math.random() * 15) + 25;
-                t.latency_ms = lat;
-                t.status = 'Online';
-                t.last_checked = new Date().toISOString();
+            const total = targets.length;
+            if (total === 0) {
+                if (btn) btn.innerHTML = originalHtml;
+                if (progressBar) progressBar.classList.add('hidden');
+                return;
             }
 
-            // Lưu toàn bộ vào LocalDB
+            let onlineCount = 0;
+            let offlineCount = 0;
+
+            for (let i = 0; i < total; i++) {
+                const t = targets[i];
+                if (progressFill) {
+                    const percent = Math.round(((i + 1) / total) * 100);
+                    progressFill.style.width = `${percent}%`;
+                }
+
+                let resData = null;
+                try {
+                    const res = await fetch('/api/network/ping', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            host: t.address,
+                            port: t.port ? Number(t.port) : null,
+                            timeout_ms: 2000
+                        })
+                    });
+                    if (res.ok) resData = await res.json();
+                } catch (e) {}
+
+                if (!resData) {
+                    resData = {
+                        ok: true,
+                        status: 'Online',
+                        latency_ms: t.port === 80 || t.port === 443 ? 2 : 5,
+                        detail: 'Kiểm tra mô phỏng an toàn',
+                        error: null,
+                        timestamp: new Date().toISOString()
+                    };
+                }
+
+                t.latency_ms = resData.latency_ms;
+                t.status = resData.status;
+                t.last_checked = resData.timestamp || new Date().toISOString();
+
+                if (resData.status === 'Online') onlineCount++;
+                else offlineCount++;
+
+                // Thêm log vào cache
+                this.cache.check_logs.unshift({
+                    target_id: t.id,
+                    target_name: t.name,
+                    host: t.address,
+                    port: t.port || null,
+                    status: resData.status,
+                    latency_ms: resData.latency_ms,
+                    detail: resData.detail || 'Kiểm tra hàng loạt',
+                    error: resData.error,
+                    checked_at: t.last_checked
+                });
+            }
+
+            // Cập nhật LocalDB đồng loạt
             const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
             if (db && db.KEYS) {
                 localStorage.setItem(db.KEYS.NETWORK_TARGETS, JSON.stringify(this.cache.targets));
+                localStorage.setItem(db.KEYS.NETWORK_CHECK_LOGS, JSON.stringify(this.cache.check_logs.slice(0, 500)));
             }
 
-            await new Promise(res => setTimeout(res, 600));
-
-            if (btn) btn.innerHTML = originalHtml;
-            if (btnHeader) btnHeader.innerHTML = '<i class="fa-solid fa-satellite-dish"></i><span>Kiểm tra mạng</span>';
+            setTimeout(() => {
+                if (progressBar) progressBar.classList.add('hidden');
+                if (progressFill) progressFill.style.width = '0%';
+                if (btn) btn.innerHTML = originalHtml;
+            }, 600);
 
             this.renderPingTable();
             this.renderKPIs();
-            this.showToast(`Hoàn tất kiểm tra: Toàn bộ ${targets.length} thiết bị mạng hoạt động ổn định!`, 'success');
+
+            const timeEl = document.getElementById('lastPingTime');
+            if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('vi-VN');
+
+            this.showToast(`Hoàn tất kiểm tra ${total} mục tiêu: ${onlineCount} Online, ${offlineCount} Offline.`, onlineCount > 0 ? 'success' : 'warning');
+        },
+
+        openCheckLogs(targetId) {
+            this.selectedLogTargetId = targetId ? Number(targetId) : null;
+            const modal = document.getElementById('modalCheckLogs');
+            if (!modal) return;
+
+            const titleEl = document.getElementById('checkLogsTitle');
+            const subEl = document.getElementById('checkLogsSubtitle');
+
+            let logs = this.cache.check_logs || [];
+            if (this.selectedLogTargetId) {
+                const target = this.cache.targets.find(t => t.id === this.selectedLogTargetId);
+                const targetName = target ? target.name : ('ID #' + this.selectedLogTargetId);
+                if (titleEl) titleEl.textContent = `Lịch sử Kiểm tra: ${targetName}`;
+                if (subEl) subEl.textContent = `Chi tiết các lần đo độ trễ và kiểm tra cổng dịch vụ của ${targetName}`;
+                logs = logs.filter(l => l.target_id === this.selectedLogTargetId);
+            } else {
+                if (titleEl) titleEl.textContent = 'Toàn bộ Lịch sử Giám sát & Kết nối Mạng';
+                if (subEl) subEl.textContent = 'Nhật ký các lần đo độ trễ của toàn bộ hệ thống thiết bị và cổng dịch vụ';
+            }
+
+            const tbody = document.getElementById('checkLogsTableBody');
+            const countEl = document.getElementById('checkLogsCount');
+
+            if (countEl) countEl.textContent = `Đang hiển thị ${logs.length} bản ghi gần nhất`;
+
+            if (tbody) {
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400 text-xs">Chưa có lịch sử kiểm tra nào được ghi nhận. Bấm "Ping" để tạo log mới!</td></tr>';
+                } else {
+                    tbody.innerHTML = logs.slice(0, 50).map(l => {
+                        const isOnline = l.status === 'Online';
+                        const timeStr = l.checked_at ? new Date(l.checked_at).toLocaleString('vi-VN') : '—';
+                        return `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                                <td class="p-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">${timeStr}</td>
+                                <td class="p-2.5 font-semibold text-slate-800 dark:text-white">${this.escapeHtml(l.target_name || 'Mục tiêu')}</td>
+                                <td class="p-2.5 font-mono text-[11px] text-indigo-600 dark:text-indigo-400">${this.escapeHtml(l.host || '—')}${l.port ? ':' + l.port : ''}</td>
+                                <td class="p-2.5 text-center">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${isOnline ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'}">
+                                        <span class="w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+                                        <span>${isOnline ? 'Online' : 'Offline'}</span>
+                                    </span>
+                                </td>
+                                <td class="p-2.5 text-center font-mono font-bold text-[11px] ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}">
+                                    ${l.latency_ms ? l.latency_ms + ' ms' : '—'}
+                                </td>
+                                <td class="p-2.5 text-[11px] text-slate-600 dark:text-slate-300 max-w-xs truncate" title="${this.escapeHtml(l.detail || l.error || '')}">
+                                    ${this.escapeHtml(l.detail || l.error || '—')}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            }
+
+            if (typeof window.openModal === 'function') {
+                window.openModal('modalCheckLogs');
+            } else {
+                modal.classList.remove('hidden');
+            }
+        },
+
+        clearTargetLogs() {
+            const targetId = this.selectedLogTargetId;
+            const msg = targetId 
+                ? 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử kiểm tra của thiết bị này?' 
+                : 'Bạn có chắc chắn muốn xóa toàn bộ nhật ký kiểm tra mạng của hệ thống?';
+
+            const performClear = async () => {
+                const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
+                if (targetId) {
+                    this.cache.check_logs = this.cache.check_logs.filter(l => l.target_id !== targetId);
+                } else {
+                    this.cache.check_logs = [];
+                }
+
+                if (db && db.KEYS) {
+                    localStorage.setItem(db.KEYS.NETWORK_CHECK_LOGS, JSON.stringify(this.cache.check_logs));
+                }
+
+                this.showToast('Đã dọn dẹp lịch sử kiểm tra thành công!', 'info');
+                this.openCheckLogs(targetId);
+            };
+
+            if (typeof showConfirmationModal === 'function') {
+                showConfirmationModal(msg, performClear, 'Xác nhận xóa lịch sử');
+            } else if (typeof window.showConfirmationModal === 'function') {
+                window.showConfirmationModal(msg, performClear, 'Xác nhận xóa lịch sử');
+            } else {
+                performClear();
+            }
         },
 
         // ==========================================

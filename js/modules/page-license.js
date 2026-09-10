@@ -123,29 +123,7 @@ window.QLTSPageLicense.init = async function () {
     document.body.addEventListener('click', async (e) => {
         const t = e.target;
 
-        // --- CÁC HÀNH ĐỘNG CHUNG ---
-        // Logout Button
-        if (t.closest('#logout-button')) {
-            e.preventDefault();
-            // [LOCAL-ONLY] handleLogout() chỉ tồn tại khi js/auth.js được tải (login.html);
-            // app đang chạy local-only nên bỏ qua thay vì báo lỗi ReferenceError.
-            if (typeof handleLogout === 'function') handleLogout();
-        }
-
-        // [MỚI] Mở modal Tìm kiếm toàn cục
-        if (t.closest('#globalSearchBtn')) {
-            openModal('globalSearchModal');
-            const input = document.getElementById('globalSearchInput');
-            if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
-            if (typeof renderGlobalSearchResults === 'function') renderGlobalSearchResults('');
-        }
-
-        // [KHÔI PHỤC] Xử lý click vào nút chuông thông báo
-        if (t.closest('#notification-button')) {
-            document.getElementById('notification-dropdown')?.classList.toggle('hidden');
-        } else if (!t.closest('#notification-dropdown')) {
-            document.getElementById('notification-dropdown')?.classList.add('hidden');
-        }
+        // --- CÁC HÀNH ĐỘNG CHUNG (Header đã được chuẩn hóa quản lý bởi QLTSHeader trong sidebar.js) ---
 
         // [KHÔI PHỤC] Đóng modal khi click ra vùng nền bên ngoài
         if (t.matches('.fixed.flex')) {
@@ -646,8 +624,6 @@ window.QLTSPageLicense.init = async function () {
             return;
         }
 
-        if (t.closest('#clear-read-notifications-btn')) { showConfirmationModal("Bạn có muốn xem lại tất cả thông báo đã đọc không?", () => { localStorage.removeItem('readNotifications'); checkAndDisplayNotifications(); }); return; }
-
         if (t.closest('#addAssetBtn')) { document.getElementById('assetForm').reset(); document.getElementById('modal_assetId').value = ''; document.getElementById('assetDisposedFields').classList.add('hidden'); document.getElementById('modalTitle').textContent = 'Thêm tài sản mới'; updateDropdowns(); initAllUserDropdowns(); openModal('assetModal'); return; }
         if (t.closest('#openMaintenanceModalBtn')) { document.getElementById('maintenanceForm')?.reset(); document.getElementById('maintenance_id').value = ''; document.getElementById('maintenanceModalTitle').textContent = 'Thêm lịch bảo trì'; updateDropdowns(); openModal('maintenanceModal'); return; }
         if (t.closest('#openStockCheckModalBtn')) { document.getElementById('stockCheckForm')?.reset(); document.getElementById('stockcheck_id').value = ''; document.getElementById('stockCheckModalTitle').textContent = 'Tạo đợt kiểm kê'; openModal('stockCheckModal'); return; }
@@ -762,20 +738,6 @@ window.QLTSPageLicense.init = async function () {
                 return;
             }
 
-            // [KHÔI PHỤC] Xử lý đánh dấu đã đọc thông báo
-            if (action === 'mark-notif-read') {
-                const notifId = actionBtn.dataset.notifId;
-                if (notifId) {
-                    let readNotifications = JSON.parse(localStorage.getItem('readNotifications') || '[]');
-                    if (!readNotifications.includes(notifId)) {
-                        readNotifications.push(notifId);
-                        localStorage.setItem('readNotifications', JSON.stringify(readNotifications));
-                        checkAndDisplayNotifications(); // Cập nhật lại UI thông báo
-                    }
-                }
-                e.stopPropagation(); // Ngăn không cho dropdown bị đóng lại
-                return;
-            }
 
             if (action === 'delete-asset') {
                 const assetToDelete = assets.find(a => String(a.id) === String(id));

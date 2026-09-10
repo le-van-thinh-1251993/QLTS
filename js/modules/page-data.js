@@ -271,6 +271,11 @@ window.QLTSPageData.init = async function () {
         const notificationCount = document.getElementById('notification-count');
         if (!notificationList || !notificationCount) return;
 
+        if (typeof window.QLTSHeader !== 'undefined' && typeof window.QLTSHeader.updateHeaderNotifications === 'function') {
+            window.QLTSHeader.updateHeaderNotifications();
+            return;
+        }
+
         const now = new Date();
         const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
         
@@ -379,18 +384,19 @@ window.QLTSPageData.init = async function () {
     function updateHeaderUserInfo() {
         if (!currentUserProfile) return;
 
-        const userNameElements = document.querySelectorAll('#header-user-name');
+        const userNameElements = document.querySelectorAll('#header-user-name, #header-dropdown-name');
         const userEmailElements = document.querySelectorAll('#header-user-email');
-        // Tìm tất cả avatar trong header
-        const userAvatarElements = document.querySelectorAll('header .group img');
+        const userRoleElements = document.querySelectorAll('#header-user-role');
+        const userAvatarElements = document.querySelectorAll('header .group img, #userProfileBtn img');
 
-        userNameElements.forEach(el => el.textContent = currentUserProfile.full_name || 'Chưa có tên');
-        userEmailElements.forEach(el => el.textContent = currentUserProfile.email);
+        userNameElements.forEach(el => el.textContent = currentUserProfile.full_name || 'Quản trị viên');
+        userEmailElements.forEach(el => el.textContent = currentUserProfile.email || 'admin@newdaymedia.com');
+        userRoleElements.forEach(el => el.textContent = currentUserProfile.role === 'admin' ? 'Admin IT' : (currentUserProfile.role || 'Nhân viên'));
         
         userAvatarElements.forEach(el => {
             el.src = currentUserProfile.avatar_url 
                      ? currentUserProfile.avatar_url 
-                     : `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUserProfile.full_name || currentUserProfile.email)}&background=random`;
+                     : `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUserProfile.full_name || currentUserProfile.email || 'Admin')}&background=4f46e5&color=fff`;
         });
     }
     // =================================================================
