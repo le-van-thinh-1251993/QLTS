@@ -83,8 +83,8 @@
                     </button>
 
                     <div class="relative w-full max-w-md hidden sm:block">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                        <input id="searchInput" type="text" placeholder="Tìm kiếm nhanh trong trang (nhấn / để tìm)..." class="w-full h-9 pl-9 pr-8 text-xs bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-700 transition-all">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+                        <input id="searchInput" type="text" placeholder="Tìm kiếm nhanh trong trang (nhấn / để tìm)..." style="padding-left: 2.5rem !important;" class="w-full h-9 pl-9 pr-8 text-xs bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-700 transition-all">
                         <kbd class="hidden lg:inline-block absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-slate-200/80 dark:bg-slate-600 rounded border border-slate-300 dark:border-slate-500">/</kbd>
                     </div>
                 </div>
@@ -252,74 +252,67 @@
                         </div>
                     </div>
 
-                    <!-- CONTAINER TAB & BẢNG DỮ LIỆU -->
+                    <!-- TABS ĐIỀU HƯỚNG NỘI BỘ -->
+                    <div class="flex border-b border-slate-200 dark:border-slate-700 mb-6 gap-6">
+                        <button id="tabBtnCurrentStock" class="pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                            <span>Tồn kho hiện tại</span>
+                            <span id="badgeStockCount" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">0</span>
+                        </button>
+                        <button id="tabBtnStockHistory" class="pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 transition-colors">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <span>Sổ kho & Lịch sử xuất/nhập</span>
+                            <span id="badgeTransCount" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">0</span>
+                        </button>
+                    </div>
+
+                    <!-- BỘ LỌC & TÌM KIẾM (TOOLBAR KÉO DÀI HẾT KHOẢNG TRỐNG) -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                        <!-- Cột tìm kiếm kéo dài ra toàn bộ khoảng trống -->
+                        <div class="flex-1 relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+                            <input id="filterSupplySearch" type="text" placeholder="Tìm theo tên vật tư, mã SKU, vị trí kho, nhà cung cấp, ghi chú..." style="padding-left: 2.75rem !important;" class="w-full h-10 pl-11 pr-4 border border-slate-200 dark:border-slate-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50 dark:bg-slate-700 dark:text-gray-200 placeholder-slate-400 transition-all">
+                        </div>
+
+                        <!-- Các bộ lọc căn phải đồng bộ -->
+                        <div class="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+                            <div id="currentStockFilterControls" class="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                                <select id="filterSupplyCategory" class="h-10 border border-slate-200 dark:border-slate-600 rounded-lg px-3 text-sm bg-white dark:bg-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer">
+                                    <option value="">-- Tất cả phân loại --</option>
+                                    <option value="Linh kiện phần cứng">Linh kiện phần cứng</option>
+                                    <option value="Thiết bị ngoại vi">Thiết bị ngoại vi</option>
+                                    <option value="Dây cáp & Chuyển đổi">Dây cáp & Chuyển đổi</option>
+                                    <option value="Mạng & Viễn thông">Mạng & Viễn thông</option>
+                                    <option value="Vật tư in ấn">Vật tư in ấn</option>
+                                    <option value="Vật tư văn phòng">Vật tư văn phòng</option>
+                                </select>
+
+                                <select id="filterSupplyStatus" class="h-10 border border-slate-200 dark:border-slate-600 rounded-lg px-3 text-sm bg-white dark:bg-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer">
+                                    <option value="">-- Tất cả trạng thái --</option>
+                                    <option value="low">⚠️ Sắp hết hàng</option>
+                                    <option value="available">Còn hàng</option>
+                                    <option value="out">Hết hàng (0)</option>
+                                </select>
+                            </div>
+
+                            <div id="historyFilterControls" class="hidden flex items-center gap-2.5">
+                                <select id="filterTransType" class="h-10 border border-slate-200 dark:border-slate-600 rounded-lg px-3 text-sm bg-white dark:bg-slate-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer">
+                                    <option value="">-- Tất cả loại phiếu --</option>
+                                    <option value="IN">Phiếu nhập kho</option>
+                                    <option value="OUT">Phiếu xuất cấp phát</option>
+                                    <option value="ADJUST">Phiếu điều chỉnh kiểm kê</option>
+                                </select>
+                            </div>
+
+                            <button id="btnResetInventoryFilter" type="button" class="h-10 px-3.5 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg flex items-center gap-1.5 transition-colors shrink-0" title="Đặt lại bộ lọc">
+                                <i class="fa-solid fa-rotate-left text-xs"></i>
+                                <span>Đặt lại</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- BẢNG DỮ LIỆU -->
                     <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                        <!-- Tab Navigation Bar -->
-                        <div class="border-b border-slate-200 dark:border-slate-700 px-6 pt-4 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
-                            <div class="flex items-center gap-6">
-                                <button id="tabBtnCurrentStock" class="pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors">
-                                    <i class="fa-solid fa-boxes-stacked"></i>
-                                    <span>Tồn kho hiện tại</span>
-                                    <span id="badgeStockCount" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">0</span>
-                                </button>
-                                <button id="tabBtnStockHistory" class="pb-3 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 transition-colors">
-                                    <i class="fa-solid fa-clock-rotate-left"></i>
-                                    <span>Sổ kho & Lịch sử xuất/nhập</span>
-                                    <span id="badgeTransCount" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">0</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Dedicated Filter & Search Bar (Kéo dài toàn bộ khoảng trống) -->
-                        <div class="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-                            <!-- Cột tìm kiếm kéo dài ra, chiếm toàn bộ khoảng trống (flex-1) -->
-                            <div class="relative flex-1 min-w-[240px]">
-                                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                                <input id="filterSupplySearch" type="text" placeholder="Tìm nhanh theo tên vật tư, mã SKU, vị trí kho, nhà cung cấp, ghi chú..." class="w-full h-10 pl-10 pr-4 text-xs md:text-sm bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-700 transition-all">
-                            </div>
-
-                            <!-- Nhóm bộ lọc bên phải -->
-                            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-                                <div id="currentStockFilterControls" class="flex flex-wrap items-center gap-2.5">
-                                    <select id="filterSupplyCategory" class="h-10 px-3 text-xs bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 font-medium cursor-pointer">
-                                        <option value="">-- Tất cả phân loại --</option>
-                                        <option value="Linh kiện phần cứng">Linh kiện phần cứng</option>
-                                        <option value="Thiết bị ngoại vi">Thiết bị ngoại vi</option>
-                                        <option value="Dây cáp & Chuyển đổi">Dây cáp & Chuyển đổi</option>
-                                        <option value="Mạng & Viễn thông">Mạng & Viễn thông</option>
-                                        <option value="Vật tư in ấn">Vật tư in ấn</option>
-                                        <option value="Vật tư văn phòng">Vật tư văn phòng</option>
-                                    </select>
-
-                                    <select id="filterSupplyStatus" class="h-10 px-3 text-xs bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 font-medium cursor-pointer">
-                                        <option value="">-- Tất cả trạng thái --</option>
-                                        <option value="low">⚠️ Sắp hết hàng</option>
-                                        <option value="available">Còn hàng</option>
-                                        <option value="out">Hết hàng (0)</option>
-                                    </select>
-
-                                    <div class="hidden lg:flex items-center h-10 bg-slate-100 dark:bg-slate-700/60 p-1 rounded-lg text-xs" id="quickFilterStockPills">
-                                        <button type="button" data-stock-filter="" class="quick-stock-btn px-3 py-1.5 rounded-md font-semibold text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800 shadow-xs transition-all">Tất cả</button>
-                                        <button type="button" data-stock-filter="available" class="quick-stock-btn px-3 py-1.5 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-purple-600 transition-all">Còn hàng</button>
-                                        <button type="button" data-stock-filter="low" class="quick-stock-btn px-3 py-1.5 rounded-md font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation text-[11px]"></i>Sắp hết</button>
-                                    </div>
-                                </div>
-
-                                <div id="historyFilterControls" class="hidden">
-                                    <select id="filterTransType" class="h-10 px-3 text-xs bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 font-medium cursor-pointer">
-                                        <option value="">-- Tất cả loại phiếu --</option>
-                                        <option value="IN">Phiếu nhập kho</option>
-                                        <option value="OUT">Phiếu xuất cấp phát</option>
-                                        <option value="ADJUST">Phiếu điều chỉnh kiểm kê</option>
-                                    </select>
-                                </div>
-
-                                <button id="btnResetInventoryFilter" type="button" class="h-10 px-3 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/60 dark:hover:bg-slate-700 rounded-lg flex items-center gap-1.5 transition-colors" title="Đặt lại bộ lọc">
-                                    <i class="fa-solid fa-rotate-left text-xs"></i>
-                                    <span class="hidden sm:inline">Đặt lại</span>
-                                </button>
-                            </div>
-                        </div>
 
                         <!-- View 1: Tồn kho hiện tại -->
                         <div id="viewCurrentStock" class="overflow-x-auto">

@@ -40,6 +40,13 @@ select {
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* Đảm bảo ô input có icon bên trái không bị quy tắc padding tổng quát đè mất khoảng cách */
+input[class*="pl-8"], input.pl-8 { padding-left: 2rem !important; }
+input[class*="pl-9"], input.pl-9 { padding-left: 2.25rem !important; }
+input[class*="pl-10"], input.pl-10 { padding-left: 2.5rem !important; }
+input[class*="pl-11"], input.pl-11 { padding-left: 2.75rem !important; }
+input[class*="pl-12"], input.pl-12 { padding-left: 3rem !important; }
+
 /* Định dạng chuẩn không bị co giãn cho checkbox và radio */
 input[type="checkbox"],
 input[type="radio"] {

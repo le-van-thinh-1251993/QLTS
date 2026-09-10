@@ -962,8 +962,14 @@ window.QLTSPageData.init = async function () {
         if (isHistoryTab) {
             if (viewStock) viewStock.classList.add('hidden');
             if (viewHistory) viewHistory.classList.remove('hidden');
-            if (historyFilterControls) historyFilterControls.classList.remove('hidden');
-            if (currentStockFilterControls) currentStockFilterControls.classList.add('hidden');
+            if (historyFilterControls) {
+                historyFilterControls.classList.remove('hidden');
+                historyFilterControls.classList.add('flex');
+            }
+            if (currentStockFilterControls) {
+                currentStockFilterControls.classList.add('hidden');
+                currentStockFilterControls.classList.remove('flex');
+            }
             if (tabBtnHistory) {
                 tabBtnHistory.className = "pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors";
             }
@@ -973,8 +979,14 @@ window.QLTSPageData.init = async function () {
         } else {
             if (viewStock) viewStock.classList.remove('hidden');
             if (viewHistory) viewHistory.classList.add('hidden');
-            if (historyFilterControls) historyFilterControls.classList.add('hidden');
-            if (currentStockFilterControls) currentStockFilterControls.classList.remove('hidden');
+            if (historyFilterControls) {
+                historyFilterControls.classList.add('hidden');
+                historyFilterControls.classList.remove('flex');
+            }
+            if (currentStockFilterControls) {
+                currentStockFilterControls.classList.remove('hidden');
+                currentStockFilterControls.classList.add('flex');
+            }
             if (tabBtnStock) {
                 tabBtnStock.className = "pb-3 text-sm font-bold text-purple-600 border-b-2 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-2 transition-colors";
             }
