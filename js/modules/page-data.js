@@ -1022,6 +1022,7 @@ window.QLTSPageData.init = async function () {
             }
 
             const sorted = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            window.currentFilteredSupplies = sorted;
             const pageSize = 10;
             const totalPages = Math.ceil(sorted.length / pageSize) || 1;
             if (window.inventoryCurrentPage > totalPages) window.inventoryCurrentPage = totalPages;
@@ -1030,7 +1031,7 @@ window.QLTSPageData.init = async function () {
             const pageItems = sorted.slice(start, start + pageSize);
 
             if (pageItems.length === 0) {
-                currentStockBody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-500 dark:text-slate-400">Không có mặt hàng vật tư nào phù hợp</td></tr>';
+                currentStockBody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-500 dark:text-slate-400">Không có mặt hàng vật tư nào phù hợp</td></tr>';
                 if (window.renderPagination) window.renderPagination('inventoryPagination', 1, 0, pageSize, 'inventory-stock');
             } else {
                 currentStockBody.innerHTML = pageItems.map(s => {
@@ -1050,9 +1051,13 @@ window.QLTSPageData.init = async function () {
                     }
 
                     const priceStr = s.unit_price ? Number(s.unit_price).toLocaleString('vi-VN') + ' đ' : '-';
+                    const isChecked = window.selectedSupplyIds && window.selectedSupplyIds.has(Number(s.id));
 
                     return `
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <td class="p-4 text-center">
+                            <input type="checkbox" class="supply-select-checkbox cursor-pointer" data-id="${s.id}" ${isChecked ? 'checked' : ''}>
+                        </td>
                         <td class="p-4">
                             <div class="font-semibold text-slate-800 dark:text-slate-100">${s.name || '-'}</div>
                             <div class="flex items-center gap-2 mt-1">
@@ -1102,6 +1107,12 @@ window.QLTSPageData.init = async function () {
                                         <i class="fa-solid fa-pen text-xs"></i>
                                     </button>
                                     <span class="tooltiptext">Chỉnh sửa</span>
+                                </div>
+                                <div class="tooltip">
+                                    <button data-action="print-supply-label" data-id="${s.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 transition-all">
+                                        <i class="fa-solid fa-qrcode text-xs"></i>
+                                    </button>
+                                    <span class="tooltiptext">In tem QR</span>
                                 </div>
                                 <div class="tooltip">
                                     <button data-action="open-adjust-supply" data-id="${s.id}" class="w-8 h-8 flex items-center justify-center rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 transition-all">

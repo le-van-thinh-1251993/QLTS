@@ -299,7 +299,7 @@ window.QLTSPageSettings.init = async function () {
         const data = LocalDB.downloadBackup();
         const statusEl = document.getElementById('backupStatus');
         if (statusEl) {
-            const counts = `${data.ASSETS?.length || 0} tài sản, ${data.LICENSES?.length || 0} license, ${data.USERS?.length || 0} người dùng`;
+            const counts = `${data.ASSETS?.length || 0} tài sản, ${data.LICENSES?.length || 0} license, ${data.USERS?.length || 0} người dùng, ${data.SUPPLIES?.length || 0} vật tư kho`;
             statusEl.textContent = `✓ Đã xuất lúc ${new Date().toLocaleString('vi-VN')} — ${counts}`;
             statusEl.classList.remove('hidden');
         }
@@ -311,7 +311,7 @@ window.QLTSPageSettings.init = async function () {
         const statusEl = document.getElementById('backupStatus');
         try {
             const data = await LocalDB.restoreFromFile(file);
-            const counts = `${data.ASSETS?.length || 0} tài sản, ${data.LICENSES?.length || 0} license, ${data.USERS?.length || 0} người dùng`;
+            const counts = `${data.ASSETS?.length || 0} tài sản, ${data.LICENSES?.length || 0} license, ${data.USERS?.length || 0} người dùng, ${data.SUPPLIES?.length || 0} vật tư kho`;
             if (statusEl) {
                 statusEl.textContent = `✓ Đã khôi phục từ backup ${data._exportedAt || ''} — ${counts}`;
                 statusEl.classList.remove('hidden');

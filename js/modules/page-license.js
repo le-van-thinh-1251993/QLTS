@@ -998,6 +998,7 @@ window.QLTSPageLicense.init = async function () {
             }
             else if (action === 'print-asset-label') openPrintLabelModal('asset', [id]);
             else if (action === 'print-license-label') openPrintLabelModal('license', [id]);
+            else if (action === 'print-supply-label') openPrintLabelModal('supply', [Number(id)]);
             else if (action === 'toggle-stockcheck-item') {
                 const itemId = parseInt(actionBtn.dataset.itemId, 10);
                 const item = stockCheckItems.find(i => i.id === itemId);
@@ -1179,7 +1180,7 @@ window.QLTSPageLicense.init = async function () {
     });
 
     // =================================================================
-    // IN TEM BARCODE/QR (Assets & Licenses)
+    // IN TEM BARCODE/QR (Assets, Licenses & Supplies)
     // =================================================================
     document.body.addEventListener('change', (e) => {
         const t = e.target;
@@ -1189,6 +1190,10 @@ window.QLTSPageLicense.init = async function () {
         } else if (t.matches('.license-select-checkbox')) {
             const id = parseInt(t.dataset.id, 10);
             if (t.checked) selectedLicenseIds.add(id); else selectedLicenseIds.delete(id);
+        } else if (t.matches('.supply-select-checkbox')) {
+            const id = parseInt(t.dataset.id, 10);
+            if (!window.selectedSupplyIds) window.selectedSupplyIds = new Set();
+            if (t.checked) window.selectedSupplyIds.add(id); else window.selectedSupplyIds.delete(id);
         } else if (t.id === 'selectAllAssets') {
             document.querySelectorAll('.asset-select-checkbox').forEach(cb => {
                 cb.checked = t.checked;
@@ -1200,6 +1205,13 @@ window.QLTSPageLicense.init = async function () {
                 cb.checked = t.checked;
                 const id = parseInt(cb.dataset.id, 10);
                 if (t.checked) selectedLicenseIds.add(id); else selectedLicenseIds.delete(id);
+            });
+        } else if (t.id === 'selectAllSupplies') {
+            if (!window.selectedSupplyIds) window.selectedSupplyIds = new Set();
+            document.querySelectorAll('.supply-select-checkbox').forEach(cb => {
+                cb.checked = t.checked;
+                const id = parseInt(cb.dataset.id, 10);
+                if (t.checked) window.selectedSupplyIds.add(id); else window.selectedSupplyIds.delete(id);
             });
         } else if (t.name === 'labelType' && document.getElementById('printLabelModal') && !document.getElementById('printLabelModal').classList.contains('hidden')) {
             renderPrintLabelPreview();
@@ -1218,6 +1230,13 @@ window.QLTSPageLicense.init = async function () {
         openPrintLabelModal('license', ids);
     });
 
+    document.getElementById('btnPrintSupplyLabels')?.addEventListener('click', () => {
+        const sel = window.selectedSupplyIds || new Set();
+        const ids = sel.size ? Array.from(sel) : (window.currentFilteredSupplies && window.currentFilteredSupplies.length ? window.currentFilteredSupplies.map(s => s.id) : (window.supplies || []).map(s => s.id));
+        if (!ids.length) return showInfoModal('Không có mặt hàng vật tư nào để in tem.');
+        openPrintLabelModal('supply', ids);
+    });
+
     let printLabelState = { kind: 'asset', ids: [] };
 
     function openPrintLabelModal(kind, ids) {
@@ -1227,6 +1246,7 @@ window.QLTSPageLicense.init = async function () {
         openModal('printLabelModal');
         renderPrintLabelPreview();
     }
+    window.openPrintLabelModal = openPrintLabelModal;
 
     function renderPrintLabelPreview() {
         const container = document.getElementById('printLabelPreview');
@@ -1236,13 +1256,15 @@ window.QLTSPageLicense.init = async function () {
 
         const items = kind === 'asset'
             ? ids.map(id => assets.find(a => a.id === id)).filter(Boolean)
-            : ids.map(id => licenses.find(l => l.id === id)).filter(Boolean);
+            : (kind === 'supply'
+                ? ids.map(id => (window.supplies || []).find(s => s.id === id || String(s.id) === String(id))).filter(Boolean)
+                : ids.map(id => licenses.find(l => l.id === id)).filter(Boolean));
 
         if (!items.length) { container.innerHTML = '<p class="text-center text-slate-400 p-8">Không có dữ liệu để in.</p>'; return; }
 
         container.innerHTML = items.map(item => {
-            const code = kind === 'asset' ? (item.asset_code || '') : (item.license_code || '');
-            const title = kind === 'asset' ? item.name : item.key_type;
+            const code = kind === 'asset' ? (item.asset_code || '') : (kind === 'supply' ? (item.code || ('VT-' + item.id)) : (item.license_code || ''));
+            const title = kind === 'asset' ? item.name : (kind === 'supply' ? item.name : item.key_type);
             const elId = `label-${kind}-${item.id}`;
             return `
                 <div class="label-card">
@@ -1256,7 +1278,7 @@ window.QLTSPageLicense.init = async function () {
         }).join('');
 
         items.forEach(item => {
-            const code = kind === 'asset' ? (item.asset_code || '') : (item.license_code || '');
+            const code = kind === 'asset' ? (item.asset_code || '') : (kind === 'supply' ? (item.code || ('VT-' + item.id)) : (item.license_code || ''));
             const elId = `label-${kind}-${item.id}`;
             const el = document.getElementById(elId);
             if (!el) return;
@@ -1265,9 +1287,14 @@ window.QLTSPageLicense.init = async function () {
                     if (typeof JsBarcode === 'function') JsBarcode(el, code || '-', { format: 'CODE128', width: 2, height: 50, fontSize: 14, margin: 4 });
                 } catch (e) { console.warn('JsBarcode render failed', e); }
             } else {
-                const info = kind === 'asset'
-                    ? `Mã tài sản: ${code}\nTên: ${item.name || ''}\nLoại: ${item.category || ''}\nVị trí: ${item.location || ''}\nNgười dùng: ${item.user || 'Chưa cấp phát'}\nTrạng thái: ${(STATUS_MAP[item.status] || {}).text || item.status || ''}`
-                    : `Mã license: ${code}\nLoại key: ${item.key_type || ''}\nGói: ${item.package_type || ''}\nHạn SD: ${item.expiration_date || 'Vĩnh viễn'}\nNgười dùng: ${item.user || 'Chưa cấp phát'}\nTrạng thái: ${(STATUS_MAP[item.status] || {}).text || item.status || ''}`;
+                let info = '';
+                if (kind === 'asset') {
+                    info = `Mã tài sản: ${code}\nTên: ${item.name || ''}\nLoại: ${item.category || ''}\nVị trí: ${item.location || ''}\nNgười dùng: ${item.user || 'Chưa cấp phát'}\nTrạng thái: ${(STATUS_MAP[item.status] || {}).text || item.status || ''}`;
+                } else if (kind === 'supply') {
+                    info = `Vật tư: ${item.name || ''}\nMã SKU: ${code}\nPhân loại: ${item.category || 'Vật tư'}\nĐơn vị: ${item.unit || 'Cái'}\nTồn kho: ${item.quantity ?? 0}\nVị trí: ${item.location || 'Kho chung'}\nNCC: ${item.supplier_name || item.supplier || '-'}`;
+                } else {
+                    info = `Mã license: ${code}\nLoại key: ${item.key_type || ''}\nGói: ${item.package_type || ''}\nHạn SD: ${item.expiration_date || 'Vĩnh viễn'}\nNgười dùng: ${item.user || 'Chưa cấp phát'}\nTrạng thái: ${(STATUS_MAP[item.status] || {}).text || item.status || ''}`;
+                }
                 try {
                     if (typeof window.qrcode === 'function') {
                         // Mặc định thư viện dùng bảng mã 'default' (cắt mỗi ký tự về 1 byte thấp),

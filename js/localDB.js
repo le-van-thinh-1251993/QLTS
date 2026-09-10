@@ -27,6 +27,7 @@ const LocalDB = {
         NETWORK_CHECK_LOGS: 'qlts_network_check_logs',
         ALERT_SETTINGS: 'qlts_alert_settings',
         WORKBOOK_DATA: 'qlts_workbook_data',
+        SEATING_DATA: 'seating_data_v2',
         COUNTER: 'qlts_id_counter'
     },
 
@@ -7463,6 +7464,8 @@ REAL_DATA: {
         Object.entries(this.KEYS).forEach(([name, key]) => {
             if (name === 'COUNTER') {
                 try { data.COUNTER = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { data.COUNTER = {}; }
+            } else if (name === 'SEATING_DATA') {
+                try { data.SEATING_DATA = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { data.SEATING_DATA = {}; }
             } else {
                 data[name] = safeRead(key);
             }
@@ -7497,6 +7500,8 @@ REAL_DATA: {
         Object.entries(this.KEYS).forEach(([name, key]) => {
             if (name === 'COUNTER' && data.COUNTER) {
                 localStorage.setItem(key, JSON.stringify(data.COUNTER));
+            } else if (name === 'SEATING_DATA' && data.SEATING_DATA) {
+                localStorage.setItem(key, JSON.stringify(data.SEATING_DATA));
             } else if (data[name]) {
                 localStorage.setItem(key, JSON.stringify(data[name]));
             }
