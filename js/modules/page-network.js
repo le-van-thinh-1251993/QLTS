@@ -187,7 +187,42 @@
             // Nút "Xuất Excel"
             const btnExportExcel = document.getElementById('btnExportNetworkExcel');
             if (btnExportExcel) {
-                btnExportExcel.addEventListener('click', () => this.exportCurrentTabExcel());
+                btnExportExcel.addEventListener('click', () => {
+                    if (this.activeTab === 'tab-nat' || this.activeTab === 'tab-ping') {
+                        this.exportCurrentTabExcel('mask_all');
+                    } else {
+                        this.showExportPasswordModal();
+                    }
+                });
+            }
+
+            const btnConfirmNetworkExport = document.getElementById('btnConfirmExportNetworkExcel');
+            if (btnConfirmNetworkExport) {
+                btnConfirmNetworkExport.addEventListener('click', () => {
+                    const checked = document.querySelector('input[name="exportPasswordMode"]:checked');
+                    const mode = checked ? checked.value : 'as_screen';
+                    document.getElementById('exportNetworkPasswordModal')?.classList.add('hidden');
+                    this.exportCurrentTabExcel(mode);
+                });
+            }
+
+            // Đồng bộ giao diện card khi chọn radio mật khẩu
+            const modalPasswords = document.getElementById('exportNetworkPasswordModal');
+            if (modalPasswords) {
+                modalPasswords.addEventListener('change', (e) => {
+                    if (e.target && e.target.name === 'exportPasswordMode') {
+                        modalPasswords.querySelectorAll('.export-password-card').forEach(card => {
+                            const r = card.querySelector('input[type="radio"]');
+                            if (r && r.checked) {
+                                card.classList.remove('border', 'border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800/60');
+                                card.classList.add('border-2', 'border-indigo-600', 'bg-indigo-50/60', 'dark:bg-indigo-950/30', 'dark:border-indigo-500');
+                            } else {
+                                card.classList.remove('border-2', 'border-indigo-600', 'bg-indigo-50/60', 'dark:bg-indigo-950/30', 'dark:border-indigo-500');
+                                card.classList.add('border', 'border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800/60');
+                            }
+                        });
+                    }
+                });
             }
 
             // Nút "Thêm đường truyền WAN"
@@ -1123,6 +1158,15 @@
             this.renderActiveTab();
         },
 
+        showExportPasswordModal() {
+            const modal = document.getElementById('exportNetworkPasswordModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            } else {
+                this.exportCurrentTabExcel('as_screen');
+            }
+        },
+
         copyToClipboard(text, label) {
             if (!text) return;
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1443,7 +1487,7 @@
         // ==========================================
         // Excel Export
         // ==========================================
-        exportCurrentTabExcel() {
+        exportCurrentTabExcel(mode = 'as_screen') {
             if (typeof XLSX === 'undefined') {
                 this.showToast('Thư viện Excel chưa được nạp. Vui lòng thử lại.', 'error');
                 return;
@@ -1454,19 +1498,31 @@
 
             switch (this.activeTab) {
                 case 'tab-wifi': {
-                    const data = this.getFilteredWifis().map((w, idx) => ({
-                        'STT': idx + 1,
-                        'Tên Wi-Fi (SSID)': w.ssid,
-                        'Mật khẩu': w.password,
-                        'Băng tần': w.band,
-                        'Chuẩn bảo mật': w.security,
-                        'Phân loại': w.network_type,
-                        'VLAN': w.vlan,
-                        'Thiết bị phát AP': w.device_name,
-                        'Vị trí': w.location,
-                        'Trạng thái': w.status,
-                        'Ghi chú': w.notes
-                    }));
+                    const data = this.getFilteredWifis().map((w, idx) => {
+                        let password = '•••••••• (Đã bảo mật)';
+                        const key = `wifi_${w.id}`;
+                        if (mode === 'reveal_all') {
+                            password = w.password || '';
+                        } else if (mode === 'as_screen') {
+                            password = this.revealedSecrets.has(key) ? (w.password || '') : '•••••••• (Đã bảo mật)';
+                        } else {
+                            password = '•••••••• (Đã bảo mật)';
+                        }
+
+                        return {
+                            'STT': idx + 1,
+                            'Tên Wi-Fi (SSID)': w.ssid,
+                            'Mật khẩu': password,
+                            'Băng tần': w.band,
+                            'Chuẩn bảo mật': w.security,
+                            'Phân loại': w.network_type,
+                            'VLAN': w.vlan,
+                            'Thiết bị phát AP': w.device_name,
+                            'Vị trí': w.location,
+                            'Trạng thái': w.status,
+                            'Ghi chú': w.notes
+                        };
+                    });
                     const ws = XLSX.utils.json_to_sheet(data);
                     XLSX.utils.book_append_sheet(wb, ws, 'Danh_sach_WiFi');
                     XLSX.writeFile(wb, `Danh_sach_mang_WiFi_${today}.xlsx`);
@@ -1491,18 +1547,30 @@
                     break;
                 }
                 case 'tab-remote': {
-                    const data = this.getFilteredRemotes().map((r, idx) => ({
-                        'STT': idx + 1,
-                        'Tên kết nối': r.name,
-                        'Loại kết nối': r.connection_type,
-                        'Địa chỉ / Host': r.address,
-                        'Tài khoản': r.username,
-                        'Mật khẩu / Key': r.secret_masked,
-                        'Thiết bị liên kết': r.related_device,
-                        'Người quản lý': r.owner,
-                        'Trạng thái': r.status,
-                        'Ghi chú': r.notes
-                    }));
+                    const data = this.getFilteredRemotes().map((r, idx) => {
+                        let secret = '•••••••• (Đã bảo mật)';
+                        const key = `remote_${r.id}`;
+                        if (mode === 'reveal_all') {
+                            secret = r.secret_masked || r.password || '';
+                        } else if (mode === 'as_screen') {
+                            secret = this.revealedSecrets.has(key) ? (r.secret_masked || r.password || '') : '•••••••• (Đã bảo mật)';
+                        } else {
+                            secret = '•••••••• (Đã bảo mật)';
+                        }
+
+                        return {
+                            'STT': idx + 1,
+                            'Tên kết nối': r.name,
+                            'Loại kết nối': r.connection_type,
+                            'Địa chỉ / Host': r.address,
+                            'Tài khoản': r.username,
+                            'Mật khẩu / Key': secret,
+                            'Thiết bị liên kết': r.related_device,
+                            'Người quản lý': r.owner,
+                            'Trạng thái': r.status,
+                            'Ghi chú': r.notes
+                        };
+                    });
                     const ws = XLSX.utils.json_to_sheet(data);
                     XLSX.utils.book_append_sheet(wb, ws, 'VPN_Remote');
                     XLSX.writeFile(wb, `Danh_sach_VPN_Remote_${today}.xlsx`);
@@ -1526,12 +1594,38 @@
                     break;
                 }
                 default: {
-                    // Export toàn bộ cấu hình mạng
-                    const wsWifi = XLSX.utils.json_to_sheet(this.cache.wifis);
-                    const wsNat = XLSX.utils.json_to_sheet(this.cache.nats);
-                    const wsRemote = XLSX.utils.json_to_sheet(this.cache.remotes);
-                    const wsPing = XLSX.utils.json_to_sheet(this.cache.targets);
-                    const wsLine = XLSX.utils.json_to_sheet(this.cache.lines);
+                    // Export toàn bộ cấu hình mạng (theo chế độ bảo mật mật khẩu đã chọn)
+                    const sanitizedWifis = (this.cache.wifis || []).map(w => {
+                        let password = '•••••••• (Đã bảo mật)';
+                        const key = `wifi_${w.id}`;
+                        if (mode === 'reveal_all') {
+                            password = w.password || '';
+                        } else if (mode === 'as_screen') {
+                            password = this.revealedSecrets.has(key) ? (w.password || '') : '•••••••• (Đã bảo mật)';
+                        } else {
+                            password = '•••••••• (Đã bảo mật)';
+                        }
+                        return { ...w, password };
+                    });
+
+                    const sanitizedRemotes = (this.cache.remotes || []).map(r => {
+                        let secret = '•••••••• (Đã bảo mật)';
+                        const key = `remote_${r.id}`;
+                        if (mode === 'reveal_all') {
+                            secret = r.secret_masked || r.password || '';
+                        } else if (mode === 'as_screen') {
+                            secret = this.revealedSecrets.has(key) ? (r.secret_masked || r.password || '') : '•••••••• (Đã bảo mật)';
+                        } else {
+                            secret = '•••••••• (Đã bảo mật)';
+                        }
+                        return { ...r, password: secret, secret_masked: secret };
+                    });
+
+                    const wsWifi = XLSX.utils.json_to_sheet(sanitizedWifis);
+                    const wsNat = XLSX.utils.json_to_sheet(this.cache.nats || []);
+                    const wsRemote = XLSX.utils.json_to_sheet(sanitizedRemotes);
+                    const wsPing = XLSX.utils.json_to_sheet(this.cache.targets || []);
+                    const wsLine = XLSX.utils.json_to_sheet(this.cache.lines || []);
 
                     XLSX.utils.book_append_sheet(wb, wsWifi, 'WiFi');
                     XLSX.utils.book_append_sheet(wb, wsNat, 'NAT_Forward');

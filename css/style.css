@@ -27,7 +27,7 @@ button {
     font: inherit;
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([type="file"]),
 textarea,
 select {
     width: 100%;
@@ -40,7 +40,26 @@ select {
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-input:focus,
+/* Định dạng chuẩn không bị co giãn cho checkbox và radio */
+input[type="checkbox"],
+input[type="radio"] {
+    width: 1.125rem !important;
+    height: 1.125rem !important;
+    min-width: 1.125rem !important;
+    min-height: 1.125rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    cursor: pointer;
+    accent-color: #4f46e5;
+    border-radius: 0.25rem;
+}
+
+input[type="radio"] {
+    border-radius: 9999px !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([type="file"]):focus,
 textarea:focus,
 select:focus {
     outline: 2px solid rgba(59, 130, 246, 0.25);
@@ -57,7 +76,7 @@ button {
     transition: all 0.2s ease;
 }
 
-.dark input,
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([type="file"]),
 .dark textarea,
 .dark select {
     background-color: #1e293b;

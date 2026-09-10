@@ -17,7 +17,31 @@
             departments: [],
             transactions: [],
             maintenanceTasks: [],
-            stockChecks: []
+            stockChecks: [],
+            networkTargets: [],
+            networkWifis: [],
+            networkNats: [],
+            networkRemotes: [],
+            networkCheckLogs: []
+        },
+        revealedSecrets: new Set(),
+
+        toggleSecretVisibility(key) {
+            if (this.revealedSecrets.has(key)) {
+                this.revealedSecrets.delete(key);
+            } else {
+                this.revealedSecrets.add(key);
+            }
+            this.renderNetworkTab();
+        },
+
+        showExportPasswordModal() {
+            const modal = document.getElementById('exportNetworkPasswordModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            } else {
+                this.exportNetworkExcel('as_screen');
+            }
         },
 
         escapeHTML(str) {
@@ -44,6 +68,10 @@
             const dateSpan = document.getElementById('printDate');
             if (dateSpan) dateSpan.textContent = new Date().toLocaleDateString('vi-VN');
 
+            if (window.localDBReady && typeof window.localDBReady.then === 'function') {
+                try { await window.localDBReady; } catch (e) { console.warn('localDBReady wait failed', e); }
+            }
+
             await this.loadData();
             this.populateDepartmentFilter();
             this.renderAll();
@@ -65,7 +93,12 @@
                     deptsRes,
                     transRes,
                     tasksRes,
-                    checksRes
+                    checksRes,
+                    targetsRes,
+                    wifisRes,
+                    natsRes,
+                    remotesRes,
+                    logsRes
                 ] = await Promise.all([
                     db.from('assets').select('*'),
                     db.from('licenses').select('*'),
@@ -74,7 +107,12 @@
                     db.from('departments').select('*'),
                     db.from('supply_transactions').select('*'),
                     db.from('maintenance_tasks').select('*'),
-                    db.from('stock_checks').select('*')
+                    db.from('stock_checks').select('*'),
+                    db.from('network_targets').select('*'),
+                    db.from('network_wifis').select('*'),
+                    db.from('network_nats').select('*'),
+                    db.from('network_remotes').select('*'),
+                    db.from('network_check_logs').select('*')
                 ]);
 
                 this.cache.assets = assetsRes?.data || [];
@@ -85,6 +123,39 @@
                 this.cache.transactions = transRes?.data || [];
                 this.cache.maintenanceTasks = tasksRes?.data || [];
                 this.cache.stockChecks = checksRes?.data || [];
+
+                const safeGet = (key) => {
+                    try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { return []; }
+                };
+
+                this.cache.networkTargets = (targetsRes?.data && targetsRes.data.length) ? targetsRes.data : safeGet('qlts_network_targets');
+                this.cache.networkWifis = (wifisRes?.data && wifisRes.data.length) ? wifisRes.data : safeGet('qlts_network_wifis');
+                this.cache.networkNats = (natsRes?.data && natsRes.data.length) ? natsRes.data : safeGet('qlts_network_nats');
+                this.cache.networkRemotes = (remotesRes?.data && remotesRes.data.length) ? remotesRes.data : safeGet('qlts_network_remotes');
+                this.cache.networkCheckLogs = (logsRes?.data && logsRes.data.length) ? logsRes.data : safeGet('qlts_network_check_logs');
+
+                // Fallback to Real Network Data if storage was not seeded
+                const net = db.REAL_NETWORK_DATA || {};
+                if ((!this.cache.networkTargets || this.cache.networkTargets.length === 0) && net.network_targets) {
+                    this.cache.networkTargets = net.network_targets;
+                    try { localStorage.setItem('qlts_network_targets', JSON.stringify(net.network_targets)); } catch (e) {}
+                }
+                if ((!this.cache.networkWifis || this.cache.networkWifis.length === 0) && net.network_wifis) {
+                    this.cache.networkWifis = net.network_wifis;
+                    try { localStorage.setItem('qlts_network_wifis', JSON.stringify(net.network_wifis)); } catch (e) {}
+                }
+                if ((!this.cache.networkNats || this.cache.networkNats.length === 0) && net.network_nats) {
+                    this.cache.networkNats = net.network_nats;
+                    try { localStorage.setItem('qlts_network_nats', JSON.stringify(net.network_nats)); } catch (e) {}
+                }
+                if ((!this.cache.networkRemotes || this.cache.networkRemotes.length === 0) && net.network_remotes) {
+                    this.cache.networkRemotes = net.network_remotes;
+                    try { localStorage.setItem('qlts_network_remotes', JSON.stringify(net.network_remotes)); } catch (e) {}
+                }
+                if ((!this.cache.networkCheckLogs || this.cache.networkCheckLogs.length === 0) && net.network_check_logs) {
+                    this.cache.networkCheckLogs = net.network_check_logs;
+                    try { localStorage.setItem('qlts_network_check_logs', JSON.stringify(net.network_check_logs)); } catch (e) {}
+                }
             } catch (err) {
                 console.error('Error loading data in reports:', err);
             }
@@ -123,6 +194,22 @@
                     c.classList.add('hidden');
                 }
             });
+
+            if (tabId === 'tab-network') {
+                this.renderNetworkTab();
+            } else if (tabId === 'tab-assets') {
+                this.renderAssetsTab();
+            } else if (tabId === 'tab-licenses') {
+                this.renderLicensesTab();
+            } else if (tabId === 'tab-supplies') {
+                this.renderSuppliesTab();
+            } else if (tabId === 'tab-allocation') {
+                this.renderTransactionsTab();
+            } else if (tabId === 'tab-maintenance') {
+                this.renderMaintenanceTab();
+            } else if (tabId === 'tab-overview') {
+                this.renderOverviewTab();
+            }
         },
 
         setupFilters() {
@@ -179,7 +266,40 @@
             const exportBtn = document.getElementById('btnExportCurrentReport');
             if (exportBtn) {
                 exportBtn.addEventListener('click', () => {
-                    this.exportCurrentTabExcel();
+                    if (this.activeTab === 'tab-network') {
+                        this.showExportPasswordModal();
+                    } else {
+                        this.exportCurrentTabExcel();
+                    }
+                });
+            }
+
+            const btnConfirmNetworkExport = document.getElementById('btnConfirmExportNetworkExcel');
+            if (btnConfirmNetworkExport) {
+                btnConfirmNetworkExport.addEventListener('click', () => {
+                    const checked = document.querySelector('input[name="exportPasswordMode"]:checked');
+                    const mode = checked ? checked.value : 'as_screen';
+                    document.getElementById('exportNetworkPasswordModal')?.classList.add('hidden');
+                    this.exportNetworkExcel(mode);
+                });
+            }
+
+            // Đồng bộ giao diện card khi chọn radio mật khẩu
+            const modalPasswords = document.getElementById('exportNetworkPasswordModal');
+            if (modalPasswords) {
+                modalPasswords.addEventListener('change', (e) => {
+                    if (e.target && e.target.name === 'exportPasswordMode') {
+                        modalPasswords.querySelectorAll('.export-password-card').forEach(card => {
+                            const r = card.querySelector('input[type="radio"]');
+                            if (r && r.checked) {
+                                card.classList.remove('border', 'border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800/60');
+                                card.classList.add('border-2', 'border-indigo-600', 'bg-indigo-50/60', 'dark:bg-indigo-950/30', 'dark:border-indigo-500');
+                            } else {
+                                card.classList.remove('border-2', 'border-indigo-600', 'bg-indigo-50/60', 'dark:bg-indigo-950/30', 'dark:border-indigo-500');
+                                card.classList.add('border', 'border-slate-200', 'dark:border-slate-700', 'bg-white', 'dark:bg-slate-800/60');
+                            }
+                        });
+                    }
                 });
             }
         },
@@ -189,9 +309,10 @@
             if (!select) return;
 
             const currentVal = select.value;
-            select.innerHTML = '<option value="all">Tất cả phòng ban (' + this.cache.departments.length + ')</option>';
+            const depts = this.cache?.departments || [];
+            select.innerHTML = '<option value="all">Tất cả phòng ban (' + depts.length + ')</option>';
 
-            this.cache.departments.forEach(d => {
+            depts.forEach(d => {
                 const opt = document.createElement('option');
                 opt.value = String(d.id);
                 opt.textContent = d.name;
@@ -315,6 +436,7 @@
             this.renderSuppliesTab();
             this.renderTransactionsTab();
             this.renderMaintenanceTab();
+            this.renderNetworkTab();
         },
 
         renderKPIs() {
@@ -687,6 +809,380 @@
             }
         },
 
+        renderNetworkTab() {
+            const targets = this.cache.networkTargets || [];
+            const wifis = this.cache.networkWifis || [];
+            const nats = this.cache.networkNats || [];
+            const remotes = this.cache.networkRemotes || [];
+            const logs = this.cache.networkCheckLogs || [];
+
+            // Filters
+            const filters = this.getFilterValues();
+            const searchTerm = (filters.search || '').toLowerCase();
+
+            const filterItem = (item, fields) => {
+                if (!searchTerm) return true;
+                const text = fields.map(f => item[f] || '').join(' ').toLowerCase();
+                return text.includes(searchTerm);
+            };
+
+            const filteredTargets = targets.filter(t => filterItem(t, ['name', 'address', 'host', 'location', 'target_type']));
+            const filteredWifis = wifis.filter(w => filterItem(w, ['ssid', 'location', 'network_type', 'vlan', 'device_name']));
+            const filteredNats = nats.filter(n => filterItem(n, ['rule_name', 'wan_port', 'lan_ip', 'lan_port', 'purpose', 'target_device']));
+            const filteredRemotes = remotes.filter(r => filterItem(r, ['name', 'address', 'username', 'owner', 'connection_type']));
+
+            // 1. KPI Calculations
+            const totalTargets = targets.length;
+            const onlineCount = targets.filter(t => t.status === 'Online').length;
+            const onlinePct = totalTargets > 0 ? Math.round((onlineCount / totalTargets) * 100) : 0;
+
+            const latencies = targets
+                .map(t => Number(t.latency_ms))
+                .filter(l => !isNaN(l) && l > 0);
+            const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+
+            const totalWifi = wifis.length;
+            const internalWifi = wifis.filter(w => (w.network_type || '').includes('Nội bộ')).length;
+            const guestWifi = wifis.filter(w => (w.network_type || '').toLowerCase().includes('khách') || (w.network_type || '').toLowerCase().includes('guest')).length;
+
+            const totalNat = nats.length;
+            const riskyPorts = [3389, 22, 23, 21, 80, 8080];
+            const riskyNatCount = nats.filter(n => riskyPorts.includes(Number(n.wan_port))).length;
+
+            const totalRemote = remotes.length;
+            const activeRemote = remotes.filter(r => r.status === 'Active' || r.status === 'Hoạt động').length;
+
+            // DOM Updates
+            const elOnlineRatio = document.getElementById('kpiNetworkOnlineRatio');
+            const elOnlinePct = document.getElementById('kpiNetworkOnlinePct');
+            const elAvgLatency = document.getElementById('kpiNetworkAvgLatency');
+            const elTotalWifi = document.getElementById('kpiNetworkTotalWifi');
+            const elInternalWifi = document.getElementById('kpiNetworkInternalWifi');
+            const elGuestWifi = document.getElementById('kpiNetworkGuestWifi');
+            const elTotalNat = document.getElementById('kpiNetworkTotalNat');
+            const elRiskyNatBadge = document.getElementById('kpiNetworkRiskyNatBadge');
+            const elTotalVpn = document.getElementById('kpiNetworkTotalVpn');
+            const elActiveVpn = document.getElementById('kpiNetworkActiveVpn');
+
+            if (elOnlineRatio) elOnlineRatio.textContent = `${onlineCount}/${totalTargets}`;
+            if (elOnlinePct) elOnlinePct.textContent = `(${onlinePct}%)`;
+            if (elAvgLatency) elAvgLatency.textContent = `${avgLatency} ms`;
+            if (elTotalWifi) elTotalWifi.textContent = totalWifi;
+            if (elInternalWifi) elInternalWifi.textContent = internalWifi;
+            if (elGuestWifi) elGuestWifi.textContent = guestWifi;
+            if (elTotalNat) elTotalNat.textContent = totalNat;
+            if (elRiskyNatBadge) {
+                if (riskyNatCount > 0) {
+                    elRiskyNatBadge.className = 'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300';
+                    elRiskyNatBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i>${riskyNatCount} cổng rủi ro`;
+                } else {
+                    elRiskyNatBadge.className = 'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300';
+                    elRiskyNatBadge.textContent = 'An toàn (0)';
+                }
+            }
+            if (elTotalVpn) elTotalVpn.textContent = totalRemote;
+            if (elActiveVpn) elActiveVpn.textContent = activeRemote;
+
+            // Summary counts
+            const elTgCount = document.getElementById('networkTargetsCountSummary');
+            if (elTgCount) elTgCount.textContent = `${filteredTargets.length}/${totalTargets} thiết bị`;
+            const elWfCount = document.getElementById('networkWifiCountSummary');
+            if (elWfCount) elWfCount.textContent = `${filteredWifis.length}/${totalWifi} mạng`;
+            const elNtCount = document.getElementById('networkNatCountSummary');
+            if (elNtCount) elNtCount.textContent = `${filteredNats.length}/${totalNat} quy tắc`;
+            const elRmCount = document.getElementById('networkRemoteCountSummary');
+            if (elRmCount) elRmCount.textContent = `${filteredRemotes.length}/${totalRemote} kết nối`;
+            const elLgCount = document.getElementById('networkLogsCountSummary');
+            if (elLgCount) elLgCount.textContent = `${logs.length} lượt kiểm tra`;
+
+            // 2. Render Targets Table
+            const tbodyTargets = document.getElementById('networkTargetsReportTableBody');
+            if (tbodyTargets) {
+                if (filteredTargets.length === 0) {
+                    tbodyTargets.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-400">Không có thiết bị giám sát nào phù hợp bộ lọc.</td></tr>';
+                } else {
+                    tbodyTargets.innerHTML = filteredTargets.map((t, idx) => {
+                        const isOnline = t.status === 'Online';
+                        const isOffline = t.status === 'Offline';
+                        const statusBadge = isOnline
+                            ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Online</span>'
+                            : (isOffline
+                                ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>Offline</span>'
+                                : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">Chưa kiểm tra</span>');
+
+                        const lat = Number(t.latency_ms || 0);
+                        const latBadge = isOnline && lat > 0
+                            ? (lat < 50
+                                ? `<span class="font-mono text-emerald-600 font-semibold">${lat} ms</span>`
+                                : `<span class="font-mono text-amber-600 font-semibold">${lat} ms</span>`)
+                            : '<span class="text-slate-400">—</span>';
+
+                        return `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                <td class="p-3 text-slate-400">${idx + 1}</td>
+                                <td class="p-3 font-bold text-slate-800 dark:text-white">${this.escapeHTML(t.name)}</td>
+                                <td class="p-3 font-mono text-blue-600 dark:text-blue-400">${this.escapeHTML(t.address || t.host || '—')}</td>
+                                <td class="p-3 font-mono text-slate-600 dark:text-slate-300">${t.port || 'Mặc định (Ping)'}</td>
+                                <td class="p-3 text-slate-600 dark:text-slate-400">${this.escapeHTML(t.location || '—')}</td>
+                                <td class="p-3">${latBadge}</td>
+                                <td class="p-3 text-slate-500 text-xs">${this.escapeHTML(t.last_checked || t.last_checked_at || 'Chưa kiểm tra')}</td>
+                                <td class="p-3 text-center">${statusBadge}</td>
+                            </tr>`;
+                    }).join('');
+                }
+            }
+
+            // 3. Render Wi-Fi Table
+            const tbodyWifi = document.getElementById('networkWifiReportTableBody');
+            if (tbodyWifi) {
+                if (filteredWifis.length === 0) {
+                    tbodyWifi.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Không có mạng Wi-Fi nào phù hợp.</td></tr>';
+                } else {
+                    tbodyWifi.innerHTML = filteredWifis.map(w => {
+                        const statusBadge = w.status === 'Hoạt động' || w.status === 'Active'
+                            ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Hoạt động</span>'
+                            : '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">Tạm dừng</span>';
+
+                        const typeBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">${this.escapeHTML(w.network_type || 'Nội bộ')}</span>`;
+
+                        const key = 'wifi_' + w.id;
+                        const isRevealed = this.revealedSecrets.has(key);
+                        const pwdDisplay = isRevealed ? this.escapeHTML(w.password || '') : '••••••••';
+                        const eyeIcon = isRevealed ? 'fa-eye-slash text-indigo-500' : 'fa-eye text-slate-400 hover:text-slate-600 dark:hover:text-slate-300';
+                        const eyeTitle = isRevealed ? 'Che mật khẩu' : 'Hiển thị mật khẩu';
+
+                        return `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                <td class="p-3 font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                                    <i class="fa-solid fa-wifi text-indigo-500 text-xs"></i>
+                                    <span>${this.escapeHTML(w.ssid)}</span>
+                                </td>
+                                <td class="p-3">
+                                    <div class="flex items-center gap-1.5 font-mono text-xs text-slate-700 dark:text-slate-300">
+                                        <span class="font-medium">${pwdDisplay}</span>
+                                        <button type="button" onclick="window.QLTSPageReports.toggleSecretVisibility('${key}')" title="${eyeTitle}" class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                                            <i class="fa-solid ${eyeIcon} text-xs"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="p-3">${typeBadge}</td>
+                                <td class="p-3 text-slate-600 dark:text-slate-300 text-xs">${this.escapeHTML(w.band || '2.4 & 5 GHz')} (${this.escapeHTML(w.security || 'WPA2/3')})</td>
+                                <td class="p-3 font-mono text-slate-700 dark:text-slate-300">${this.escapeHTML(w.vlan || 'Mặc định')}</td>
+                                <td class="p-3 text-center">${statusBadge}</td>
+                            </tr>`;
+                    }).join('');
+                }
+            }
+
+            // 4. Render NAT Table
+            const tbodyNat = document.getElementById('networkNatReportTableBody');
+            if (tbodyNat) {
+                if (filteredNats.length === 0) {
+                    tbodyNat.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">Không có quy tắc NAT nào phù hợp.</td></tr>';
+                } else {
+                    tbodyNat.innerHTML = filteredNats.map(n => {
+                        const portNum = Number(n.wan_port);
+                        const isRisky = riskyPorts.includes(portNum);
+                        const riskBadge = isRisky
+                            ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Cổng nhạy cảm</span>'
+                            : '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">Bình thường</span>';
+
+                        return `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                <td class="p-3 font-bold text-slate-800 dark:text-white">${this.escapeHTML(n.rule_name)}</td>
+                                <td class="p-3 font-mono font-bold text-amber-600 dark:text-amber-400">${n.wan_port} (${this.escapeHTML(n.protocol || 'TCP')})</td>
+                                <td class="p-3 font-mono text-slate-700 dark:text-slate-300">${this.escapeHTML(n.lan_ip)}:${n.lan_port}</td>
+                                <td class="p-3 text-slate-600 dark:text-slate-400 text-xs">${this.escapeHTML(n.purpose || n.target_device || '—')}</td>
+                                <td class="p-3 text-center">${riskBadge}</td>
+                            </tr>`;
+                    }).join('');
+                }
+            }
+
+            // 5. Render Remote Table
+            const tbodyRemote = document.getElementById('networkRemoteReportTableBody');
+            if (tbodyRemote) {
+                if (filteredRemotes.length === 0) {
+                    tbodyRemote.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-400">Không có kết nối VPN/Remote nào phù hợp.</td></tr>';
+                } else {
+                    tbodyRemote.innerHTML = filteredRemotes.map((r, idx) => {
+                        const statusBadge = r.status === 'Hoạt động' || r.status === 'Active'
+                            ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Hoạt động</span>'
+                            : '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">Tạm dừng</span>';
+
+                        const key = 'remote_' + r.id;
+                        const isRevealed = this.revealedSecrets.has(key);
+                        const secretDisplay = isRevealed ? this.escapeHTML(r.secret_masked || r.password || '') : '••••••••';
+                        const eyeIcon = isRevealed ? 'fa-eye-slash text-purple-500' : 'fa-eye text-slate-400 hover:text-slate-600 dark:hover:text-slate-300';
+                        const eyeTitle = isRevealed ? 'Che mật khẩu/khóa' : 'Hiển thị mật khẩu/khóa';
+
+                        return `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                <td class="p-3 text-slate-400">${idx + 1}</td>
+                                <td class="p-3 font-bold text-slate-800 dark:text-white">${this.escapeHTML(r.name)}</td>
+                                <td class="p-3 text-slate-600 dark:text-slate-300 text-xs">${this.escapeHTML(r.connection_type || 'VPN')}</td>
+                                <td class="p-3 font-mono text-blue-600 dark:text-blue-400">${this.escapeHTML(r.address || '—')}</td>
+                                <td class="p-3 font-mono text-slate-700 dark:text-slate-300">${this.escapeHTML(r.username || '—')}</td>
+                                <td class="p-3">
+                                    <div class="flex items-center gap-1.5 font-mono text-xs text-slate-700 dark:text-slate-300">
+                                        <span class="font-medium">${secretDisplay}</span>
+                                        ${!isRevealed ? '<span class="text-[10px] text-slate-400 italic">(Đã bảo vệ)</span>' : ''}
+                                        <button type="button" onclick="window.QLTSPageReports.toggleSecretVisibility('${key}')" title="${eyeTitle}" class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                                            <i class="fa-solid ${eyeIcon} text-xs"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="p-3 text-slate-600 dark:text-slate-300 text-xs">${this.escapeHTML(r.owner || 'Admin IT')}</td>
+                                <td class="p-3 text-center">${statusBadge}</td>
+                            </tr>`;
+                    }).join('');
+                }
+            }
+
+            // 6. Render Check Logs Table
+            const tbodyLogs = document.getElementById('networkLogsReportTableBody');
+            if (tbodyLogs) {
+                const recentLogs = (logs || []).slice(-15).reverse();
+                if (recentLogs.length === 0) {
+                    tbodyLogs.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">Chưa có nhật ký kiểm tra kết nối nào được ghi nhận.</td></tr>';
+                } else {
+                    tbodyLogs.innerHTML = recentLogs.map(l => {
+                        const isSuccess = l.status === 'Online' || l.status === 'Success' || (l.latency_ms && l.latency_ms > 0);
+                        const statusBadge = isSuccess
+                            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Thành công</span>'
+                            : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300">Thất bại</span>';
+
+                        const rtt = l.latency_ms ? `${l.latency_ms} ms` : '—';
+
+                        return `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                <td class="p-3 text-slate-500 font-mono text-xs">${this.escapeHTML(l.checked_at || l.timestamp || '—')}</td>
+                                <td class="p-3 font-medium text-slate-800 dark:text-white">${this.escapeHTML(l.target_name || l.host || 'Mục tiêu')}</td>
+                                <td class="p-3 font-mono text-slate-600 dark:text-slate-400 text-xs">${this.escapeHTML(l.host || '')}:${l.port || 'icmp'}</td>
+                                <td class="p-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">${rtt}</td>
+                                <td class="p-3 text-slate-500 text-xs max-w-[200px] truncate" title="${this.escapeHTML(l.detail || l.error || '')}">${this.escapeHTML(l.detail || l.error || 'Phản hồi bình thường')}</td>
+                                <td class="p-3 text-center">${statusBadge}</td>
+                            </tr>`;
+                    }).join('');
+                }
+            }
+        },
+
+        exportNetworkExcel(mode = 'as_screen') {
+            if (typeof XLSX === 'undefined') {
+                if (typeof showInfoModal === 'function') {
+                    showInfoModal('Thư viện xuất Excel (XLSX) chưa sẵn sàng.', 'Thông báo');
+                }
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+            const today = new Date().toISOString().slice(0, 10);
+
+            // 1. Sheet Targets
+            const targetsData = (this.cache.networkTargets || []).map((t, idx) => ({
+                'STT': idx + 1,
+                'Tên thiết bị / Mục tiêu': t.name,
+                'Phân loại': t.target_type || 'Thiết bị',
+                'Địa chỉ IP / Host': t.address || t.host,
+                'Cổng (Port)': t.port || 'ICMP / Mặc định',
+                'Vị trí lắp đặt': t.location || '',
+                'Độ trễ phản hồi (ms)': t.latency_ms || '',
+                'Lần kiểm tra cuối': t.last_checked || t.last_checked_at || '',
+                'Trạng thái': t.status || 'Chưa kiểm tra'
+            }));
+            const wsTargets = XLSX.utils.json_to_sheet(targetsData);
+            XLSX.utils.book_append_sheet(wb, wsTargets, '1_Giam_Sat_Thiet_Bi');
+
+            // 2. Sheet Wi-Fi (Credentials based on export mode)
+            const wifiData = (this.cache.networkWifis || []).map((w, idx) => {
+                let password = '•••••••• (Đã bảo vệ)';
+                const key = 'wifi_' + w.id;
+                if (mode === 'reveal_all') {
+                    password = w.password || '';
+                } else if (mode === 'as_screen') {
+                    password = this.revealedSecrets.has(key) ? (w.password || '') : '•••••••• (Đã bảo vệ)';
+                } else {
+                    password = '•••••••• (Đã bảo vệ)';
+                }
+
+                return {
+                    'STT': idx + 1,
+                    'Tên Wi-Fi (SSID)': w.ssid,
+                    'Mật khẩu truy cập': password,
+                    'Phân loại mạng': w.network_type,
+                    'Băng tần': w.band || '2.4 & 5 GHz',
+                    'Chuẩn bảo mật': w.security || 'WPA2/WPA3',
+                    'VLAN': w.vlan || '',
+                    'Thiết bị phát sóng': w.device_name || '',
+                    'Vị trí': w.location || '',
+                    'Trạng thái': w.status || 'Hoạt động',
+                    'Ghi chú': w.notes || ''
+                };
+            });
+            const wsWifi = XLSX.utils.json_to_sheet(wifiData);
+            XLSX.utils.book_append_sheet(wb, wsWifi, '2_Mang_WiFi');
+
+            // 3. Sheet NAT
+            const natData = (this.cache.networkNats || []).map((n, idx) => ({
+                'STT': idx + 1,
+                'Tên quy tắc': n.rule_name,
+                'Cổng WAN': n.wan_port,
+                'Giao thức': n.protocol || 'TCP',
+                'IP LAN đích': n.lan_ip,
+                'Cổng LAN đích': n.lan_port,
+                'Mục đích sử dụng': n.purpose || '',
+                'Thiết bị liên kết': n.target_device || '',
+                'Cảnh báo an ninh': [3389, 22, 23, 21].includes(Number(n.wan_port)) ? 'CẢNH BÁO: Cổng nhạy cảm mở ra Internet' : 'Bình thường',
+                'Trạng thái': n.status || 'Hoạt động'
+            }));
+            const wsNat = XLSX.utils.json_to_sheet(natData);
+            XLSX.utils.book_append_sheet(wb, wsNat, '3_NAT_Forwarding');
+
+            // 4. Sheet VPN Remote (Credentials based on export mode)
+            const remoteData = (this.cache.networkRemotes || []).map((r, idx) => {
+                let secret = '•••••••• (Đã bảo vệ)';
+                const key = 'remote_' + r.id;
+                if (mode === 'reveal_all') {
+                    secret = r.secret_masked || r.password || '';
+                } else if (mode === 'as_screen') {
+                    secret = this.revealedSecrets.has(key) ? (r.secret_masked || r.password || '') : '•••••••• (Đã bảo vệ)';
+                } else {
+                    secret = '•••••••• (Đã bảo vệ)';
+                }
+
+                return {
+                    'STT': idx + 1,
+                    'Tên kết nối': r.name,
+                    'Phân loại kết nối': r.connection_type || 'VPN',
+                    'Địa chỉ / Host': r.address,
+                    'Tài khoản đăng nhập': r.username,
+                    'Khóa bí mật / Mật khẩu': secret,
+                    'Thiết bị liên kết': r.related_device || '',
+                    'Người phụ trách': r.owner || '',
+                    'Trạng thái': r.status || 'Hoạt động',
+                    'Ghi chú': r.notes || ''
+                };
+            });
+            const wsRemote = XLSX.utils.json_to_sheet(remoteData);
+            XLSX.utils.book_append_sheet(wb, wsRemote, '4_VPN_Remote');
+
+            // 5. Sheet Check Logs
+            const logsData = (this.cache.networkCheckLogs || []).slice(-50).reverse().map((l, idx) => ({
+                'STT': idx + 1,
+                'Thời gian ghi nhận': l.checked_at || l.timestamp || '',
+                'Mục tiêu kiểm tra': l.target_name || l.host || '',
+                'Địa chỉ & Cổng': `${l.host || ''}:${l.port || 'icmp'}`,
+                'Độ trễ RTT (ms)': l.latency_ms || '',
+                'Trạng thái': l.status || '',
+                'Thông điệp chi tiết': l.detail || l.error || ''
+            }));
+            const wsLogs = XLSX.utils.json_to_sheet(logsData);
+            XLSX.utils.book_append_sheet(wb, wsLogs, '5_Lich_Su_Kiem_Tra');
+
+            this.saveWorkbook(wb, `Bao_cao_Ha_tang_Mang_${today}.xlsx`);
+        },
+
         // =================================================================
         // EXPORT EXCEL UTILITIES (Using SheetJS XLSX)
         // =================================================================
@@ -706,6 +1202,9 @@
                     break;
                 case 'tab-maintenance':
                     this.exportMaintenanceExcel();
+                    break;
+                case 'tab-network':
+                    this.showExportPasswordModal();
                     break;
                 case 'tab-overview':
                 default:
@@ -883,15 +1382,21 @@
     };
 
     // Auto initialize if on reports.html
-    document.addEventListener('DOMContentLoaded', () => {
+    function startReports() {
         const path = window.location.pathname || '';
         if (path.includes('reports.html')) {
             if (window.localDBReady && typeof window.localDBReady.then === 'function') {
                 window.localDBReady.then(() => window.QLTSPageReports.init());
             } else {
-                setTimeout(() => window.QLTSPageReports.init(), 100);
+                setTimeout(() => window.QLTSPageReports.init(), 50);
             }
         }
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startReports);
+    } else {
+        startReports();
+    }
 
 })();
