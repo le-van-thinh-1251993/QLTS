@@ -168,7 +168,7 @@
                             </div>
                             <span class="text-xs text-slate-400">Ưu tiên xử lý sự cố & thời hạn</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                             <!-- Card: Hỏng / Sửa chữa -->
                             <div id="cardAssetsInRepair" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border border-red-200 dark:border-red-900/50 flex items-center border-l-4 border-l-red-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem danh sách thiết bị hỏng/sửa">
                                 <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/30 text-red-500 group-hover:scale-110 transition-transform flex-shrink-0">
@@ -207,6 +207,20 @@
                                     <div class="flex items-baseline justify-between mt-1">
                                         <p id="openStockChecks" class="text-2xl font-bold text-slate-800 dark:text-gray-100">0</p>
                                         <span class="text-xs text-cyan-600 dark:text-cyan-400 font-medium group-hover:underline">Chi tiết <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card: Vật tư sắp hết -->
+                            <div id="cardLowStockSupplies" class="stat-card bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm hover:shadow-md border border-purple-200 dark:border-purple-900/50 flex items-center border-l-4 border-l-purple-500 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group" title="Bấm để xem danh sách vật tư / linh kiện sắp hết">
+                                <div class="p-3 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i class="fa-solid fa-boxes-packing text-2xl"></i>
+                                </div>
+                                <div class="ml-4 flex-1 min-w-0">
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Vật tư sắp hết</p>
+                                    <div class="flex items-baseline justify-between mt-1">
+                                        <p id="lowStockSuppliesCount" class="text-2xl font-bold text-purple-600 dark:text-purple-400">0</p>
+                                        <span class="text-xs text-purple-600 dark:text-purple-400 font-medium group-hover:underline">Chi tiết <i class="fa-solid fa-arrow-right text-[10px]"></i></span>
                                     </div>
                                 </div>
                             </div>

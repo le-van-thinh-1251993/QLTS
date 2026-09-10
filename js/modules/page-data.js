@@ -1601,6 +1601,15 @@ window.QLTSPageData.init = async function () {
         renderInventoryList();
     });
 
+    // Tự động kích hoạt bộ lọc nếu URL có tham số filter=low_stock hoặc filter=low
+    if (document.getElementById('inventoryContent')) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const filterParam = urlParams.get('filter');
+        if (filterParam === 'low_stock' || filterParam === 'low') {
+            syncStockFilterUI('low');
+        }
+    }
+
     // Top search input trên maintenance, stock-checks, assignments
     const topSearch = document.getElementById('searchInput');
     if (topSearch && !document.getElementById('assetTableBody') && !document.getElementById('licenseTableBody')) {

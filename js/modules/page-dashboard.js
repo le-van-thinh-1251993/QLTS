@@ -70,6 +70,8 @@ window.QLTSPageDashboard.init = async function () {
                 thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Loại cảnh báo</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Đối tượng</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Thời hạn</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Còn lại</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mức độ</th></tr>';
             } else if (type === 'activity') {
                 thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Thời gian</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Hành động</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tài sản liên quan</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người thực hiện</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Chi tiết</th></tr>';
+            } else if (type === 'supply') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mặt hàng & Mã</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Phân loại</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-center">Đơn vị</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-center">Tồn kho / Tối thiểu</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-right">Tình trạng</th></tr>';
             }
         }
 
@@ -241,6 +243,31 @@ window.QLTSPageDashboard.init = async function () {
                         <td class="p-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap"><i class="fa-solid fa-user text-xs text-slate-400 mr-1"></i>${userStr}</td>
                         <td class="p-3 text-sm text-slate-600 dark:text-slate-300">${descStr}</td>
                     </tr>`;
+                } else if (type === 'supply') {
+                    const qty = Number(item.quantity || 0);
+                    const itemMin = item.min_quantity !== undefined && item.min_quantity !== null && item.min_quantity !== '' ? Number(item.min_quantity) : null;
+                    const alertCfg = (Array.isArray(window.alertSettings) ? window.alertSettings[0] : window.alertSettings) || {};
+                    const minQty = itemMin !== null && !isNaN(itemMin) ? itemMin : (alertCfg.min_stock_threshold !== undefined ? Number(alertCfg.min_stock_threshold) : 5);
+                    const isOut = qty <= 0;
+                    const stBadge = isOut
+                        ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Hết hàng</span>'
+                        : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">⚠️ Sắp hết</span>';
+                    const code = item.code ? `<div class="text-xs text-slate-400 font-mono">${item.code}</div>` : '';
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3 font-medium text-slate-800 dark:text-slate-100">
+                            <a href="inventory.html?filter=low_stock" class="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1.5">
+                                <span>${item.name || 'Vật tư'}</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            </a>
+                            ${code}
+                        </td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300">${item.category || '-'}</td>
+                        <td class="p-3 text-sm text-center text-slate-600 dark:text-slate-300">${item.unit || 'cái'}</td>
+                        <td class="p-3 text-sm text-center font-semibold ${isOut ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">
+                            ${qty} / ${minQty}
+                        </td>
+                        <td class="p-3 text-right">${stBadge}</td>
+                    </tr>`;
                 }
                 return '';
             }).join('');
@@ -288,6 +315,11 @@ window.QLTSPageDashboard.init = async function () {
             title: `Các đợt kiểm kê đang mở (${currentDashboardData.openStockChecks.length})`,
             items: currentDashboardData.openStockChecks,
             type: 'stock_check'
+        }));
+        bind('cardLowStockSupplies', () => ({
+            title: `Danh sách Vật tư & Linh kiện sắp hết / thiếu hụt (${currentDashboardData.lowStockSupplies?.length || 0})`,
+            items: currentDashboardData.lowStockSupplies || [],
+            type: 'supply'
         }));
         bind('cardAlertCount', () => ({
             title: `Tổng hợp cảnh báo hạn dùng & Bảo trì (${currentDashboardData.alertsList.length})`,
@@ -460,6 +492,7 @@ window.QLTSPageDashboard.init = async function () {
         });
 
         // 4. Cảnh báo tồn kho vật tư linh kiện thấp / hết hàng
+        const lowStockSupplies = [];
         const globalMinStock = alertCfg.min_stock_threshold !== undefined ? Number(alertCfg.min_stock_threshold) : 5;
         const stockAlertEnabled = alertCfg.stock_alert_enabled !== false;
         if (stockAlertEnabled) {
@@ -469,6 +502,7 @@ window.QLTSPageDashboard.init = async function () {
                 const itemMin = s.min_quantity !== undefined && s.min_quantity !== null && s.min_quantity !== '' ? Number(s.min_quantity) : null;
                 const minQty = itemMin !== null && !isNaN(itemMin) ? itemMin : globalMinStock;
                 if (qty <= minQty) {
+                    lowStockSupplies.push(s);
                     const isOut = qty <= 0;
                     alertsList.push({
                         category: 'Kho vật tư',
@@ -487,6 +521,7 @@ window.QLTSPageDashboard.init = async function () {
         currentDashboardData.repairAssets = assets.filter(a => ['Repair', 'Broken'].includes(a.status));
         currentDashboardData.backlogMaintenance = backlogTasks;
         currentDashboardData.openStockChecks = stockChecks.filter(c => (c.status || '').toLowerCase() !== 'hoàn thành');
+        currentDashboardData.lowStockSupplies = lowStockSupplies;
         currentDashboardData.alertsList = alertsList;
         currentDashboardData.totalAssets = assets;
         currentDashboardData.assetsInUse = assets.filter(a => a.status === 'Active');
@@ -497,6 +532,9 @@ window.QLTSPageDashboard.init = async function () {
         // Khởi tạo sự kiện click card và toolbar
         initDashboardCardClicks();
         initDashboardToolbar();
+
+        const lowStockSuppliesEl = document.getElementById('lowStockSuppliesCount');
+        if (lowStockSuppliesEl) lowStockSuppliesEl.textContent = lowStockSupplies.length;
 
         const nextMaintenanceEl = document.getElementById('nextMaintenance');
         if (nextMaintenanceEl) nextMaintenanceEl.textContent = nextDue ? nextDue.toLocaleDateString('vi-VN') : 'Không lịch';
