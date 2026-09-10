@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https://i.pravatar.cc https://ui-avatars.com; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
+    <title>Báo cáo tập trung - Quản lý Tài sản CNTT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {}
+                }
+            }
+        }
+    </script>
+    <script>
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: auto;
+            background-color: #2d3748;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 12px;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        @media print {
+            #sidebar, header, #filterBar, .no-print {
+                display: none !important;
+            }
+            body, .flex-1, main {
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .print-header {
+                display: block !important;
+            }
+        }
+        .print-header {
+            display: none;
+        }
+    </style>
+</head>
+<body class="font-sans text-slate-800 bg-slate-100 dark:bg-slate-900 dark:text-slate-100 min-h-screen">
+
+    <div class="relative min-h-screen md:flex">
+        <!-- Mobile menu backdrop -->
+        <div id="sidebar-backdrop" class="hidden md:hidden fixed inset-0 bg-black opacity-50 z-40"></div>
+
+        <!-- Sidebar (Rendered by js/modules/sidebar.js) -->
+        <aside id="sidebar" class="bg-slate-800 text-slate-200 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition duration-200 ease-in-out z-50 flex flex-col">
+        </aside>
+
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Top Header -->
+            <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-6 sticky top-0 z-30 shadow-sm">
+                <button id="hamburger-button" class="md:hidden text-slate-500 focus:outline-none">
+                    <i class="fa-solid fa-bars text-2xl"></i>
+                </button>
+
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-lg shadow-inner">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold text-slate-800 dark:text-white leading-tight">Trung tâm Báo cáo & Thống kê</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Dữ liệu phân tích hợp nhất theo thời gian thực</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button id="globalSearchBtn" title="Tìm kiếm toàn cục" class="text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                        <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                    </button>
+                    <button id="themeToggleBtn" title="Chuyển chế độ sáng/tối" class="text-slate-600 hover:text-amber-500 dark:text-slate-300 dark:hover:text-amber-400 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                        <i class="fa-solid fa-moon dark:hidden text-lg"></i>
+                        <i class="fa-solid fa-sun hidden dark:inline text-lg"></i>
+                    </button>
+                    <div class="h-5 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                    <button id="btnRefreshData" class="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span>Làm mới</span>
+                    </button>
+                    <button id="btnPrintReport" class="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition no-print">
+                        <i class="fa-solid fa-print"></i>
+                        <span>In</span>
+                    </button>
+                    <button id="btnExportCurrentReport" class="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition hover:shadow-md">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Xuất Excel</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 p-6 space-y-6 max-w-7xl w-full mx-auto">
+
+                <!-- Print-only Title Header -->
+                <div class="print-header mb-6 pb-4 border-b-2 border-slate-800">
+                    <h1 class="text-2xl font-bold uppercase tracking-wider text-slate-900">BÁO CÁO TỔNG HỢP QUẢN LÝ TÀI SẢN CNTT</h1>
+                    <p class="text-sm text-slate-600 mt-1">Đơn vị: Newday Media JSC | Ngày xuất: <span id="printDate"></span></p>
+                </div>
+
+                <!-- Section 1: Executive KPI Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <!-- Total Assets -->
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden group hover:border-blue-300 dark:hover:border-blue-700 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng tài sản</span>
+                            <span class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-laptop"></i>
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="kpiTotalAssets" class="text-2xl font-extrabold text-slate-800 dark:text-white">0</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">thiết bị</span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>Đang dùng: <strong id="kpiActiveAssets" class="text-slate-700 dark:text-slate-200">0</strong></span>
+                            <span class="text-slate-300 dark:text-slate-600">|</span>
+                            <span>Kho: <strong id="kpiStockAssets" class="text-slate-700 dark:text-slate-200">0</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Software Licenses -->
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden group hover:border-purple-300 dark:hover:border-purple-700 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Bản quyền phần mềm</span>
+                            <span class="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-key"></i>
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="kpiTotalLicenses" class="text-2xl font-extrabold text-slate-800 dark:text-white">0</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">license</span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <span class="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
+                            <span>Toon Boom: <strong id="kpiToonBoomCount" class="text-slate-700 dark:text-slate-200">0</strong></span>
+                            <span class="text-slate-300 dark:text-slate-600">|</span>
+                            <span>CSP: <strong id="kpiCspCount" class="text-slate-700 dark:text-slate-200">0</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Inventory & Parts -->
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden group hover:border-emerald-300 dark:hover:border-emerald-700 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kho vật tư & Linh kiện</span>
+                            <span class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-boxes-packing"></i>
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="kpiTotalSupplies" class="text-2xl font-extrabold text-slate-800 dark:text-white">0</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">mặt hàng</span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <span>Tổng tồn: <strong id="kpiTotalStockQty" class="text-emerald-600 dark:text-emerald-400">0</strong> chiếc</span>
+                        </div>
+                    </div>
+
+                    <!-- Personnel & Depts -->
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden group hover:border-amber-300 dark:hover:border-amber-700 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nhân sự & Phòng ban</span>
+                            <span class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-users"></i>
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="kpiTotalUsers" class="text-2xl font-extrabold text-slate-800 dark:text-white">0</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">nhân sự</span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <span>Thuộc <strong id="kpiTotalDepts" class="text-slate-700 dark:text-slate-200">0</strong> phòng ban / khối</span>
+                        </div>
+                    </div>
+
+                    <!-- Operations Alerts -->
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden group hover:border-rose-300 dark:hover:border-rose-700 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cần xử lý & Cảnh báo</span>
+                            <span class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="kpiTotalAlerts" class="text-2xl font-extrabold text-rose-600 dark:text-rose-400">0</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">vấn đề</span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <span>Vật tư tồn thấp: <strong id="kpiLowStockAlerts" class="text-amber-600">0</strong></span>
+                            <span class="text-slate-300 dark:text-slate-600">|</span>
+                            <span>Bảo trì: <strong id="kpiPendingMaintenance" class="text-rose-600">0</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Universal Filter Bar -->
+                <div id="filterBar" class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-3 flex-1 min-w-[300px]">
+                            <!-- Period Filter -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">Thời kỳ:</label>
+                                <select id="filterPeriod" class="text-xs font-medium bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white">
+                                    <option value="all">Tất cả thời gian</option>
+                                    <option value="this_month">Tháng này</option>
+                                    <option value="this_quarter">Quý này</option>
+                                    <option value="2026">Năm 2026</option>
+                                    <option value="2025">Năm 2025</option>
+                                </select>
+                            </div>
+
+                            <!-- Department Filter -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">Phòng ban:</label>
+                                <select id="filterDepartment" class="text-xs font-medium bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white max-w-[200px]">
+                                    <option value="all">Tất cả phòng ban (12)</option>
+                                </select>
+                            </div>
+
+                            <!-- Status Filter -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">Trạng thái:</label>
+                                <select id="filterStatus" class="text-xs font-medium bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white">
+                                    <option value="all">Tất cả trạng thái</option>
+                                    <option value="Active">Đang sử dụng (Active)</option>
+                                    <option value="Stock">Tồn kho (Stock)</option>
+                                    <option value="Broken">Hỏng hóc (Broken)</option>
+                                    <option value="Disposed">Đã thanh lý (Disposed)</option>
+                                </select>
+                            </div>
+
+                            <!-- Search Input -->
+                            <div class="relative flex-1 min-w-[200px]">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input id="filterSearch" type="text" placeholder="Tìm theo tên, mã, người dùng..." class="w-full text-xs pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white">
+                            </div>
+                        </div>
+
+                        <!-- Reset Filter Button -->
+                        <button id="btnResetFilters" class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                            <i class="fa-solid fa-filter-circle-xmark"></i>
+                            <span>Xóa lọc</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 3: Navigation Tabs -->
+                <div class="border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <nav class="flex space-x-1 sm:space-x-4 overflow-x-auto no-scrollbar" aria-label="Tabs">
+                        <button data-tab="tab-overview" class="tab-btn py-3 px-4 text-xs font-bold border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <span>1. Tổng quan phân tích</span>
+                        </button>
+                        <button data-tab="tab-assets" class="tab-btn py-3 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-desktop"></i>
+                            <span>2. Báo cáo Tài sản & Thiết bị</span>
+                        </button>
+                        <button data-tab="tab-licenses" class="tab-btn py-3 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-key"></i>
+                            <span>3. Báo cáo Bản quyền (License)</span>
+                        </button>
+                        <button data-tab="tab-supplies" class="tab-btn py-3 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-boxes-packing"></i>
+                            <span>4. Báo cáo Kho vật tư & Linh kiện</span>
+                        </button>
+                        <button data-tab="tab-allocation" class="tab-btn py-3 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-hand-holding-hand"></i>
+                            <span>5. Biến động kho & Cấp phát</span>
+                        </button>
+                        <button data-tab="tab-maintenance" class="tab-btn py-3 px-4 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-wrench"></i>
+                            <span>6. Bảo trì & Kiểm kê</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Section 4: Tab Contents -->
+
+                <!-- TAB 1: OVERVIEW -->
+                <div id="tab-overview" class="tab-content space-y-6">
+                    <!-- Distribution Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Card: Asset distribution by Category -->
+                        <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-pie-chart text-blue-500"></i>
+                                    <span>Cơ cấu Tài sản theo chủng loại</span>
+                                </h3>
+                                <span class="text-xs text-slate-400" id="overviewAssetCatTotal">196 tài sản</span>
+                            </div>
+                            <div id="categoryBarsContainer" class="space-y-3">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Card: Asset distribution by Department -->
+                        <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-sitemap text-indigo-500"></i>
+                                    <span>Phân bổ Tài sản theo Phòng ban</span>
+                                </h3>
+                                <span class="text-xs text-slate-400">Top phân bổ</span>
+                            </div>
+                            <div id="deptBarsContainer" class="space-y-3">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Department Summary Table -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white">Bảng tổng hợp phân bổ theo Phòng ban / Khối</h3>
+                            <button onclick="window.QLTSPageReports.exportDeptSummaryExcel()" class="text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Xuất bảng này</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold">
+                                    <tr>
+                                        <th class="p-3">#</th>
+                                        <th class="p-3">Phòng ban / Bộ phận</th>
+                                        <th class="p-3 text-center">Nhân sự</th>
+                                        <th class="p-3 text-center">Tổng thiết bị</th>
+                                        <th class="p-3 text-center">PC Máy trạm</th>
+                                        <th class="p-3 text-center">Laptop</th>
+                                        <th class="p-3 text-center">Màn hình</th>
+                                        <th class="p-3 text-center">License Toon Boom/CSP</th>
+                                        <th class="p-3 text-center">Tỷ lệ sử dụng</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deptSummaryTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: ASSETS -->
+                <div id="tab-assets" class="tab-content hidden space-y-4">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white">Chi tiết Sổ theo dõi Tài sản & Máy móc thiết bị</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Hiển thị <span id="assetReportFilteredCount" class="font-bold text-blue-600 dark:text-blue-400">0</span> tài sản phù hợp bộ lọc</p>
+                            </div>
+                            <button onclick="window.QLTSPageReports.exportAssetsExcel()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Xuất Sổ tài sản</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[600px]">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="p-3">Mã TS</th>
+                                        <th class="p-3">Tên tài sản</th>
+                                        <th class="p-3">Loại</th>
+                                        <th class="p-3">Cấu hình chi tiết</th>
+                                        <th class="p-3">Vị trí</th>
+                                        <th class="p-3">Người sử dụng</th>
+                                        <th class="p-3">Phòng ban</th>
+                                        <th class="p-3">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="assetReportTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: LICENSES -->
+                <div id="tab-licenses" class="tab-content hidden space-y-4">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white">Báo cáo Bản quyền phần mềm chuyên dụng</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Toon Boom Harmony Premium 22, Storyboard Pro và Clip Studio Paint</p>
+                            </div>
+                            <button onclick="window.QLTSPageReports.exportLicensesExcel()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Xuất Sổ bản quyền</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[600px]">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="p-3">#</th>
+                                        <th class="p-3">Phần mềm</th>
+                                        <th class="p-3">Mã Key / License</th>
+                                        <th class="p-3">Gói</th>
+                                        <th class="p-3">Người sử dụng</th>
+                                        <th class="p-3">Phòng ban</th>
+                                        <th class="p-3">Trạng thái</th>
+                                        <th class="p-3">Hóa đơn liên quan</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="licenseReportTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: SUPPLIES -->
+                <div id="tab-supplies" class="tab-content hidden space-y-4">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white">Báo cáo Tồn kho Vật tư & Linh kiện thay thế</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Ổ cứng rời (OC-001..012), RAM nâng cấp, VGA RTX, Nguồn, Cáp phụ kiện</p>
+                            </div>
+                            <button onclick="window.QLTSPageReports.exportSuppliesExcel()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Xuất Sổ kho vật tư</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[600px]">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="p-3">Mã VT</th>
+                                        <th class="p-3">Tên vật tư / Linh kiện</th>
+                                        <th class="p-3">Nhóm</th>
+                                        <th class="p-3">Vị trí lưu kho</th>
+                                        <th class="p-3 text-center">Tồn kho</th>
+                                        <th class="p-3 text-center">Định mức min</th>
+                                        <th class="p-3 text-right">Đơn giá (VNĐ)</th>
+                                        <th class="p-3 text-right">Thành tiền (VNĐ)</th>
+                                        <th class="p-3 text-center">Cảnh báo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="suppliesReportTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: ALLOCATION & TRANSACTIONS -->
+                <div id="tab-allocation" class="tab-content hidden space-y-4">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-white">Báo cáo Biến động Kho & Lịch sử Giao dịch</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Lịch sử các phiếu Nhập kho và Xuất kho linh kiện thực tế</p>
+                            </div>
+                            <button onclick="window.QLTSPageReports.exportTransactionsExcel()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Xuất Sổ biến động</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[600px]">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="p-3">Mã phiếu</th>
+                                        <th class="p-3">Loại</th>
+                                        <th class="p-3">Ngày giao dịch</th>
+                                        <th class="p-3">Vật tư / Linh kiện</th>
+                                        <th class="p-3 text-center">Số lượng</th>
+                                        <th class="p-3 text-right">Tổng tiền</th>
+                                        <th class="p-3">Đối tác / Người nhận</th>
+                                        <th class="p-3">Lý do & Ghi chú</th>
+                                        <th class="p-3">Người thực hiện</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transactionsReportTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 6: MAINTENANCE & AUDIT -->
+                <div id="tab-maintenance" class="tab-content hidden space-y-6">
+                    <!-- Maintenance tasks section -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                <i class="fa-solid fa-wrench text-amber-500"></i>
+                                <span>Tình trạng Phiếu Bảo trì & Sửa chữa thiết bị</span>
+                            </h3>
+                            <button onclick="window.QLTSPageReports.exportMaintenanceExcel()" class="text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Xuất Excel</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold">
+                                    <tr>
+                                        <th class="p-3">#</th>
+                                        <th class="p-3">Thiết bị liên quan</th>
+                                        <th class="p-3">Tiêu đề bảo trì</th>
+                                        <th class="p-3">Hạn xử lý</th>
+                                        <th class="p-3">Ưu tiên</th>
+                                        <th class="p-3">Phụ trách</th>
+                                        <th class="p-3">Trạng thái</th>
+                                        <th class="p-3">Nội dung ghi chú</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="maintenanceReportTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Stock Checks section -->
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                <i class="fa-solid fa-clipboard-check text-blue-500"></i>
+                                <span>Kết quả các Đợt Kiểm kê Tài sản</span>
+                            </h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold">
+                                    <tr>
+                                        <th class="p-3">#</th>
+                                        <th class="p-3">Tên đợt kiểm kê</th>
+                                        <th class="p-3">Ngày bắt đầu</th>
+                                        <th class="p-3">Trạng thái</th>
+                                        <th class="p-3">Ghi chú</th>
+                                        <th class="p-3 text-center">Tiến độ kiểm tra</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stockChecksReportTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal: Tìm kiếm toàn cục -->
+    <div id="globalSearchModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[90] flex justify-center items-start pt-24 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-xl p-4 relative border dark:border-slate-700">
+            <div class="relative mb-3">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="globalSearchInput" placeholder="Tìm tài sản, license, nhân viên, vật tư..." class="w-full pl-10 pr-10 py-2.5 border rounded-lg dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200" autocomplete="off">
+                <button class="close-modal absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div id="globalSearchResults" class="max-h-[60vh] overflow-y-auto"><p class="text-sm text-slate-400 text-center p-4">Nhập từ khóa để tìm kiếm...</p></div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirmationModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[99] flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 text-center border dark:border-slate-700">
+            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400 flex items-center justify-center mx-auto mb-4 text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirmationModalTitle" class="text-base font-bold mb-2 text-slate-800 dark:text-gray-100">Xác nhận</h3>
+            <p id="confirmationModalMessage" class="text-sm text-slate-600 dark:text-slate-300 mb-6">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+            <div class="flex justify-center gap-3">
+                <button type="button" class="close-modal px-4 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-xs font-semibold dark:bg-slate-700 dark:text-gray-200 w-1/2">Hủy</button>
+                <button type="button" id="btnConfirmAction" class="px-5 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-xs font-semibold shadow-sm w-1/2">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="infoModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[99] flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 text-center border dark:border-slate-700">
+            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 dark:text-blue-400 text-2xl">
+                <i class="fa-solid fa-circle-info"></i>
+            </div>
+            <h3 id="infoModalTitle" class="text-base font-bold mb-2 text-slate-800 dark:text-gray-100">Thông báo</h3>
+            <p id="infoModalMessage" class="text-sm text-slate-600 dark:text-slate-300 mb-6 whitespace-pre-line"></p>
+            <button type="button" class="close-modal px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold w-full shadow-sm">Đã hiểu</button>
+        </div>
+    </div>
+
+    <!-- Scripts hệ thống -->
+    <script src="js/localDB.js?v=20260910-1"></script>
+    <script src="js/modules/script-helpers.js?v=20260910-1"></script>
+    <script src="js/modules/sidebar.js?v=20260910-1"></script>
+    <script src="js/modules/page-common.js?v=20260910-1"></script>
+    <script src="js/modules/page-data.js?v=20260910-1"></script>
+    <script src="js/modules/page-ui.js?v=20260910-1"></script>
+    <script src="js/modules/page-reports.js?v=20260910-1"></script>
+    <script src="js/script.js?v=20260910-1"></script>
+</body>
+</html>

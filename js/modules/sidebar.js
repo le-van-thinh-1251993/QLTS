@@ -34,6 +34,18 @@
             ]
         },
         {
+            title: 'Hạ tầng & Kết nối',
+            items: [
+                { href: 'network.html', icon: 'fa-solid fa-network-wired', label: 'Hạ tầng & Mạng' }
+            ]
+        },
+        {
+            title: 'Báo cáo & Phân tích',
+            items: [
+                { href: 'reports.html', icon: 'fa-solid fa-chart-line', label: 'Báo cáo tập trung' }
+            ]
+        },
+        {
             title: 'Hệ thống',
             items: [
                 { href: 'settings.html', icon: 'fa-solid fa-gear', label: 'Cài đặt & Nhật ký' }

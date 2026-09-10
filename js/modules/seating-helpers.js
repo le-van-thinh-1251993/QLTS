@@ -107,4 +107,20 @@
         toast,
         showConfirm
     };
+
+    // Override native alert to use #alertModal on seating.html
+    window.alert = function (msg) {
+        const modal = document.getElementById('alertModal');
+        const titleEl = document.getElementById('alertTitle');
+        const msgEl = document.getElementById('alertMessage');
+        const cancelBtn = document.getElementById('alertCancel');
+        if (modal && msgEl) {
+            if (titleEl) titleEl.textContent = 'Thông báo';
+            msgEl.textContent = String(msg ?? '');
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            modal.classList.remove('hidden');
+        } else {
+            console.warn(msg);
+        }
+    };
 })();

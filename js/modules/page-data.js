@@ -244,12 +244,23 @@ window.QLTSPageData.init = async function () {
     }
 
     function showConfirmationModal(message, callback, title = 'Xác nhận') {
+        if (typeof ensureConfirmationModalDOM === 'function') ensureConfirmationModalDOM();
         const titleEl = document.getElementById('confirmationModalTitle');
         const msgEl = document.getElementById('confirmationModalMessage');
         if (titleEl) titleEl.textContent = title;
         if (msgEl) msgEl.textContent = message;
-        confirmCallback = callback || null;
-        openModal('confirmationModal');
+        window.confirmCallback = callback || null;
+        if (typeof openModal === 'function') {
+            openModal('confirmationModal');
+        } else if (typeof window.openModal === 'function') {
+            window.openModal('confirmationModal');
+        } else {
+            const modal = document.getElementById('confirmationModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        }
     }
 
     // =================================================================

@@ -93,7 +93,110 @@ window.STATUS_MAP = window.STATUS_MAP || {
     Expired: { text: 'Hết hạn', classes: 'bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' }
 };
 
+function ensureInfoModalDOM() {
+    let modal = document.getElementById('infoModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'infoModal';
+    modal.className = 'hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[99] flex justify-center items-center backdrop-blur-sm';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6 w-full max-w-sm text-center border dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150 mx-4">
+            <div class="w-12 h-12 bg-blue-50 dark:bg-blue-900/40 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 dark:text-blue-400 text-2xl shadow-inner">
+                <i class="fa-solid fa-circle-info"></i>
+            </div>
+            <h3 id="infoModalTitle" class="text-base font-bold text-slate-800 dark:text-gray-100 mb-2">Thông báo</h3>
+            <p id="infoModalMessage" class="text-slate-600 dark:text-slate-300 mb-6 text-sm whitespace-pre-line"></p>
+            <button type="button" class="close-modal px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold w-full transition-colors shadow-sm">Đã hiểu</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.close-modal')?.addEventListener('click', () => {
+        if (typeof window.safeCloseModal === 'function') {
+            window.safeCloseModal('infoModal');
+        } else {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            if (typeof window.safeCloseModal === 'function') {
+                window.safeCloseModal('infoModal');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+    });
+
+    return modal;
+}
+
+function ensureConfirmationModalDOM() {
+    let modal = document.getElementById('confirmationModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'confirmationModal';
+    modal.className = 'hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[99] flex justify-center items-center backdrop-blur-sm';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-6 w-full max-w-sm text-center border dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150 mx-4">
+            <div class="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirmationModalTitle" class="text-base font-bold text-slate-800 dark:text-gray-100 mb-2">Xác nhận</h3>
+            <p id="confirmationModalMessage" class="text-slate-600 dark:text-slate-300 mb-6 text-sm whitespace-pre-line">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+            <div class="flex justify-center gap-3">
+                <button type="button" class="close-modal px-4 py-2.5 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-xs font-semibold text-slate-700 dark:text-gray-200 w-1/2 transition-colors">Hủy</button>
+                <button type="button" id="btnConfirmAction" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold w-1/2 shadow-sm transition-colors">Xác nhận</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.close-modal')?.addEventListener('click', () => {
+        if (typeof window.safeCloseModal === 'function') {
+            window.safeCloseModal('confirmationModal');
+        } else {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            if (typeof window.safeCloseModal === 'function') {
+                window.safeCloseModal('confirmationModal');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+    });
+
+    const confirmBtn = modal.querySelector('#btnConfirmAction');
+    confirmBtn?.addEventListener('click', async () => {
+        if (typeof window.confirmCallback === 'function') {
+            const cb = window.confirmCallback;
+            window.confirmCallback = null;
+            await cb();
+        }
+        if (typeof window.safeCloseModal === 'function') {
+            window.safeCloseModal('confirmationModal');
+        } else {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    });
+
+    return modal;
+}
+
 function showInfoModal(message, title = 'Thông báo') {
+    ensureInfoModalDOM();
     const titleEl = document.getElementById('infoModalTitle');
     const msgEl = document.getElementById('infoModalMessage');
     if (titleEl && msgEl) {
@@ -101,14 +204,126 @@ function showInfoModal(message, title = 'Thông báo') {
         if (typeof message === 'string' && /<[^>]+>/.test(message)) {
             msgEl.innerHTML = message;
         } else {
-            msgEl.textContent = message;
+            msgEl.textContent = String(message ?? '');
         }
         if (typeof window.openModal === 'function') {
             window.openModal('infoModal');
+        } else {
+            const modal = document.getElementById('infoModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
         }
     } else {
-        console.warn(`showInfoModal: không tìm thấy #infoModal trên trang. ${title}: ${String(message).replace(/<[^>]*>?/gm, '')}`);
+        console.warn(`showInfoModal: ${title}: ${String(message).replace(/<[^>]*>?/gm, '')}`);
     }
+}
+
+function showConfirmationModal(message, callback, title = 'Xác nhận') {
+    ensureConfirmationModalDOM();
+    const titleEl = document.getElementById('confirmationModalTitle');
+    const msgEl = document.getElementById('confirmationModalMessage');
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = String(message ?? '');
+    window.confirmCallback = callback || null;
+
+    if (typeof window.openModal === 'function') {
+        window.openModal('confirmationModal');
+    } else {
+        const modal = document.getElementById('confirmationModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+    }
+}
+
+// Override native window.alert to always open the beautiful modal
+if (typeof window !== 'undefined') {
+    window.showInfoModal = showInfoModal;
+    window.showConfirmationModal = showConfirmationModal;
+    window.alert = function (message) {
+        showInfoModal(String(message ?? ''), 'Thông báo');
+    };
+}
+
+// Global delegated handlers for Confirmation and Info modals across all pages
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', async (e) => {
+        // 1. Confirm button in confirmationModal / confirmModal
+        const confirmBtn = e.target.closest('#btnConfirmAction') || e.target.closest('#confirmDeleteBtn');
+        if (confirmBtn) {
+            e.preventDefault();
+            const cb = window.confirmCallback;
+            window.confirmCallback = null;
+            if (typeof cb === 'function') {
+                try {
+                    await cb();
+                } catch (err) {
+                    console.error('Error executing confirmCallback:', err);
+                }
+            }
+            if (typeof window.safeCloseModal === 'function') {
+                window.safeCloseModal('confirmationModal');
+                window.safeCloseModal('confirmModal');
+            } else {
+                ['confirmationModal', 'confirmModal'].forEach(id => {
+                    const m = document.getElementById(id);
+                    if (m) {
+                        m.classList.add('hidden');
+                        m.classList.remove('flex');
+                    }
+                });
+            }
+            return;
+        }
+
+        // 2. Close modal buttons (.close-modal, .btn-close-modal) for confirmationModal & infoModal
+        const closeBtn = e.target.closest('.close-modal') || e.target.closest('.btn-close-modal');
+        if (closeBtn) {
+            const confModal = closeBtn.closest('#confirmationModal') || closeBtn.closest('#confirmModal');
+            if (confModal) {
+                window.confirmCallback = null;
+                if (typeof window.safeCloseModal === 'function') {
+                    window.safeCloseModal(confModal.id);
+                } else {
+                    confModal.classList.add('hidden');
+                    confModal.classList.remove('flex');
+                }
+                return;
+            }
+
+            const infModal = closeBtn.closest('#infoModal');
+            if (infModal) {
+                if (typeof window.safeCloseModal === 'function') {
+                    window.safeCloseModal(infModal.id);
+                } else {
+                    infModal.classList.add('hidden');
+                    infModal.classList.remove('flex');
+                }
+                return;
+            }
+        }
+
+        // 3. Backdrop click to close confirmationModal / infoModal
+        if (e.target.id === 'confirmationModal' || e.target.id === 'confirmModal') {
+            window.confirmCallback = null;
+            if (typeof window.safeCloseModal === 'function') {
+                window.safeCloseModal(e.target.id);
+            } else {
+                e.target.classList.add('hidden');
+                e.target.classList.remove('flex');
+            }
+        } else if (e.target.id === 'infoModal') {
+            if (typeof window.safeCloseModal === 'function') {
+                window.safeCloseModal('infoModal');
+            } else {
+                e.target.classList.add('hidden');
+                e.target.classList.remove('flex');
+            }
+        }
+    });
 }
 
 function handleSupabaseError(error, context) {

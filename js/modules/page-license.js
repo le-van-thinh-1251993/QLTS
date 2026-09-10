@@ -709,7 +709,15 @@ window.QLTSPageLicense.init = async function () {
             return;
         }
 
-        if (t.closest('#btnConfirmAction') || t.closest('#confirmDeleteBtn')) { if (confirmCallback) await confirmCallback(); safeCloseModal('confirmationModal'); safeCloseModal('confirmModal'); return; }
+        if (t.closest('#btnConfirmAction') || t.closest('#confirmDeleteBtn')) {
+            const cb = window.confirmCallback || (typeof confirmCallback !== 'undefined' ? confirmCallback : null);
+            window.confirmCallback = null;
+            if (typeof confirmCallback !== 'undefined') confirmCallback = null;
+            if (typeof cb === 'function') await cb();
+            safeCloseModal('confirmationModal');
+            safeCloseModal('confirmModal');
+            return;
+        }
 
         const actionBtn = t.closest('button[data-action]');
         if (actionBtn) {
