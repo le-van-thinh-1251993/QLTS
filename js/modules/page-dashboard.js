@@ -938,6 +938,7 @@ window.QLTSPageDashboard.init = async function () {
                 <td class="p-4 text-sm text-slate-500"><span class="bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-1 rounded text-xs font-bold">${holdingInfo}</span></td>
                 <td class="p-4 font-bold text-sm ${u.status === 'Đang hoạt động' ? 'text-green-600' : 'text-slate-400'}">${u.status}</td>
                 <td class="p-4 flex gap-2">
+                    <div class="tooltip"><button data-action="print-user-handover" data-id="${u.id}" class="${btnClasses} text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/40" title="Xuất biên bản bàn giao tổng hợp"><i class="fa-solid fa-file-invoice"></i></button><span class="tooltiptext">Biên bản bàn giao</span></div>
                     <div class="tooltip"><button data-action="scan-user" data-id="${u.id}" class="${btnClasses} text-indigo-600 hover:bg-indigo-100"><i class="fa-solid fa-qrcode"></i></button><span class="tooltiptext">Scan (QR)</span></div>
                     ${adminActions}
                 </td>

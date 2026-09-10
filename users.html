@@ -379,6 +379,146 @@
         </div>
     </div>
 
+    <!-- Modal: Biên bản bàn giao tổng hợp cho Nhân sự (A4 Chuẩn In / PDF) -->
+    <div id="userHandoverReceiptModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-4xl p-6 relative border dark:border-slate-700 max-h-[92vh] flex flex-col">
+            <button class="close-modal absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 no-print"><i class="fa-solid fa-times text-2xl"></i></button>
+            <div class="flex flex-wrap items-center justify-between pb-3 border-b dark:border-slate-700 mb-4 gap-3 no-print">
+                <div class="flex items-center gap-3">
+                    <span class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-file-invoice"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-base font-bold dark:text-gray-200" id="userReceiptModalHeading">Biên bản bàn giao tổng hợp trang thiết bị</h3>
+                        <p class="text-xs text-slate-400">Gom toàn bộ tài sản cấp phát cho nhân sự vào văn bản hành chính khổ A4</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="flex rounded-lg border border-slate-300 dark:border-slate-600 p-0.5 text-xs bg-slate-50 dark:bg-slate-700">
+                        <button id="btnUserReceiptModeHandover" type="button" class="px-3 py-1.5 rounded-md font-semibold bg-blue-600 text-white shadow-sm transition">Bàn giao</button>
+                        <button id="btnUserReceiptModeReturn" type="button" class="px-3 py-1.5 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 transition">Thu hồi</button>
+                    </div>
+                    <button id="btnPrintUserReceiptBtn" type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+                        <i class="fa-solid fa-print"></i>
+                        <span>In / Lưu PDF (A4)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Toolbar chọn lọc thiết bị cần đưa vào biên bản (No-print) -->
+            <div class="bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg mb-4 no-print border dark:border-slate-600">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-blue-600 dark:text-blue-400 text-sm"></i>
+                        <span class="text-xs font-bold text-slate-700 dark:text-slate-200">Tùy chọn thiết bị in trong biên bản:</span>
+                        <span id="userReceiptSelectedCount" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Đã chọn: 0</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <button type="button" id="btnUserReceiptSelectAll" class="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-xs">Chọn tất cả</button>
+                        <span class="text-slate-300 dark:text-slate-600">|</span>
+                        <button type="button" id="btnUserReceiptDeselectAll" class="text-slate-500 dark:text-slate-400 hover:underline text-xs">Bỏ chọn tất cả</button>
+                    </div>
+                </div>
+                <div id="userReceiptAssetCheckboxes" class="flex flex-wrap gap-2 max-h-32 overflow-y-auto pt-1">
+                    <!-- Checkbox từng tài sản sẽ được sinh ra động ở đây -->
+                </div>
+            </div>
+
+            <!-- Nội dung văn bản in A4 chuẩn Hành chính Việt Nam -->
+            <div id="userPrintableReceipt" class="printable-document official-document official-document-preview overflow-y-auto flex-1 p-8 sm:p-12 bg-white text-slate-900 border rounded-lg">
+                <div class="text-center mb-6">
+                    <p class="font-bold text-xs uppercase tracking-wider">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                    <p class="text-xs font-semibold underline underline-offset-4">Độc lập - Tự do - Hạnh phúc</p>
+                    <div class="h-2"></div>
+                    <h2 class="text-xl font-bold uppercase mt-4 tracking-wide" id="userReceiptDocTitle">BIÊN BẢN BÀN GIAO TRANG THIẾT BỊ LÀM VIỆC</h2>
+                    <p class="text-xs italic text-slate-600 mt-1" id="userReceiptDocNumber">Số: BBBG-TH-2026/09/10-01</p>
+                    <p class="text-xs italic text-slate-600 mt-0.5" id="userReceiptDateStr">Hà Nội, ngày ... tháng ... năm ...</p>
+                </div>
+
+                <div class="space-y-4 text-sm leading-relaxed">
+                    <p class="italic text-xs text-slate-700" id="userReceiptIntro">Hôm nay, tại văn phòng Công ty CP Truyền thông Newday, chúng tôi tiến hành lập biên bản bàn giao toàn bộ trang thiết bị và công cụ làm việc phục vụ công tác cho nhân sự với chi tiết như sau:</p>
+
+                    <div>
+                        <p class="font-bold text-xs uppercase text-slate-900" id="userReceiptGiverHeader">I. ĐẠI DIỆN BÊN GIAO (BỘ PHẬN CNTT & QUẢN TRỊ THIẾT BỊ):</p>
+                        <div class="ml-4 text-xs space-y-1 mt-1">
+                            <p id="userReceiptGiverName">- Họ và tên: Admin Hệ Thống</p>
+                            <p class="text-slate-600">- Bộ phận: Quản trị Hạ tầng & Trang thiết bị CNTT</p>
+                            <p class="text-slate-600">- Chức danh: Cán bộ Quản trị Thiết bị</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="font-bold text-xs uppercase text-slate-900" id="userReceiptReceiverHeader">II. ĐẠI DIỆN BÊN NHẬN (NHÂN SỰ TIẾP NHẬN SỬ DỤNG):</p>
+                        <div class="ml-4 text-xs space-y-1 mt-1">
+                            <p id="userReceiptReceiverName">- Họ và tên: -</p>
+                            <p id="userReceiptReceiverDept">- Phòng ban / Bộ phận: -</p>
+                            <p id="userReceiptReceiverEmail">- Địa chỉ Email: -</p>
+                            <p id="userReceiptReceiverPhone">- Điện thoại liên hệ: -</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="font-bold text-xs uppercase text-slate-900" id="userReceiptListHeader">III. DANH MỤC THIẾT BỊ & CÔNG CỤ BÀN GIAO TỔNG HỢP:</p>
+                        <table class="w-full border-collapse border border-slate-700 mt-2 text-xs">
+                            <thead>
+                                <tr class="bg-slate-100 text-center font-bold">
+                                    <th class="border border-slate-700 p-2 w-10">STT</th>
+                                    <th class="border border-slate-700 p-2 w-28">Mã tài sản</th>
+                                    <th class="border border-slate-700 p-2">Tên thiết bị / Chủng loại</th>
+                                    <th class="border border-slate-700 p-2">Cấu hình kỹ thuật / Thông số</th>
+                                    <th class="border border-slate-700 p-2 w-28">Tình trạng thực tế</th>
+                                    <th class="border border-slate-700 p-2">Phụ kiện đi kèm</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userReceiptAssetTableBody">
+                                <tr>
+                                    <td colspan="6" class="border border-slate-700 p-3 text-center text-slate-400">Đang tải danh mục...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="userReceiptLicenseSection" class="hidden">
+                        <p class="font-bold text-xs uppercase text-slate-900">IV. BẢN QUYỀN PHẦN MỀM ĐƯỢC CẤP PHÁT KÈM THEO:</p>
+                        <table class="w-full border-collapse border border-slate-700 mt-2 text-xs">
+                            <thead>
+                                <tr class="bg-slate-100 text-center font-bold">
+                                    <th class="border border-slate-700 p-2 w-10">STT</th>
+                                    <th class="border border-slate-700 p-2">Loại phần mềm / Dịch vụ</th>
+                                    <th class="border border-slate-700 p-2">Gói bản quyền</th>
+                                    <th class="border border-slate-700 p-2 w-32">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userReceiptLicenseTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div>
+                        <p class="font-bold text-xs uppercase text-slate-900" id="userReceiptCommitmentHeader">IV. CAM KẾT TRÁCH NHIỆM & NGHĨA VỤ QUẢN LÝ TÀI SẢN:</p>
+                        <p id="userReceiptCommitmentText" class="italic text-xs text-slate-700 leading-normal mt-1">
+                            Nhân viên cam kết tiếp nhận đầy đủ toàn bộ các trang thiết bị và bản quyền nêu trên; sử dụng đúng mục đích phục vụ công việc tại Công ty; có trách nhiệm bảo quản, giữ gìn tài sản và tuân thủ các quy định về an toàn thông tin của Công ty. Khi thôi việc hoặc chuyển công tác, nhân viên có trách nhiệm bàn giao hoàn trả đầy đủ nguyên vẹn toàn bộ danh mục tài sản trên cho Bộ phận CNTT.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-2 text-center mt-10 pt-4">
+                        <div>
+                            <p class="font-bold uppercase text-xs" id="userReceiptSignTitleGiver">ĐẠI DIỆN BÊN GIAO</p>
+                            <p class="text-[11px] italic text-slate-500">(Ký và ghi rõ họ tên)</p>
+                            <div class="h-20"></div>
+                            <p class="font-bold text-xs" id="userReceiptSignGiver">Quản trị viên IT</p>
+                        </div>
+                        <div>
+                            <p class="font-bold uppercase text-xs" id="userReceiptSignTitleReceiver">ĐẠI DIỆN BÊN NHẬN</p>
+                            <p class="text-[11px] italic text-slate-500">(Ký và ghi rõ họ tên)</p>
+                            <div class="h-20"></div>
+                            <p class="font-bold text-xs" id="userReceiptSignReceiver">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Generic Confirmation Modal -->
     <div id="confirmationModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full items-center justify-center z-50">
         <div class="relative mx-auto p-6 border w-full max-w-sm shadow-lg rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700">
@@ -443,6 +583,7 @@
     <!-- <script src="config.js"></script> -->
     <script src="js/localDB.js?v=20260904-7"></script>
     <script src="js/modules/script-helpers.js?v=20260825-1"></script>
+    <script src="js/modules/rbac.js"></script>
     <script src="js/modules/sidebar.js?v=20260909-3"></script>
 
 <script src="js/modules/page-common.js?v=20260825-1"></script>

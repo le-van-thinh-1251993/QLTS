@@ -366,6 +366,15 @@ window.QLTSPageData.init = async function () {
     // [MỚI] LOGIC PHÂN QUYỀN (RBAC)
     // =================================================================
     function applyRoleBasedUI() {
+        // Nếu hệ thống RBAC có sẵn, áp dụng phân quyền nâng cao
+        if (window.RBAC && typeof window.RBAC.applyRoleUI === 'function') {
+            window.RBAC.applyRoleUI();
+            // Khi RBAC đang tắt (local development), không khóa/ẩn các nút quản trị
+            if (!window.RBAC.isEnabled()) {
+                return;
+            }
+        }
+
         const isAdmin = currentUserProfile.role === 'admin';
 
         // Ẩn tất cả các nút nguy hiểm nếu không phải admin
@@ -403,7 +412,10 @@ window.QLTSPageData.init = async function () {
 
         userNameElements.forEach(el => el.textContent = currentUserProfile.full_name || 'Quản trị viên');
         userEmailElements.forEach(el => el.textContent = currentUserProfile.email || 'admin@newdaymedia.com');
-        userRoleElements.forEach(el => el.textContent = currentUserProfile.role === 'admin' ? 'Admin IT' : (currentUserProfile.role || 'Nhân viên'));
+        const roleLabel = (window.RBAC && typeof window.RBAC.getRoleLabel === 'function')
+            ? window.RBAC.getRoleLabel(currentUserProfile.role)
+            : (currentUserProfile.role === 'admin' ? 'Admin IT' : (currentUserProfile.role || 'Nhân viên'));
+        userRoleElements.forEach(el => el.textContent = roleLabel);
         
         userAvatarElements.forEach(el => {
             el.src = currentUserProfile.avatar_url 

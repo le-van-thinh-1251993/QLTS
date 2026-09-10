@@ -54,6 +54,10 @@
                 .replace(/'/g, '&#039;');
         },
 
+        escapeHtml(str) {
+            return this.escapeHTML(str);
+        },
+
         formatMoney(num) {
             if (num === null || num === undefined || isNaN(Number(num))) return '0 ₫';
             return Number(num).toLocaleString('vi-VN') + ' ₫';
@@ -259,7 +263,35 @@
             const printBtn = document.getElementById('btnPrintReport');
             if (printBtn) {
                 printBtn.addEventListener('click', () => {
-                    window.print();
+                    this.openOfficialReportModal();
+                });
+            }
+
+            const btnOpenOfficial = document.getElementById('btnOpenOfficialReportModal');
+            if (btnOpenOfficial) {
+                btnOpenOfficial.addEventListener('click', () => {
+                    this.openOfficialReportModal();
+                });
+            }
+
+            document.getElementById('officialReportTypeSelect')?.addEventListener('change', () => {
+                this.renderOfficialReportContent();
+            });
+
+            document.getElementById('officialReportDeptSelect')?.addEventListener('change', () => {
+                this.renderOfficialReportContent();
+            });
+
+            document.getElementById('officialReportAssetSelect')?.addEventListener('change', () => {
+                this.renderOfficialReportContent();
+            });
+
+            const officialModal = document.getElementById('officialReportModal');
+            if (officialModal) {
+                officialModal.addEventListener('click', (e) => {
+                    if (e.target.closest('.close-modal') || e.target === officialModal) {
+                        officialModal.classList.add('hidden');
+                    }
                 });
             }
 
@@ -1378,6 +1410,477 @@
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Lich_bao_tri');
             this.saveWorkbook(wb, `Bao_cao_bao_tri_kiem_ke_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        },
+
+        // =================================================================
+        // TRUNG TÂM XUẤT VĂN BẢN & BÁO CÁO HÀNH CHÍNH KHỔ A4 (PRINT / PDF)
+        // =================================================================
+        openOfficialReportModal(defaultType) {
+            const modal = document.getElementById('officialReportModal');
+            if (!modal) return;
+            const typeSelect = document.getElementById('officialReportTypeSelect');
+            if (typeSelect && defaultType) typeSelect.value = defaultType;
+            this.populateOfficialModalFilters();
+            this.renderOfficialReportContent();
+            modal.classList.remove('hidden');
+        },
+
+        populateOfficialModalFilters() {
+            const deptSelect = document.getElementById('officialReportDeptSelect');
+            if (deptSelect) {
+                const depts = this.cache.departments || [];
+                deptSelect.innerHTML = '<option value="all">-- Toàn bộ công ty (Tất cả) --</option>' +
+                    depts.map(d => `<option value="${this.escapeHtml(d.name)}">${this.escapeHtml(d.name)}</option>`).join('');
+            }
+            const assetSelect = document.getElementById('officialReportAssetSelect');
+            if (assetSelect) {
+                const assets = (this.cache.assets || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                assetSelect.innerHTML = assets.map(a => `<option value="${a.id}">${this.escapeHtml(a.name || '')} (${this.escapeHtml(a.asset_code || a.id)}) - ${this.escapeHtml(a.user || 'Chưa cấp')}</option>`).join('');
+            }
+        },
+
+        renderOfficialReportContent() {
+            const container = document.getElementById('officialReportContent');
+            if (!container) return;
+            const type = document.getElementById('officialReportTypeSelect')?.value || 'asset_register';
+            const deptFilter = document.getElementById('officialReportDeptSelect')?.value || 'all';
+            const assetId = document.getElementById('officialReportAssetSelect')?.value;
+
+            const deptWrap = document.getElementById('officialDeptFilterWrap');
+            const assetWrap = document.getElementById('officialAssetPickerWrap');
+
+            if (type === 'handover_act') {
+                if (deptWrap) deptWrap.classList.add('hidden');
+                if (assetWrap) assetWrap.classList.remove('hidden');
+                container.innerHTML = this.generateHandoverActHtml(assetId);
+            } else if (type === 'stock_audit_act') {
+                if (deptWrap) deptWrap.classList.add('hidden');
+                if (assetWrap) assetWrap.classList.add('hidden');
+                container.innerHTML = this.generateStockAuditActHtml();
+            } else if (type === 'inventory_movement') {
+                if (deptWrap) deptWrap.classList.add('hidden');
+                if (assetWrap) assetWrap.classList.add('hidden');
+                container.innerHTML = this.generateInventoryMovementHtml();
+            } else {
+                // asset_register
+                if (deptWrap) deptWrap.classList.remove('hidden');
+                if (assetWrap) assetWrap.classList.add('hidden');
+                container.innerHTML = this.generateAssetRegisterHtml(deptFilter);
+            }
+        },
+
+        generateAssetRegisterHtml(deptFilter) {
+            let items = (this.cache.assets || []).slice();
+            if (deptFilter && deptFilter !== 'all') {
+                items = items.filter(a => a.department === deptFilter || a.location === deptFilter);
+            }
+            items.sort((a, b) => (a.asset_code || '').localeCompare(b.asset_code || ''));
+
+            const today = new Date();
+            const todayStr = `ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
+            const deptTitle = deptFilter === 'all' ? 'TOÀN BỘ CÔNG TY' : `PHÒNG BAN: ${deptFilter.toUpperCase()}`;
+
+            let activeCount = 0, stockCount = 0, repairCount = 0, brokenCount = 0, disposedCount = 0;
+            items.forEach(a => {
+                if (a.status === 'Active') activeCount++;
+                else if (a.status === 'Stock') stockCount++;
+                else if (a.status === 'Repair') repairCount++;
+                else if (a.status === 'Broken') brokenCount++;
+                else if (a.status === 'Disposed') disposedCount++;
+            });
+
+            const rowsHtml = items.map((a, idx) => {
+                const st = (window.STATUS_MAP && window.STATUS_MAP[a.status]) ? window.STATUS_MAP[a.status].text : (a.status || '-');
+                return `
+                    <tr>
+                        <td style="border:1px solid #334155;padding:6px;text-align:center;">${idx + 1}</td>
+                        <td style="border:1px solid #334155;padding:6px;font-family:monospace;font-weight:bold;text-align:center;">${this.escapeHtml(a.asset_code || a.id || '-')}</td>
+                        <td style="border:1px solid #334155;padding:6px;font-weight:600;">${this.escapeHtml(a.name || '-')}</td>
+                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(a.category || '-')}</td>
+                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(a.config || a.specs || '-')}</td>
+                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(a.user || 'Chưa cấp phát')}</td>
+                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(a.department || a.location || '-')}</td>
+                        <td style="border:1px solid #334155;padding:6px;text-align:center;">${this.escapeHtml(st)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+                <div class="official-document">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;font-size:11pt;">
+                        <div style="text-align:left;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CÔNG TY CP TRUYỀN THÔNG NEWDAY</p>
+                            <p style="margin:2px 0 0 0;font-size:10pt;color:#475569;">BỘ PHẬN QUẢN TRỊ THIẾT BỊ & CNTT</p>
+                            <p style="margin:2px 0 0 0;font-size:9pt;font-style:italic;">Số: BKTB-${today.getFullYear()}/${today.getMonth() + 1}</p>
+                        </div>
+                        <div style="text-align:center;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                            <p style="margin:2px 0 0 0;font-style:italic;text-decoration:underline;">Độc lập - Tự do - Hạnh phúc</p>
+                            <p style="margin:4px 0 0 0;font-size:9pt;font-style:italic;color:#64748b;">Hà Nội, ${todayStr}</p>
+                        </div>
+                    </div>
+
+                    <div style="text-align:center;margin:25px 0 15px 0;">
+                        <h2 style="font-size:16pt;font-weight:bold;text-transform:uppercase;margin:0;letter-spacing:0.5px;">BẢNG KÊ TỔNG HỢP TRANG THIẾT BỊ CNTT</h2>
+                        <p style="font-size:11pt;font-style:italic;margin-top:4px;color:#334155;">(Phạm vi: ${this.escapeHtml(deptTitle)})</p>
+                    </div>
+
+                    <table style="width:100%;border-collapse:collapse;margin-top:15px;font-size:10pt;">
+                        <thead>
+                            <tr style="background-color:#f1f5f9;font-weight:bold;text-align:center;">
+                                <th style="border:1px solid #334155;padding:6px;width:35px;">STT</th>
+                                <th style="border:1px solid #334155;padding:6px;width:95px;">Mã tài sản</th>
+                                <th style="border:1px solid #334155;padding:6px;">Tên thiết bị</th>
+                                <th style="border:1px solid #334155;padding:6px;width:110px;">Chủng loại</th>
+                                <th style="border:1px solid #334155;padding:6px;">Cấu hình / Thông số</th>
+                                <th style="border:1px solid #334155;padding:6px;width:130px;">Người sử dụng</th>
+                                <th style="border:1px solid #334155;padding:6px;width:110px;">Phòng ban</th>
+                                <th style="border:1px solid #334155;padding:6px;width:90px;">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml || '<tr><td colspan="8" style="text-align:center;padding:15px;border:1px solid #334155;">Không có dữ liệu thiết bị phù hợp</td></tr>'}
+                        </tbody>
+                    </table>
+
+                    <div style="margin-top:15px;font-size:11pt;line-height:1.6;">
+                        <p style="margin:0;"><strong>Tổng số lượng thiết bị:</strong> ${items.length} thiết bị.</p>
+                        <p style="margin:0;"><strong>Tình trạng vận hành:</strong> Đang cấp phát: <strong>${activeCount}</strong> | Trong kho sẵn sàng: <strong>${stockCount}</strong> | Hỏng / Đang sửa: <strong>${repairCount + brokenCount}</strong> | Đã thanh lý: <strong>${disposedCount}</strong>.</p>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:repeat(3, 1fr);text-align:center;margin-top:35px;page-break-inside:avoid;font-size:11pt;">
+                        <div>
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">NGƯỜI LẬP BIỂU</p>
+                            <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                            <div style="height:65px;"></div>
+                            <p style="font-weight:bold;margin:0;">Quản trị viên IT</p>
+                        </div>
+                        <div>
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">TRƯỞNG BỘ PHẬN CNTT</p>
+                            <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                            <div style="height:65px;"></div>
+                            <p style="font-weight:bold;margin:0;">Trưởng phòng CNTT</p>
+                        </div>
+                        <div>
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">BAN GIÁM ĐỐC DUYỆT</p>
+                            <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký, đóng dấu)</p>
+                            <div style="height:65px;"></div>
+                            <p style="font-weight:bold;margin:0;">Ban Giám Đốc</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        },
+
+        generateHandoverActHtml(assetId) {
+            const assets = this.cache.assets || [];
+            const users = this.cache.users || [];
+            const asset = assets.find(a => String(a.id) === String(assetId)) || assets[0] || {};
+            const user = users.find(u => u.name === asset.user || String(u.id) === String(asset.user_id)) || {};
+
+            const today = new Date();
+            const todayStr = `ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
+            const docNum = `BBBG-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${asset.id || '01'}`;
+
+            return `
+                <div class="official-document">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px;font-size:11pt;">
+                        <div style="text-align:left;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CÔNG TY CP TRUYỀN THÔNG NEWDAY</p>
+                            <p style="margin:2px 0 0 0;font-size:10pt;color:#475569;">BỘ PHẬN QUẢN TRỊ THIẾT BỊ CNTT</p>
+                            <p style="margin:2px 0 0 0;font-size:9.5pt;font-style:italic;">Số: ${docNum}</p>
+                        </div>
+                        <div style="text-align:center;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                            <p style="margin:2px 0 0 0;font-style:italic;text-decoration:underline;">Độc lập - Tự do - Hạnh phúc</p>
+                            <p style="margin:4px 0 0 0;font-size:9.5pt;font-style:italic;color:#64748b;">Hà Nội, ${todayStr}</p>
+                        </div>
+                    </div>
+
+                    <div style="text-align:center;margin:25px 0 20px 0;">
+                        <h2 style="font-size:16pt;font-weight:bold;text-transform:uppercase;margin:0;">BIÊN BẢN BÀN GIAO THIẾT BỊ CNTT</h2>
+                        <p style="font-size:10pt;font-style:italic;margin-top:3px;color:#64748b;">(V/v Bàn giao trang thiết bị làm việc cho nhân sự)</p>
+                    </div>
+
+                    <div style="font-size:11pt;line-height:1.7;">
+                        <p style="margin:0 0 8px 0;font-style:italic;">Hôm nay, tại Văn phòng Công ty CP Truyền thông Newday, chúng tôi gồm có:</p>
+
+                        <div style="margin-bottom:12px;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0 0 4px 0;">I. ĐẠI DIỆN BÊN GIAO (BỘ PHẬN QUẢN TRỊ CNTT):</p>
+                            <p style="margin:0 0 2px 15px;">- Họ và tên: <strong>Admin Hệ Thống</strong></p>
+                            <p style="margin:0 0 2px 15px;">- Chức vụ: Cán bộ Quản trị Hạ tầng & Trang thiết bị CNTT</p>
+                            <p style="margin:0 0 2px 15px;">- Bộ phận: Phòng Công Nghệ Thông Tin</p>
+                        </div>
+
+                        <div style="margin-bottom:15px;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0 0 4px 0;">II. ĐẠI DIỆN BÊN NHẬN (NGƯỜI TIẾP NHẬN SỬ DỤNG):</p>
+                            <p style="margin:0 0 2px 15px;">- Họ và tên: <strong>${this.escapeHtml(user.name || asset.user || 'Nhân sự tiếp nhận')}</strong></p>
+                            <p style="margin:0 0 2px 15px;">- Phòng ban / Khối: ${this.escapeHtml(user.department || asset.department || asset.location || 'Chưa cập nhật')}</p>
+                            <p style="margin:0 0 2px 15px;">- Email: ${this.escapeHtml(user.email || 'Chưa cập nhật')}</p>
+                        </div>
+
+                        <div style="margin-bottom:15px;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0 0 6px 0;">III. THÔNG TIN THIẾT BỊ & PHỤ KIỆN BÀN GIAO:</p>
+                            <table style="width:100%;border-collapse:collapse;font-size:10.5pt;">
+                                <thead>
+                                    <tr style="background-color:#f1f5f9;text-align:center;font-weight:bold;">
+                                        <th style="border:1px solid #334155;padding:6px;width:35px;">STT</th>
+                                        <th style="border:1px solid #334155;padding:6px;">Tên thiết bị</th>
+                                        <th style="border:1px solid #334155;padding:6px;width:110px;">Mã tài sản</th>
+                                        <th style="border:1px solid #334155;padding:6px;">Cấu hình / Thông số kỹ thuật</th>
+                                        <th style="border:1px solid #334155;padding:6px;width:110px;">Tình trạng bàn giao</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">1</td>
+                                        <td style="border:1px solid #334155;padding:6px;font-weight:600;">${this.escapeHtml(asset.name || '-')}</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;font-family:monospace;font-weight:bold;">${this.escapeHtml(asset.asset_code || asset.id || '-')}</td>
+                                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(asset.config || asset.specs || asset.category || '-')}</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">Hoạt động tốt</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div style="margin-top:6px;font-size:10pt;">
+                                <strong>Phụ kiện kèm theo:</strong> 01 Củ sạc chính hãng kèm dây nguồn, 01 Chuột quang máy tính, 01 Túi chống sốc / Cặp đựng.
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:20px;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0 0 4px 0;">IV. CAM KẾT SỬ DỤNG & TRÁCH NHIỆM BẢO QUẢN:</p>
+                            <p style="margin:0;font-size:10pt;font-style:italic;color:#334155;text-align:justify;">
+                                1. Bên nhận cam kết sử dụng thiết bị đúng mục đích công việc, bảo quản cẩn thận, tuân thủ các quy chuẩn an toàn thông tin và bảo mật dữ liệu của Công ty.<br>
+                                2. Không tự ý tháo dỡ, thay thế linh kiện hoặc cài đặt phần mềm độc hại, vi phạm bản quyền.<br>
+                                3. Khi xảy ra sự cố hỏng hóc hoặc khi chuyển công tác, thôi việc, có trách nhiệm hoàn trả đầy đủ thiết bị và phụ kiện cho Bộ phận CNTT.
+                            </p>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:repeat(2, 1fr);text-align:center;margin-top:30px;page-break-inside:avoid;">
+                            <div>
+                                <p style="font-weight:bold;text-transform:uppercase;margin:0;">ĐẠI DIỆN BÊN GIAO</p>
+                                <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                                <div style="height:70px;"></div>
+                                <p style="font-weight:bold;margin:0;">Quản trị viên IT</p>
+                            </div>
+                            <div>
+                                <p style="font-weight:bold;text-transform:uppercase;margin:0;">ĐẠI DIỆN BÊN NHẬN</p>
+                                <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                                <div style="height:70px;"></div>
+                                <p style="font-weight:bold;margin:0;">${this.escapeHtml(user.name || asset.user || 'Người nhận')}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        },
+
+        generateStockAuditActHtml() {
+            const checks = this.cache.stockChecks || [];
+            const latestCheck = checks[0] || { name: 'Đợt kiểm kê định kỳ Q1/2026', check_date: new Date().toISOString() };
+            const assets = this.cache.assets || [];
+
+            const today = new Date();
+            const todayStr = `ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
+
+            let matchedCount = 0, missingCount = 0;
+            assets.forEach(a => {
+                if (a.status === 'Active' || a.status === 'Stock') matchedCount++;
+                else if (a.status === 'Broken' || a.status === 'Disposed') missingCount++;
+            });
+
+            return `
+                <div class="official-document">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px;font-size:11pt;">
+                        <div style="text-align:left;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CÔNG TY CP TRUYỀN THÔNG NEWDAY</p>
+                            <p style="margin:2px 0 0 0;font-size:10pt;color:#475569;">HỘI ĐỒNG KIỂM KÊ TÀI SẢN</p>
+                            <p style="margin:2px 0 0 0;font-size:9.5pt;font-style:italic;">Số: BBKK-${today.getFullYear()}/01</p>
+                        </div>
+                        <div style="text-align:center;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                            <p style="margin:2px 0 0 0;font-style:italic;text-decoration:underline;">Độc lập - Tự do - Hạnh phúc</p>
+                            <p style="margin:4px 0 0 0;font-size:9.5pt;font-style:italic;color:#64748b;">Hà Nội, ${todayStr}</p>
+                        </div>
+                    </div>
+
+                    <div style="text-align:center;margin:25px 0 20px 0;">
+                        <h2 style="font-size:16pt;font-weight:bold;text-transform:uppercase;margin:0;">BIÊN BẢN ĐỐI SOÁT & KIỂM KÊ TÀI SẢN ĐỊNH KỲ</h2>
+                        <p style="font-size:10.5pt;font-style:italic;margin-top:3px;color:#334155;">Đợt: ${this.escapeHtml(latestCheck.name || 'Kiểm kê định kỳ')}</p>
+                    </div>
+
+                    <div style="font-size:11pt;line-height:1.7;">
+                        <p style="margin:0 0 8px 0;font-style:italic;">Hội đồng kiểm kê được thành lập theo quyết định của Ban Giám đốc, tiến hành kiểm kê thực tế tài sản CNTT với các thành phần:</p>
+
+                        <div style="margin-bottom:12px;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0 0 4px 0;">I. THÀNH PHẦN HỘI ĐỒNG KIỂM KÊ:</p>
+                            <p style="margin:0 0 2px 15px;">1. Ông/Bà: <strong>Admin Hệ Thống</strong> - Trưởng phòng CNTT (Trưởng ban)</p>
+                            <p style="margin:0 0 2px 15px;">2. Ông/Bà: <strong>Nguyễn Văn Quản Lý</strong> - Cán bộ Kỹ thuật (Ủy viên)</p>
+                            <p style="margin:0 0 2px 15px;">3. Ông/Bà: <strong>Trần Thị Kế Toán</strong> - Đại diện Phòng Tài chính / Kế toán (Ủy viên)</p>
+                        </div>
+
+                        <div style="margin-bottom:15px;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0 0 6px 0;">II. KẾT QUẢ ĐỐI SOÁT SỔ SÁCH VÀ THỰC TẾ:</p>
+                            <table style="width:100%;border-collapse:collapse;font-size:10.5pt;">
+                                <thead>
+                                    <tr style="background-color:#f1f5f9;text-align:center;font-weight:bold;">
+                                        <th style="border:1px solid #334155;padding:6px;width:40px;">STT</th>
+                                        <th style="border:1px solid #334155;padding:6px;">Chỉ tiêu kiểm kê</th>
+                                        <th style="border:1px solid #334155;padding:6px;width:110px;">Số lượng</th>
+                                        <th style="border:1px solid #334155;padding:6px;width:110px;">Tỷ lệ (%)</th>
+                                        <th style="border:1px solid #334155;padding:6px;">Ghi chú đánh giá</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">1</td>
+                                        <td style="border:1px solid #334155;padding:6px;font-weight:600;">Tổng tài sản quản lý trên sổ sách</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;font-weight:bold;">${assets.length}</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">100%</td>
+                                        <td style="border:1px solid #334155;padding:6px;">Theo danh mục hệ thống</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">2</td>
+                                        <td style="border:1px solid #334155;padding:6px;">Tài sản kiểm đếm thực tế trùng khớp</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;font-weight:bold;color:#15803d;">${matchedCount}</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">${assets.length ? ((matchedCount / assets.length) * 100).toFixed(1) : 0}%</td>
+                                        <td style="border:1px solid #334155;padding:6px;">Đang hoạt động và trong kho</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">3</td>
+                                        <td style="border:1px solid #334155;padding:6px;">Tài sản lệch / Hỏng hóc / Đã thanh lý</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;font-weight:bold;color:#b91c1c;">${missingCount}</td>
+                                        <td style="border:1px solid #334155;padding:6px;text-align:center;">${assets.length ? ((missingCount / assets.length) * 100).toFixed(1) : 0}%</td>
+                                        <td style="border:1px solid #334155;padding:6px;">Cần bảo trì sửa chữa hoặc thanh lý</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div style="margin-bottom:20px;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0 0 4px 0;">III. KIẾN NGHỊ VÀ XỬ LÝ CỦA HỘI ĐỒNG:</p>
+                            <p style="margin:0;font-size:10pt;font-style:italic;color:#334155;text-align:justify;">
+                                1. Tiếp tục duy trì dán tem mã QR / Barcode cho 100% thiết bị để đối soát nhanh bằng máy quét.<br>
+                                2. Lập thủ tục điều chuyển thanh lý đối với các thiết bị hỏng không còn khả năng sửa chữa.<br>
+                                3. Đôn đốc các phòng ban bàn giao lại thiết bị dôi dư chưa sử dụng về kho tập trung.
+                            </p>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:repeat(3, 1fr);text-align:center;margin-top:30px;page-break-inside:avoid;">
+                            <div>
+                                <p style="font-weight:bold;text-transform:uppercase;margin:0;">ĐẠI DIỆN KẾ TOÁN</p>
+                                <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                                <div style="height:65px;"></div>
+                                <p style="font-weight:bold;margin:0;">Trần Thị Kế Toán</p>
+                            </div>
+                            <div>
+                                <p style="font-weight:bold;text-transform:uppercase;margin:0;">CÁN BỘ KỸ THUẬT</p>
+                                <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                                <div style="height:65px;"></div>
+                                <p style="font-weight:bold;margin:0;">Kỹ thuật viên IT</p>
+                            </div>
+                            <div>
+                                <p style="font-weight:bold;text-transform:uppercase;margin:0;">TRƯỞNG BAN KIỂM KÊ</p>
+                                <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                                <div style="height:65px;"></div>
+                                <p style="font-weight:bold;margin:0;">Trưởng ban</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        },
+
+        generateInventoryMovementHtml() {
+            const supplies = (this.cache.supplies || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            const today = new Date();
+            const todayStr = `ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
+
+            let totalQty = 0;
+            const rowsHtml = supplies.map((s, idx) => {
+                const qty = Number(s.quantity || 0);
+                totalQty += qty;
+                const minQty = Number(s.min_quantity || 5);
+                const isLow = qty <= minQty;
+                return `
+                    <tr>
+                        <td style="border:1px solid #334155;padding:6px;text-align:center;">${idx + 1}</td>
+                        <td style="border:1px solid #334155;padding:6px;text-align:center;font-family:monospace;font-weight:bold;">${this.escapeHtml(s.code || ('VT-' + s.id))}</td>
+                        <td style="border:1px solid #334155;padding:6px;font-weight:600;">${this.escapeHtml(s.name || '-')}</td>
+                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(s.category || 'Vật tư')}</td>
+                        <td style="border:1px solid #334155;padding:6px;text-align:center;">${this.escapeHtml(s.unit || 'Cái')}</td>
+                        <td style="border:1px solid #334155;padding:6px;text-align:center;font-weight:bold;${isLow ? 'color:#b91c1c;' : ''}">${qty}</td>
+                        <td style="border:1px solid #334155;padding:6px;text-align:center;">${minQty}</td>
+                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(s.location || 'Kho chung')}</td>
+                        <td style="border:1px solid #334155;padding:6px;">${this.escapeHtml(s.supplier_name || s.supplier || '-')}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+                <div class="official-document">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px;font-size:11pt;">
+                        <div style="text-align:left;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CÔNG TY CP TRUYỀN THÔNG NEWDAY</p>
+                            <p style="margin:2px 0 0 0;font-size:10pt;color:#475569;">BỘ PHẬN QUẢN LÝ KHO VẬT TƯ & LINH KIỆN</p>
+                            <p style="margin:2px 0 0 0;font-size:9.5pt;font-style:italic;">Số: BCK-${today.getFullYear()}/${today.getMonth() + 1}</p>
+                        </div>
+                        <div style="text-align:center;">
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                            <p style="margin:2px 0 0 0;font-style:italic;text-decoration:underline;">Độc lập - Tự do - Hạnh phúc</p>
+                            <p style="margin:4px 0 0 0;font-size:9.5pt;font-style:italic;color:#64748b;">Hà Nội, ${todayStr}</p>
+                        </div>
+                    </div>
+
+                    <div style="text-align:center;margin:25px 0 20px 0;">
+                        <h2 style="font-size:16pt;font-weight:bold;text-transform:uppercase;margin:0;">BÁO CÁO TỒN KHO LINH KIỆN & VẬT TƯ TIÊU HAO</h2>
+                        <p style="font-size:10.5pt;font-style:italic;margin-top:3px;color:#334155;">(Theo dõi số lượng tồn kho thực tế và ngưỡng dự phòng)</p>
+                    </div>
+
+                    <table style="width:100%;border-collapse:collapse;font-size:10pt;">
+                        <thead>
+                            <tr style="background-color:#f1f5f9;text-align:center;font-weight:bold;">
+                                <th style="border:1px solid #334155;padding:6px;width:35px;">STT</th>
+                                <th style="border:1px solid #334155;padding:6px;width:95px;">Mã SKU</th>
+                                <th style="border:1px solid #334155;padding:6px;">Tên vật tư / Linh kiện</th>
+                                <th style="border:1px solid #334155;padding:6px;width:110px;">Phân loại</th>
+                                <th style="border:1px solid #334155;padding:6px;width:55px;">ĐVT</th>
+                                <th style="border:1px solid #334155;padding:6px;width:75px;">Tồn kho</th>
+                                <th style="border:1px solid #334155;padding:6px;width:75px;">Tối thiểu</th>
+                                <th style="border:1px solid #334155;padding:6px;width:100px;">Vị trí kho</th>
+                                <th style="border:1px solid #334155;padding:6px;width:120px;">Nhà cung cấp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml || '<tr><td colspan="9" style="text-align:center;padding:15px;border:1px solid #334155;">Không có dữ liệu vật tư</td></tr>'}
+                        </tbody>
+                    </table>
+
+                    <div style="margin-top:15px;font-size:11pt;">
+                        <p style="margin:0;"><strong>Tổng số mặt hàng theo dõi:</strong> ${supplies.length} SKU | <strong>Tổng số lượng tồn:</strong> ${totalQty} sản phẩm.</p>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:repeat(3, 1fr);text-align:center;margin-top:35px;page-break-inside:avoid;font-size:11pt;">
+                        <div>
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">THỦ KHO VẬT TƯ</p>
+                            <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                            <div style="height:65px;"></div>
+                            <p style="font-weight:bold;margin:0;">Thủ kho</p>
+                        </div>
+                        <div>
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">QUẢN TRỊ VIÊN IT</p>
+                            <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký và ghi rõ họ tên)</p>
+                            <div style="height:65px;"></div>
+                            <p style="font-weight:bold;margin:0;">Kỹ thuật viên</p>
+                        </div>
+                        <div>
+                            <p style="font-weight:bold;text-transform:uppercase;margin:0;">BAN GIÁM ĐỐC DUYỆT</p>
+                            <p style="font-style:italic;font-size:9.5pt;margin:2px 0 0 0;color:#64748b;">(Ký, đóng dấu)</p>
+                            <div style="height:65px;"></div>
+                            <p style="font-weight:bold;margin:0;">Ban Giám Đốc</p>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
     };
 

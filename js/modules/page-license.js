@@ -6,6 +6,319 @@ if (typeof window.applyAssetFilters !== 'function') window.applyAssetFilters = f
 if (typeof window.applyLicenseFilters !== 'function') window.applyLicenseFilters = function () {};
 if (typeof window.applyUserFilters !== 'function') window.applyUserFilters = function () {};
 
+// Biến lưu trữ ngữ cảnh biên bản hiện tại
+window.currentReceiptContext = null;
+
+// Hàm cập nhật trạng thái Biên bản: Bàn giao vs Thu hồi
+window.updateHandoverReceiptMode = function (mode) {
+    const docTitle = document.getElementById('receiptDocTitle');
+    const docNumber = document.getElementById('receiptDocNumber');
+    const recHeader = document.getElementById('receiptReceiverHeader');
+    const comHeader = document.getElementById('receiptCommitmentHeader');
+    const comText = document.getElementById('receiptCommitmentText');
+    const signTitleGiver = document.getElementById('receiptSignTitleGiver');
+    const signTitleReceiver = document.getElementById('receiptSignTitleReceiver');
+    const btnHandover = document.getElementById('btnReceiptModeHandover');
+    const btnReturn = document.getElementById('btnReceiptModeReturn');
+    const assetCode = (window.currentReceiptContext && window.currentReceiptContext.assetCode) || '01';
+    const dateNum = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+    if (mode === 'return') {
+        if (docTitle) docTitle.textContent = 'BIÊN BẢN THU HỒI / HOÀN TRẢ THIẾT BỊ CNTT';
+        if (docNumber) docNumber.textContent = `Số: BBTH-${dateNum}-${assetCode}`;
+        if (recHeader) recHeader.textContent = 'II. ĐẠI DIỆN BÊN TRẢ (NGƯỜI BÀN GIAO LẠI THIẾT BỊ):';
+        if (comHeader) comHeader.textContent = 'IV. XÁC NHẬN THU HỒI & TÌNH TRẠNG KỸ THUẬT:';
+        if (comText) comText.textContent = 'Bộ phận CNTT xác nhận đã tiếp nhận bàn giao lại thiết bị và các phụ kiện đính kèm đúng theo danh mục nêu trên. Hai bên đã cùng kiểm tra tình trạng thực tế và xác nhận việc hoàn tất thủ tục bàn giao tài sản CNTT của người bàn giao đối với thiết bị này.';
+        if (signTitleGiver) signTitleGiver.textContent = 'ĐẠI DIỆN BỘ PHẬN TIẾP NHẬN';
+        if (signTitleReceiver) signTitleReceiver.textContent = 'NGƯỜI BÀN GIAO LẠI';
+        if (btnReturn) {
+            btnReturn.className = 'px-3 py-1.5 rounded-md font-semibold bg-blue-600 text-white shadow-sm transition';
+        }
+        if (btnHandover) {
+            btnHandover.className = 'px-3 py-1.5 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 transition';
+        }
+    } else {
+        if (docTitle) docTitle.textContent = 'BIÊN BẢN BÀN GIAO THIẾT BỊ CNTT';
+        if (docNumber) docNumber.textContent = `Số: BBBG-${dateNum}-${assetCode}`;
+        if (recHeader) recHeader.textContent = 'II. ĐẠI DIỆN BÊN NHẬN (NGƯỜI TIẾP NHẬN SỬ DỤNG):';
+        if (comHeader) comHeader.textContent = 'IV. CAM KẾT TRÁCH NHIỆM & BẢO QUẢN:';
+        if (comText) comText.textContent = 'Bên nhận cam kết sử dụng thiết bị đúng mục đích phục vụ công việc của Công ty, tuân thủ nghiêm ngặt các quy định về an toàn thông tin, bảo mật dữ liệu và bảo quản tài sản. Khi xảy ra sự cố kỹ thuật, hỏng hóc hoặc khi chuyển vị trí công tác / chấm dứt hợp đồng lao động, người sử dụng có trách nhiệm bàn giao hoàn trả đầy đủ nguyên vẹn thiết bị cho Bộ phận CNTT.';
+        if (signTitleGiver) signTitleGiver.textContent = 'ĐẠI DIỆN BÊN GIAO';
+        if (signTitleReceiver) signTitleReceiver.textContent = 'ĐẠI DIỆN BÊN NHẬN';
+        if (btnHandover) {
+            btnHandover.className = 'px-3 py-1.5 rounded-md font-semibold bg-blue-600 text-white shadow-sm transition';
+        }
+        if (btnReturn) {
+            btnReturn.className = 'px-3 py-1.5 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 transition';
+        }
+    }
+};
+
+// Global click event delegation cho nút chuyển đổi loại biên bản
+document.addEventListener('click', function (e) {
+    if (e.target.closest('#btnReceiptModeHandover')) {
+        if (typeof window.updateHandoverReceiptMode === 'function') {
+            window.updateHandoverReceiptMode('handover');
+        }
+    } else if (e.target.closest('#btnReceiptModeReturn')) {
+        if (typeof window.updateHandoverReceiptMode === 'function') {
+            window.updateHandoverReceiptMode('return');
+        }
+    } else if (e.target.closest('#btnUserReceiptModeHandover')) {
+        if (typeof window.updateUserHandoverReceiptMode === 'function') {
+            window.updateUserHandoverReceiptMode('handover');
+        }
+    } else if (e.target.closest('#btnUserReceiptModeReturn')) {
+        if (typeof window.updateUserHandoverReceiptMode === 'function') {
+            window.updateUserHandoverReceiptMode('return');
+        }
+    }
+});
+
+// Biến lưu trữ ngữ cảnh biên bản tổng hợp nhân sự hiện tại
+window.currentUserReceiptContext = null;
+
+// Hàm cập nhật trạng thái Biên bản tổng hợp nhân sự: Bàn giao vs Thu hồi
+window.updateUserHandoverReceiptMode = function (mode) {
+    const docTitle = document.getElementById('userReceiptDocTitle');
+    const docNumber = document.getElementById('userReceiptDocNumber');
+    const intro = document.getElementById('userReceiptIntro');
+    const recHeader = document.getElementById('userReceiptReceiverHeader');
+    const comHeader = document.getElementById('userReceiptCommitmentHeader');
+    const comText = document.getElementById('userReceiptCommitmentText');
+    const signTitleGiver = document.getElementById('userReceiptSignTitleGiver');
+    const signTitleReceiver = document.getElementById('userReceiptSignTitleReceiver');
+    const btnHandover = document.getElementById('btnUserReceiptModeHandover');
+    const btnReturn = document.getElementById('btnUserReceiptModeReturn');
+    const userId = (window.currentUserReceiptContext && window.currentUserReceiptContext.userId) || '01';
+    const dateNum = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+    if (mode === 'return') {
+        if (docTitle) docTitle.textContent = 'BIÊN BẢN THU HỒI / HOÀN TRẢ TÀI SẢN & THIẾT BỊ';
+        if (docNumber) docNumber.textContent = `Số: BBTH-TH-${dateNum}-${userId}`;
+        if (intro) intro.textContent = 'Hôm nay, tại văn phòng Công ty CP Truyền thông Newday, chúng tôi tiến hành lập biên bản thu hồi và bàn giao lại toàn bộ trang thiết bị làm việc của nhân sự chuyển vị trí công tác hoặc thôi việc:';
+        if (recHeader) recHeader.textContent = 'II. ĐẠI DIỆN BÊN TRẢ (NHÂN SỰ BÀN GIAO LẠI TÀI SẢN):';
+        if (comHeader) comHeader.textContent = 'IV. XÁC NHẬN THU HỒI & HOÀN TẤT THỦ TỤC:';
+        if (comText) comText.textContent = 'Bộ phận CNTT xác nhận đã tiếp nhận bàn giao lại toàn bộ danh mục trang thiết bị, phụ kiện và bản quyền phần mềm nêu trên từ nhân sự. Hai bên đã cùng kiểm tra tình trạng thực tế và xác nhận nhân viên đã hoàn tất thủ tục bàn giao tài sản CNTT theo quy định của Công ty.';
+        if (signTitleGiver) signTitleGiver.textContent = 'ĐẠI DIỆN BỘ PHẬN TIẾP NHẬN';
+        if (signTitleReceiver) signTitleReceiver.textContent = 'NHÂN SỰ BÀN GIAO LẠI';
+        if (btnReturn) {
+            btnReturn.className = 'px-3 py-1.5 rounded-md font-semibold bg-blue-600 text-white shadow-sm transition';
+        }
+        if (btnHandover) {
+            btnHandover.className = 'px-3 py-1.5 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 transition';
+        }
+    } else {
+        if (docTitle) docTitle.textContent = 'BIÊN BẢN BÀN GIAO TRANG THIẾT BỊ LÀM VIỆC';
+        if (docNumber) docNumber.textContent = `Số: BBBG-TH-${dateNum}-${userId}`;
+        if (intro) intro.textContent = 'Hôm nay, tại văn phòng Công ty CP Truyền thông Newday, chúng tôi tiến hành lập biên bản bàn giao toàn bộ trang thiết bị và công cụ làm việc phục vụ công tác cho nhân sự với chi tiết như sau:';
+        if (recHeader) recHeader.textContent = 'II. ĐẠI DIỆN BÊN NHẬN (NHÂN SỰ TIẾP NHẬN SỬ DỤNG):';
+        if (comHeader) comHeader.textContent = 'IV. CAM KẾT TRÁCH NHIỆM & NGHĨA VỤ QUẢN LÝ TÀI SẢN:';
+        if (comText) comText.textContent = 'Nhân viên cam kết tiếp nhận đầy đủ toàn bộ các trang thiết bị và bản quyền nêu trên; sử dụng đúng mục đích phục vụ công việc tại Công ty; có trách nhiệm bảo quản, giữ gìn tài sản và tuân thủ các quy định về an toàn thông tin của Công ty. Khi thôi việc hoặc chuyển công tác, nhân viên có trách nhiệm bàn giao hoàn trả đầy đủ nguyên vẹn toàn bộ danh mục tài sản trên cho Bộ phận CNTT.';
+        if (signTitleGiver) signTitleGiver.textContent = 'ĐẠI DIỆN BÊN GIAO';
+        if (signTitleReceiver) signTitleReceiver.textContent = 'ĐẠI DIỆN BÊN NHẬN';
+        if (btnHandover) {
+            btnHandover.className = 'px-3 py-1.5 rounded-md font-semibold bg-blue-600 text-white shadow-sm transition';
+        }
+        if (btnReturn) {
+            btnReturn.className = 'px-3 py-1.5 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 transition';
+        }
+    }
+};
+
+// Hàm render bảng danh mục tài sản theo danh sách đã tick chọn
+window.renderUserReceiptAssetTable = function () {
+    const ctx = window.currentUserReceiptContext;
+    if (!ctx) return;
+
+    const assetTbody = document.getElementById('userReceiptAssetTableBody');
+    const countBadge = document.getElementById('userReceiptSelectedCount');
+    const selectedAssets = (ctx.allAssets || []).filter(a => ctx.selectedAssetIds.has(String(a.id)));
+
+    if (countBadge) {
+        countBadge.textContent = `Đã chọn: ${selectedAssets.length}/${(ctx.allAssets || []).length} tài sản`;
+    }
+
+    if (assetTbody) {
+        if (selectedAssets.length === 0) {
+            assetTbody.innerHTML = `<tr><td colspan="6" class="border border-slate-700 p-4 text-center text-slate-500 italic">Chưa chọn thiết bị nào để in trong biên bản. Vui lòng tick chọn ít nhất một thiết bị ở danh sách phía trên.</td></tr>`;
+        } else {
+            assetTbody.innerHTML = selectedAssets.map((a, idx) => {
+                const configText = a.config || a.specs || a.category || '-';
+                const condText = a.status === 'Active' ? 'Hoạt động tốt' : (a.status || 'Bình thường');
+                const catLower = (a.category || '').toLowerCase();
+                const nameLower = (a.name || '').toLowerCase();
+                let accessories = 'Đầy đủ phụ kiện tiêu chuẩn';
+                if (catLower.includes('laptop') || nameLower.includes('macbook') || nameLower.includes('laptop')) {
+                    accessories = '01 Củ sạc zin theo máy, 01 Túi đựng/Balo, 01 Chuột';
+                } else if (catLower.includes('màn hình') || nameLower.includes('màn hình')) {
+                    accessories = 'Dây nguồn, Dây cáp tín hiệu (HDMI/Type-C/DisplayPort)';
+                }
+                return `
+                    <tr>
+                        <td class="border border-slate-700 p-2 text-center font-semibold">${idx + 1}</td>
+                        <td class="border border-slate-700 p-2 text-center font-mono font-bold">${a.asset_code || a.id || '-'}</td>
+                        <td class="border border-slate-700 p-2 font-semibold">${a.name || '-'}</td>
+                        <td class="border border-slate-700 p-2">${configText}</td>
+                        <td class="border border-slate-700 p-2 text-center">${condText}</td>
+                        <td class="border border-slate-700 p-2 italic">${accessories}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
+};
+
+// Hàm gom toàn bộ tài sản đã bàn giao cho nhân sự vào 1 biên bản tổng hợp
+window.openUserHandoverModal = function (userId, defaultMode) {
+    const userList = window.users || [];
+    const assetList = window.assets || [];
+    const licenseList = window.licenses || [];
+
+    const user = userList.find(u => String(u.id) === String(userId));
+    if (!user) {
+        if (typeof showInfoModal === 'function') {
+            showInfoModal('Không tìm thấy thông tin nhân viên!', 'Thông báo');
+        } else {
+            alert('Không tìm thấy thông tin nhân viên!');
+        }
+        return;
+    }
+
+    // Gom toàn bộ tài sản thuộc về nhân sự này
+    const userAssets = assetList.filter(a => String(a.user_id) === String(user.id) || (a.user && a.user.trim().toLowerCase() === user.name.trim().toLowerCase()));
+    const userLicenses = licenseList.filter(l => String(l.user_id) === String(user.id));
+
+    const today = new Date();
+    const d = today.getDate();
+    const m = today.getMonth() + 1;
+    const y = today.getFullYear();
+    const dateStr = `Hà Nội, ngày ${d < 10 ? '0' + d : d} tháng ${m < 10 ? '0' + m : m} năm ${y}`;
+
+    const giverName = window.currentUserProfile?.full_name || window.currentUserProfile?.email || 'Admin Hệ Thống';
+    const deptName = typeof user.department === 'object' ? (user.department?.name || 'Chưa cập nhật') : (user.department || 'Chưa cập nhật');
+
+    // Cập nhật thông tin các bên
+    const rDate = document.getElementById('userReceiptDateStr');
+    const rGiver = document.getElementById('userReceiptGiverName');
+    const rRecName = document.getElementById('userReceiptReceiverName');
+    const rRecDept = document.getElementById('userReceiptReceiverDept');
+    const rRecEmail = document.getElementById('userReceiptReceiverEmail');
+    const rRecPhone = document.getElementById('userReceiptReceiverPhone');
+    const rSignGiver = document.getElementById('userReceiptSignGiver');
+    const rSignRec = document.getElementById('userReceiptSignReceiver');
+
+    if (rDate) rDate.textContent = dateStr;
+    if (rGiver) rGiver.textContent = `- Họ và tên: ${giverName}`;
+    if (rRecName) rRecName.textContent = `- Họ và tên: ${user.name}`;
+    if (rRecDept) rRecDept.textContent = `- Phòng ban / Bộ phận: ${deptName}`;
+    if (rRecEmail) rRecEmail.textContent = `- Email: ${user.email || 'Chưa cập nhật'}`;
+    if (rRecPhone) rRecPhone.textContent = `- Điện thoại: ${user.phone || 'Chưa cập nhật'}`;
+    if (rSignGiver) rSignGiver.textContent = giverName;
+    if (rSignRec) rSignRec.textContent = user.name;
+
+    // Lưu trữ ngữ cảnh và khởi tạo toàn bộ tài sản ở trạng thái được chọn (selected)
+    window.currentUserReceiptContext = {
+        userId: user.id,
+        userName: user.name,
+        allAssets: userAssets,
+        allLicenses: userLicenses,
+        selectedAssetIds: new Set(userAssets.map(a => String(a.id))),
+        mode: defaultMode || 'handover'
+    };
+
+    // Render danh sách các ô checkbox chọn thiết bị
+    const checkboxContainer = document.getElementById('userReceiptAssetCheckboxes');
+    if (checkboxContainer) {
+        if (userAssets.length === 0) {
+            checkboxContainer.innerHTML = '<span class="text-xs text-slate-400 italic">Nhân sự này hiện chưa giữ thiết bị phần cứng nào.</span>';
+        } else {
+            checkboxContainer.innerHTML = userAssets.map(a => {
+                const code = a.asset_code || a.id || '-';
+                return `
+                    <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-slate-700 transition select-none shadow-sm">
+                        <input type="checkbox" class="user-receipt-asset-item-check rounded text-blue-600 focus:ring-blue-500" value="${a.id}" checked>
+                        <span class="font-mono font-bold text-blue-600 dark:text-blue-400">${code}</span>
+                        <span class="text-slate-700 dark:text-slate-200 truncate max-w-[180px]" title="${a.name}">${a.name}</span>
+                    </label>
+                `;
+            }).join('');
+        }
+    }
+
+    // Render bảng in A4 theo danh sách đang chọn
+    window.renderUserReceiptAssetTable();
+
+    // Render bảng bản quyền phần mềm kèm theo nếu có
+    const licSec = document.getElementById('userReceiptLicenseSection');
+    const licTbody = document.getElementById('userReceiptLicenseTableBody');
+    if (licSec && licTbody) {
+        if (userLicenses.length > 0) {
+            licSec.classList.remove('hidden');
+            licTbody.innerHTML = userLicenses.map((l, idx) => `
+                <tr>
+                    <td class="border border-slate-700 p-2 text-center font-semibold">${idx + 1}</td>
+                    <td class="border border-slate-700 p-2 font-semibold">${l.key_type || '-'}</td>
+                    <td class="border border-slate-700 p-2">${l.package_type || 'Bản quyền doanh nghiệp'}</td>
+                    <td class="border border-slate-700 p-2 text-center font-medium text-emerald-700">${l.status || 'Đang kích hoạt'}</td>
+                </tr>
+            `).join('');
+        } else {
+            licSec.classList.add('hidden');
+        }
+    }
+
+    window.updateUserHandoverReceiptMode(defaultMode || 'handover');
+
+    if (typeof openModal === 'function') {
+        openModal('userHandoverReceiptModal');
+    } else {
+        const m = document.getElementById('userHandoverReceiptModal');
+        if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+    }
+};
+
+// Lắng nghe sự kiện tick chọn tài sản cần đưa vào biên bản
+document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('user-receipt-asset-item-check')) {
+        const ctx = window.currentUserReceiptContext;
+        if (!ctx) return;
+        const assetId = String(e.target.value);
+        if (e.target.checked) {
+            ctx.selectedAssetIds.add(assetId);
+        } else {
+            ctx.selectedAssetIds.delete(assetId);
+        }
+        if (typeof window.renderUserReceiptAssetTable === 'function') {
+            window.renderUserReceiptAssetTable();
+        }
+    }
+});
+
+// Lắng nghe nút chọn tất cả / bỏ chọn tất cả thiết bị
+document.addEventListener('click', function (e) {
+    if (e.target.closest('#btnUserReceiptSelectAll')) {
+        const ctx = window.currentUserReceiptContext;
+        if (!ctx) return;
+        (ctx.allAssets || []).forEach(a => ctx.selectedAssetIds.add(String(a.id)));
+        document.querySelectorAll('.user-receipt-asset-item-check').forEach(cb => cb.checked = true);
+        if (typeof window.renderUserReceiptAssetTable === 'function') {
+            window.renderUserReceiptAssetTable();
+        }
+    } else if (e.target.closest('#btnUserReceiptDeselectAll')) {
+        const ctx = window.currentUserReceiptContext;
+        if (!ctx) return;
+        ctx.selectedAssetIds.clear();
+        document.querySelectorAll('.user-receipt-asset-item-check').forEach(cb => cb.checked = false);
+        if (typeof window.renderUserReceiptAssetTable === 'function') {
+            window.renderUserReceiptAssetTable();
+        }
+    }
+});
+
 window.QLTSPageLicense.init = async function () {
     // =================================================================
 
@@ -269,7 +582,14 @@ window.QLTSPageLicense.init = async function () {
                 } 
                 else { content += '<p class="text-sm text-gray-400 italic">Không có license</p>'; }
                 
-                content += '</div></div>';
+                content += `</div>
+                <div class="pt-3 border-t mt-4">
+                    <button type="button" data-action="print-user-handover" data-id="${user.id}" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition">
+                        <i class="fa-solid fa-file-invoice"></i>
+                        <span>Xuất Biên Bản Bàn Giao Tổng Hợp (A4)</span>
+                    </button>
+                </div>
+                </div>`;
                 showInfoModal(content, `Chi tiết: ${user.name}`);
             }
             return;
@@ -852,6 +1172,11 @@ window.QLTSPageLicense.init = async function () {
                 }
                 openModal('userQrModal');
             }
+            else if (action === 'print-user-handover') {
+                if (typeof window.openUserHandoverModal === 'function') {
+                    window.openUserHandoverModal(id);
+                }
+            }
 
             else if (action === 'delete-cat') {
                 const catName = categories.find(c => c.id === id)?.name || '';
@@ -1053,6 +1378,7 @@ window.QLTSPageLicense.init = async function () {
                 let receiverUser = null;
                 let receiptDate = new Date();
                 let conditionText = 'Hoạt động tốt';
+                let initialMode = 'handover';
 
                 if (action === 'view-receipt-history') {
                     const logId = actionBtn.dataset.logId;
@@ -1065,6 +1391,9 @@ window.QLTSPageLicense.init = async function () {
                             const m = log.desc.match(/Tình trạng:\s*([^|]+)/);
                             if (m) conditionText = m[1].trim();
                         }
+                    }
+                    if (log && ((log.action || '').toLowerCase().includes('thu hồi') || (log.desc || '').toLowerCase().includes('thu hồi'))) {
+                        initialMode = 'return';
                     }
                 }
                 if (!receiverUser && asset.user_id) {
@@ -1102,6 +1431,16 @@ window.QLTSPageLicense.init = async function () {
                 if (rAssetCond) rAssetCond.textContent = conditionText;
                 if (rSignGiver) rSignGiver.textContent = giverName;
                 if (rSignRec) rSignRec.textContent = recName;
+
+                if (typeof window.updateHandoverReceiptMode === 'function') {
+                    window.currentReceiptContext = {
+                        assetCode: asset.asset_code || asset.id || '01',
+                        assetName: asset.name || '',
+                        receiverName: recName,
+                        giverName: giverName
+                    };
+                    window.updateHandoverReceiptMode(initialMode);
+                }
 
                 openModal('handoverReceiptModal');
             }

@@ -812,24 +812,50 @@ select:focus {
 }
 
 @media print {
+    @page {
+        size: A4 portrait;
+        margin: 12mm 12mm 12mm 12mm;
+    }
     body * {
         visibility: hidden;
     }
     #printLabelModal,
-    #printLabelModal * {
+    #printLabelModal *,
+    #handoverReceiptModal,
+    #handoverReceiptModal *,
+    #userHandoverReceiptModal,
+    #userHandoverReceiptModal *,
+    #officialReportModal,
+    #officialReportModal *,
+    .printable-document,
+    .printable-document * {
         visibility: visible;
     }
-    #printLabelModal {
+    #printLabelModal,
+    #handoverReceiptModal,
+    #userHandoverReceiptModal,
+    #officialReportModal {
         position: absolute;
         inset: 0;
         background: #fff !important;
         backdrop-filter: none !important;
         display: block !important;
+        color: #000 !important;
+        overflow: visible !important;
+        z-index: 9999 !important;
     }
-    #printLabelModal > div {
+    #printLabelModal > div,
+    #handoverReceiptModal > div,
+    #userHandoverReceiptModal > div,
+    #officialReportModal > div {
         max-height: none !important;
+        max-width: 100% !important;
         box-shadow: none !important;
         border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        background: #fff !important;
     }
     .no-print {
         display: none !important;
@@ -837,5 +863,45 @@ select:focus {
     #printLabelPreview {
         overflow: visible !important;
     }
+    .official-document {
+        font-family: "Times New Roman", Times, Georgia, serif !important;
+        color: #000 !important;
+        background: #fff !important;
+        line-height: 1.5 !important;
+        font-size: 12pt !important;
+        padding: 0 !important;
+        border: none !important;
+    }
+    .official-document table {
+        border-collapse: collapse !important;
+        width: 100% !important;
+    }
+    .official-document th,
+    .official-document td {
+        border: 1px solid #334155 !important;
+        padding: 5px 8px !important;
+        font-size: 10.5pt !important;
+    }
+    .official-document th {
+        background-color: #f1f5f9 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        font-weight: 700 !important;
+    }
+}
+
+/* Kiểu hiển thị văn bản hành chính xem trước trên màn hình (A4 Preview) */
+.official-document-preview {
+    font-family: "Times New Roman", Times, Georgia, serif;
+    background-color: #ffffff;
+    color: #1e293b;
+    line-height: 1.6;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+}
+.dark .official-document-preview {
+    background-color: #ffffff; /* Giữ nguyên nền trắng cho văn bản mẫu in */
+    color: #1e293b;
+    border-color: #cbd5e1;
 }
 

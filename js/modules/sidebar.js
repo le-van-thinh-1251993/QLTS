@@ -125,6 +125,16 @@
         nav.className = 'flex-1 px-3 py-3 space-y-4 overflow-y-auto max-h-[calc(100vh-4.5rem)] pb-8';
 
         MENU_SECTIONS.forEach(function (section) {
+            // Lọc các mục menu được phép truy cập theo RBAC (nếu RBAC bật)
+            const allowedItems = section.items.filter(item => {
+                if (window.RBAC && typeof window.RBAC.canAccessModule === 'function') {
+                    return window.RBAC.canAccessModule(item.href);
+                }
+                return true;
+            });
+
+            if (allowedItems.length === 0) return;
+
             const secDiv = document.createElement('div');
             secDiv.className = 'space-y-1';
 
@@ -135,7 +145,7 @@
                 secDiv.appendChild(titleEl);
             }
 
-            section.items.forEach(function (item) {
+            allowedItems.forEach(function (item) {
                 const a = document.createElement('a');
                 a.href = item.href;
 
@@ -262,7 +272,9 @@
 
         const name = profile.full_name || 'Quản trị viên';
         const email = profile.email || 'admin@newdaymedia.com';
-        const role = profile.role === 'admin' ? 'Admin IT' : (profile.role || 'Nhân viên');
+        const role = (window.RBAC && typeof window.RBAC.getRoleLabel === 'function')
+            ? window.RBAC.getRoleLabel(profile.role)
+            : (profile.role === 'admin' ? 'Admin IT' : (profile.role || 'Nhân viên'));
         const avatar = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4f46e5&color=fff`;
 
         // Update elements
