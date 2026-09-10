@@ -143,6 +143,7 @@ window.QLTSPageData.init = async function () {
         stockChecks = stockCheckData.data || [];
         stockCheckItems = stockCheckItemData.data || [];
         alertSettings = alertSettingData.data || [];
+        window.alertSettings = alertSettings;
 
         // Process supplies & inventory transactions
         const rawSupplies = supplyData?.data || [];
@@ -305,8 +306,19 @@ window.QLTSPageData.init = async function () {
             .sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
         } else if (document.getElementById('inventoryContent')) {
             pageType = 'supply';
-            notificationsToShow = (window.supplies || []).filter(s => (parseInt(s.quantity) || 0) <= (parseInt(s.min_quantity) || 0))
-                .filter(s => !readNotifications.includes(`supply_${s.id}`));
+            const alertCfg = (Array.isArray(alertSettings) ? alertSettings[0] : alertSettings) || {};
+            const globalMinStock = alertCfg.min_stock_threshold !== undefined ? Number(alertCfg.min_stock_threshold) : 5;
+            const stockAlertEnabled = alertCfg.stock_alert_enabled !== false;
+            if (!stockAlertEnabled) {
+                notificationsToShow = [];
+            } else {
+                notificationsToShow = (window.supplies || []).filter(s => {
+                    const qty = Number(s.quantity || 0);
+                    const itemMin = s.min_quantity !== undefined && s.min_quantity !== null && s.min_quantity !== '' ? Number(s.min_quantity) : null;
+                    const minQty = itemMin !== null && !isNaN(itemMin) ? itemMin : globalMinStock;
+                    return qty <= minQty;
+                }).filter(s => !readNotifications.includes(`supply_${s.id}`));
+            }
         }
 
         if (notificationsToShow.length > 0) {
@@ -917,7 +929,14 @@ window.QLTSPageData.init = async function () {
         const badgeStockEl = document.getElementById('badgeStockCount');
         const badgeTransEl = document.getElementById('badgeTransCount');
 
-        const lowStockItems = allSupplies.filter(s => Number(s.quantity || 0) <= Number(s.min_quantity || 0));
+        const alertCfg = (Array.isArray(alertSettings) ? alertSettings[0] : alertSettings) || {};
+        const globalMinStock = alertCfg.min_stock_threshold !== undefined ? Number(alertCfg.min_stock_threshold) : 5;
+        const getEffectiveMinQty = (s) => {
+            const hasCustom = s.min_quantity !== undefined && s.min_quantity !== null && s.min_quantity !== '' && !isNaN(Number(s.min_quantity));
+            return hasCustom ? Number(s.min_quantity) : globalMinStock;
+        };
+
+        const lowStockItems = allSupplies.filter(s => Number(s.quantity || 0) <= getEffectiveMinQty(s));
         const stockInTrans = allTrans.filter(t => t.type === 'IN');
         const stockOutTrans = allTrans.filter(t => t.type === 'OUT');
 
@@ -974,11 +993,11 @@ window.QLTSPageData.init = async function () {
                 filtered = filtered.filter(s => s.category === catFilter);
             }
             if (statusFilter === 'low') {
-                filtered = filtered.filter(s => Number(s.quantity || 0) <= Number(s.min_quantity || 0) && Number(s.quantity || 0) > 0);
+                filtered = filtered.filter(s => Number(s.quantity || 0) <= getEffectiveMinQty(s));
             } else if (statusFilter === 'out') {
                 filtered = filtered.filter(s => Number(s.quantity || 0) <= 0);
             } else if (statusFilter === 'available') {
-                filtered = filtered.filter(s => Number(s.quantity || 0) > Number(s.min_quantity || 0));
+                filtered = filtered.filter(s => Number(s.quantity || 0) > getEffectiveMinQty(s));
             }
             if (searchVal) {
                 filtered = filtered.filter(s => {
@@ -1001,17 +1020,17 @@ window.QLTSPageData.init = async function () {
             } else {
                 currentStockBody.innerHTML = pageItems.map(s => {
                     const qty = Number(s.quantity || 0);
-                    const minQty = Number(s.min_quantity || 0);
-                    const isLow = qty <= minQty && qty > 0;
+                    const minQty = getEffectiveMinQty(s);
                     const isOut = qty <= 0;
+                    const isLow = !isOut && qty <= minQty;
 
                     let qtyBadge = "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
                     let statusLabel = "Còn hàng";
                     if (isOut) {
-                        qtyBadge = "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300";
+                        qtyBadge = "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 font-bold";
                         statusLabel = "Hết hàng";
                     } else if (isLow) {
-                        qtyBadge = "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300";
+                        qtyBadge = "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 font-bold";
                         statusLabel = "Sắp hết";
                     }
 
@@ -1039,7 +1058,8 @@ window.QLTSPageData.init = async function () {
                             </div>
                         </td>
                         <td class="p-4 text-center text-xs font-mono text-slate-500 dark:text-slate-400">
-                            ${minQty}
+                            <span class="font-bold text-slate-700 dark:text-slate-200">${minQty}</span>
+                            ${(s.min_quantity === undefined || s.min_quantity === null || s.min_quantity === '') ? `<span class="block text-[10px] text-slate-400" title="Áp dụng từ ngưỡng mặc định hệ thống">(mặc định)</span>` : ''}
                         </td>
                         <td class="p-4 text-xs text-slate-600 dark:text-slate-300">
                             <i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${s.location || 'Kho chung'}
@@ -1426,10 +1446,20 @@ window.QLTSPageData.init = async function () {
         ].join('');
     }
 
-    // Nếu được điều hướng tới từ modal tìm kiếm toàn cục (?q=...), tự áp dụng từ khóa
-    // vào ô tìm kiếm sẵn có của trang này ngay khi tải xong dữ liệu lần đầu.
+    // Nếu được điều hướng tới từ modal tìm kiếm toàn cục (?q=...) hoặc cảnh báo (?filter=...), tự áp dụng
+    // vào bộ lọc của trang ngay khi tải xong dữ liệu lần đầu.
     function applyGlobalSearchParamIfAny() {
         const params = new URLSearchParams(window.location.search);
+        const filter = params.get('filter');
+        if (filter && document.getElementById('inventoryContent')) {
+            const statusSelect = document.getElementById('filterSupplyStatus');
+            if (statusSelect && (filter === 'low_stock' || filter === 'low')) {
+                statusSelect.value = 'low';
+                window.inventoryCurrentPage = 1;
+                renderInventoryList();
+            }
+        }
+
         const q = params.get('q');
         if (!q) return;
         const assetInput = document.getElementById('searchInput');
@@ -1509,10 +1539,41 @@ window.QLTSPageData.init = async function () {
         window.inventoryCurrentPage = 1;
         renderInventoryList();
     });
-    if (supplyStatus) supplyStatus.addEventListener('change', () => {
+    function syncStockFilterUI(statusVal) {
+        if (supplyStatus) supplyStatus.value = statusVal;
+        document.querySelectorAll('.quick-stock-btn').forEach(btn => {
+            const isMatch = (btn.dataset.stockFilter || '') === statusVal;
+            if (isMatch) {
+                btn.className = 'quick-stock-btn px-2.5 py-1 rounded-md font-semibold text-purple-700 dark:text-purple-300 bg-white dark:bg-slate-800 shadow-xs transition-all';
+            } else {
+                btn.className = 'quick-stock-btn px-2.5 py-1 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-purple-600 transition-all';
+            }
+        });
         window.inventoryCurrentPage = 1;
         renderInventoryList();
+    }
+
+    if (supplyStatus) {
+        supplyStatus.addEventListener('change', () => {
+            syncStockFilterUI(supplyStatus.value);
+        });
+    }
+
+    document.querySelectorAll('.quick-stock-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            syncStockFilterUI(btn.dataset.stockFilter || '');
+        });
     });
+
+    document.getElementById('cardStatTotalSupplies')?.addEventListener('click', () => {
+        syncStockFilterUI('');
+    });
+
+    document.getElementById('cardStatLowStock')?.addEventListener('click', () => {
+        const currentVal = supplyStatus ? supplyStatus.value : '';
+        syncStockFilterUI(currentVal === 'low' ? '' : 'low');
+    });
+
     if (transType) transType.addEventListener('change', () => {
         window.supplyTransCurrentPage = 1;
         renderInventoryList();

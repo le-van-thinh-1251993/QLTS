@@ -221,7 +221,9 @@ window.QLTSPageDashboard.init = async function () {
 
                     return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
                         <td class="p-3"><span class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200">${item.category}</span></td>
-                        <td class="p-3 text-sm font-medium text-slate-800 dark:text-slate-100">${item.title}</td>
+                        <td class="p-3 text-sm font-medium text-slate-800 dark:text-slate-100">
+                            ${item.href ? `<a href="${item.href}" class="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1.5"><span>${item.title}</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>` : item.title}
+                        </td>
                         <td class="p-3 text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap">${item.dueDate}</td>
                         <td class="p-3 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">${daysText}</td>
                         <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-bold ${item.levelClass}">${item.level}</span></td>
@@ -456,6 +458,30 @@ window.QLTSPageDashboard.init = async function () {
                 });
             }
         });
+
+        // 4. Cảnh báo tồn kho vật tư linh kiện thấp / hết hàng
+        const globalMinStock = alertCfg.min_stock_threshold !== undefined ? Number(alertCfg.min_stock_threshold) : 5;
+        const stockAlertEnabled = alertCfg.stock_alert_enabled !== false;
+        if (stockAlertEnabled) {
+            const suppliesList = window.supplies || [];
+            suppliesList.forEach(s => {
+                const qty = Number(s.quantity || 0);
+                const itemMin = s.min_quantity !== undefined && s.min_quantity !== null && s.min_quantity !== '' ? Number(s.min_quantity) : null;
+                const minQty = itemMin !== null && !isNaN(itemMin) ? itemMin : globalMinStock;
+                if (qty <= minQty) {
+                    const isOut = qty <= 0;
+                    alertsList.push({
+                        category: 'Kho vật tư',
+                        title: (s.name || 'Vật tư') + (s.code ? ` [${s.code}]` : ''),
+                        dueDate: isOut ? 'Hết hàng (0)' : `Còn ${qty}/${minQty} ${s.unit || 'cái'}`,
+                        daysLeft: isOut ? 0 : 1,
+                        level: isOut ? 'Hết hàng' : 'Sắp hết',
+                        levelClass: isOut ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                        href: 'inventory.html?filter=low_stock'
+                    });
+                }
+            });
+        }
 
         // Cập nhật bộ nhớ dữ liệu phục vụ click drill-down
         currentDashboardData.repairAssets = assets.filter(a => ['Repair', 'Broken'].includes(a.status));

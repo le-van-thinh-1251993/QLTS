@@ -207,8 +207,8 @@
 
                     <!-- KHỐI THỐNG KÊ (STAT CARDS) -->
                     <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 flex items-center justify-center text-xl shrink-0">
+                        <div id="cardStatTotalSupplies" class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4 cursor-pointer hover:border-purple-300 dark:hover:border-purple-600 transition-all group" title="Bấm để xem tất cả mặt hàng">
+                            <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform">
                                 <i class="fa-solid fa-cubes-stacked"></i>
                             </div>
                             <div>
@@ -218,8 +218,8 @@
                             </div>
                         </div>
 
-                        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 flex items-center justify-center text-xl shrink-0">
+                        <div id="cardStatLowStock" class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-rose-200 dark:border-rose-900/50 shadow-sm flex items-center gap-4 cursor-pointer hover:border-rose-400 dark:hover:border-rose-600 transition-all group" title="Bấm để lọc các mặt hàng sắp hết / hết hàng">
+                            <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform">
                                 <i class="fa-solid fa-triangle-exclamation"></i>
                             </div>
                             <div>
@@ -286,10 +286,15 @@
                                 </select>
                                 <select id="filterSupplyStatus" class="px-2.5 py-1.5 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
                                     <option value="">-- Trạng thái tồn --</option>
-                                    <option value="low">Sắp hết hàng</option>
+                                    <option value="low">⚠️ Sắp hết hàng</option>
                                     <option value="available">Còn hàng</option>
                                     <option value="out">Hết hàng (0)</option>
                                 </select>
+                                <div class="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-700/60 p-0.5 rounded-lg text-xs" id="quickFilterStockPills">
+                                    <button type="button" data-stock-filter="" class="quick-stock-btn px-2.5 py-1 rounded-md font-medium text-purple-700 bg-white dark:bg-slate-800 shadow-xs transition-all">Tất cả</button>
+                                    <button type="button" data-stock-filter="available" class="quick-stock-btn px-2.5 py-1 rounded-md font-medium text-slate-600 dark:text-slate-300 hover:text-purple-600 transition-all">Còn hàng</button>
+                                    <button type="button" data-stock-filter="low" class="quick-stock-btn px-2.5 py-1 rounded-md font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation text-[10px]"></i>Sắp hết</button>
+                                </div>
                                 <div id="historyFilterControls" class="hidden">
                                     <select id="filterTransType" class="px-2.5 py-1.5 text-xs border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200">
                                         <option value="">-- Loại phiếu --</option>

@@ -285,8 +285,17 @@
 
         const readNotifications = new Set(getStorageJson('readNotifications', []));
         const now = new Date();
-        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        const thirtyDaysFromNow = new Date(now.getTime() + thirtyDaysMs);
+
+        // Đọc cấu hình cảnh báo từ LocalDB (Settings)
+        const alertSettingsList = getStorageJson('qlts_alert_settings', []);
+        const alertCfg = (Array.isArray(alertSettingsList) ? alertSettingsList[0] : alertSettingsList) || {};
+        const warrantyDays = Number(alertCfg.warranty_threshold_days) || 30;
+        const licenseDays = Number(alertCfg.license_threshold_days) || 30;
+        const globalMinStock = alertCfg.min_stock_threshold !== undefined ? Number(alertCfg.min_stock_threshold) : 5;
+        const stockAlertEnabled = alertCfg.stock_alert_enabled !== false;
+
+        const warrantyThresholdDate = new Date(now.getTime() + warrantyDays * 24 * 60 * 60 * 1000);
+        const licenseThresholdDate = new Date(now.getTime() + licenseDays * 24 * 60 * 60 * 1000);
 
         const notifications = [];
 
@@ -295,7 +304,7 @@
         assets.forEach(a => {
             if (!a.warranty_expiration_date) return;
             const exp = new Date(a.warranty_expiration_date);
-            if (exp >= now && exp <= thirtyDaysFromNow) {
+            if (exp >= now && exp <= warrantyThresholdDate) {
                 const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
                 notifications.push({
                     id: `asset_${a.id}`,
@@ -314,7 +323,7 @@
         licenses.forEach(l => {
             if (!l.expiration_date) return;
             const exp = new Date(l.expiration_date);
-            if (exp >= now && exp <= thirtyDaysFromNow) {
+            if (exp >= now && exp <= licenseThresholdDate) {
                 const days = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
                 notifications.push({
                     id: `license_${l.id}`,
@@ -329,22 +338,25 @@
         });
 
         // 3. Vật tư & Linh kiện dưới tồn kho an toàn
-        const supplies = getStorageJson('qlts_supplies', []);
-        supplies.forEach(s => {
-            const qty = Number(s.quantity || 0);
-            const minQty = Number(s.min_quantity || 5);
-            if (qty <= minQty) {
-                notifications.push({
-                    id: `supply_${s.id}`,
-                    type: 'supply',
-                    icon: 'fa-boxes-packing text-rose-500 bg-rose-50 dark:bg-rose-950/40',
-                    title: s.name || 'Vật tư',
-                    code: s.code || ('VT-' + s.id),
-                    detail: `Tồn kho thấp: ${qty}/${minQty} ${s.unit || 'cái'}`,
-                    href: 'inventory.html'
-                });
-            }
-        });
+        if (stockAlertEnabled) {
+            const supplies = getStorageJson('qlts_supplies', []);
+            supplies.forEach(s => {
+                const qty = Number(s.quantity || 0);
+                const itemMin = s.min_quantity !== undefined && s.min_quantity !== null && s.min_quantity !== '' ? Number(s.min_quantity) : null;
+                const minQty = itemMin !== null && !isNaN(itemMin) ? itemMin : globalMinStock;
+                if (qty <= minQty) {
+                    notifications.push({
+                        id: `supply_${s.id}`,
+                        type: 'supply',
+                        icon: 'fa-boxes-packing text-rose-500 bg-rose-50 dark:bg-rose-950/40',
+                        title: s.name || 'Vật tư',
+                        code: s.code || ('VT-' + s.id),
+                        detail: qty === 0 ? `Đã hết hàng (0/${minQty} ${s.unit || 'cái'})` : `Tồn kho thấp: ${qty}/${minQty} ${s.unit || 'cái'}`,
+                        href: 'inventory.html?filter=low_stock'
+                    });
+                }
+            });
+        }
 
         // 4. Thiết bị mạng offline
         const targets = getStorageJson('qlts_network_targets', []);

@@ -62,10 +62,14 @@ window.QLTSPageSettings.init = async function () {
         const warrantyInput = document.getElementById('alert-warranty-days');
         const licenseInput = document.getElementById('alert-license-days');
         const maintenanceInput = document.getElementById('alert-maintenance-days');
+        const minStockInput = document.getElementById('alert-min-stock-qty');
+        const stockAlertToggle = document.getElementById('alert-stock-enabled');
         const emailsInput = document.getElementById('alert-emails');
         if (warrantyInput) warrantyInput.value = cfg.warranty_threshold_days || 30;
         if (licenseInput) licenseInput.value = cfg.license_threshold_days || 30;
         if (maintenanceInput) maintenanceInput.value = cfg.maintenance_threshold_days || 7;
+        if (minStockInput) minStockInput.value = cfg.min_stock_threshold !== undefined ? cfg.min_stock_threshold : 5;
+        if (stockAlertToggle) stockAlertToggle.checked = cfg.stock_alert_enabled !== false;
         if (emailsInput) emailsInput.value = (cfg.emails || []).join(', ');
 
         const unitCodeInput = document.getElementById('unit-code-input');
@@ -270,11 +274,15 @@ window.QLTSPageSettings.init = async function () {
 
     document.getElementById('alert-settings-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const minStockVal = parseInt(document.getElementById('alert-min-stock-qty')?.value, 10);
+        const stockAlertChecked = document.getElementById('alert-stock-enabled')?.checked;
         const payload = {
             id: alertSettings[0]?.id,
             warranty_threshold_days: parseInt(document.getElementById('alert-warranty-days').value, 10) || 30,
             license_threshold_days: parseInt(document.getElementById('alert-license-days').value, 10) || 30,
             maintenance_threshold_days: parseInt(document.getElementById('alert-maintenance-days').value, 10) || 7,
+            min_stock_threshold: isNaN(minStockVal) ? 5 : Math.max(0, minStockVal),
+            stock_alert_enabled: stockAlertChecked !== false,
             emails: (document.getElementById('alert-emails').value || '')
                 .split(',')
                 .map(e => e.trim())
