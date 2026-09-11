@@ -1911,6 +1911,34 @@ window.QLTSPageContracts.init = function () {
             return;
         }
 
+        if (data.cost < 0) {
+            if (typeof window.showInfoModal === 'function') {
+                window.showInfoModal('Chi phí hợp đồng không được là số âm.', 'Dữ liệu không hợp lệ');
+            } else {
+                alert('Chi phí hợp đồng không được là số âm.');
+            }
+            return;
+        }
+
+        if (data.start_date && data.end_date && data.end_date < data.start_date) {
+            const msg = `Ngày hết hạn hợp đồng (${formatDateSafe(data.end_date)}) không được nhỏ hơn ngày hiệu lực (${formatDateSafe(data.start_date)}).`;
+            if (typeof window.showInfoModal === 'function') {
+                window.showInfoModal(msg, 'Ngày không hợp lệ');
+            } else {
+                alert(msg);
+            }
+            return;
+        }
+
+        if (data.provider_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.provider_email)) {
+            if (typeof window.showInfoModal === 'function') {
+                window.showInfoModal('Địa chỉ email nhà cung cấp không đúng định dạng.', 'Email không hợp lệ');
+            } else {
+                alert('Địa chỉ email nhà cung cấp không đúng định dạng.');
+            }
+            return;
+        }
+
         const attachmentInput = document.getElementById('contractAttachment');
         const selectedFile = attachmentInput?.files?.[0];
         if (selectedFile) {

@@ -1244,6 +1244,29 @@ window.QLTSPageDashboard.init = async function () {
         if (catDropdown) { const cur = catDropdown.value; catDropdown.innerHTML = '<option value="">-- Chọn loại --</option>' + categories.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); catDropdown.value = cur; }
         const supplierDropdown = document.getElementById('modal_assetSupplier');
         if (supplierDropdown) { const cur = supplierDropdown.value; supplierDropdown.innerHTML = '<option value="">-- Không có --</option>' + suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join(''); supplierDropdown.value = cur; }
+        const assetLocSelect = document.getElementById('modal_assetLocation');
+        if (assetLocSelect) {
+            const curVal = assetLocSelect.value;
+            const PROVINCES = [
+                "Hà Nội", "TP. Hồ Chí Minh", "Hải Phòng", "Đà Nẵng", "Cần Thơ",
+                "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu",
+                "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước",
+                "Bình Thuận", "Cà Mau", "Cao Bằng", "Đắk Lắk", "Đắk Nông",
+                "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang",
+                "Hà Nam", "Hà Tĩnh", "Hải Dương", "Hậu Giang", "Hòa Bình",
+                "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu",
+                "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định",
+                "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên",
+                "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị",
+                "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên",
+                "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "Trà Vinh", "Tuyên Quang",
+                "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
+            ];
+            const existingLocs = (assets || []).map(a => (a.location || '').toString().trim()).filter(Boolean);
+            const allLocs = Array.from(new Set([...PROVINCES, ...existingLocs]));
+            assetLocSelect.innerHTML = '<option value="">-- Chọn vị trí --</option>' + allLocs.map(l => `<option value="${l}">${l}</option>`).join('');
+            if (curVal) assetLocSelect.value = curVal;
+        }
         const licTypeDropdown = document.getElementById('modal_licenseType');
         if (licTypeDropdown) { const cur = licTypeDropdown.value; licTypeDropdown.innerHTML = '<option value="">-- Chọn loại Key --</option>' + licenseTypes.map(t => `<option value="${t.name}">${t.name}</option>`).join(''); licTypeDropdown.value = cur; }
         const filterLicType = document.getElementById('filterLicenseType');

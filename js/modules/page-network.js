@@ -1271,6 +1271,11 @@
             const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
             if (!db) return;
 
+            if (!payload.ssid) {
+                this.showToast('Vui lòng nhập tên mạng Wi-Fi (SSID)!', 'error');
+                return;
+            }
+
             if (id) {
                 await db.from('network_wifis').update(payload).eq('id', Number(id));
                 this.showToast(`Đã cập nhật mạng Wi-Fi "${payload.ssid}" thành công!`, 'success');
@@ -1334,6 +1339,25 @@
             const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
             if (!db) return;
 
+            if (!payload.rule_name) {
+                this.showToast('Vui lòng nhập tên quy tắc NAT!', 'error');
+                return;
+            }
+            if (payload.wan_port) {
+                const p = parseInt(payload.wan_port, 10);
+                if (isNaN(p) || p < 1 || p > 65535) {
+                    this.showToast('Port WAN ngoài phải nằm trong khoảng từ 1 đến 65535!', 'error');
+                    return;
+                }
+            }
+            if (payload.lan_port) {
+                const p = parseInt(payload.lan_port, 10);
+                if (isNaN(p) || p < 1 || p > 65535) {
+                    this.showToast('Port LAN đích phải nằm trong khoảng từ 1 đến 65535!', 'error');
+                    return;
+                }
+            }
+
             if (id) {
                 await db.from('network_nats').update(payload).eq('id', Number(id));
                 this.showToast(`Đã cập nhật quy tắc NAT "${payload.rule_name}" thành công!`, 'success');
@@ -1395,6 +1419,11 @@
             const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
             if (!db) return;
 
+            if (!payload.name || !payload.address) {
+                this.showToast('Vui lòng nhập tên kết nối và địa chỉ IP / Host!', 'error');
+                return;
+            }
+
             if (id) {
                 await db.from('network_remotes').update(payload).eq('id', Number(id));
                 this.showToast(`Đã cập nhật kết nối "${payload.name}" thành công!`, 'success');
@@ -1454,6 +1483,15 @@
 
             const db = window.LocalDB || (typeof LocalDB !== 'undefined' ? LocalDB : null);
             if (!db) return;
+
+            if (!payload.name || !payload.address) {
+                this.showToast('Vui lòng nhập tên thiết bị và địa chỉ IP / Host!', 'error');
+                return;
+            }
+            if (payload.port < 1 || payload.port > 65535) {
+                this.showToast('Cổng dịch vụ (Port) phải nằm trong khoảng từ 1 đến 65535!', 'error');
+                return;
+            }
 
             if (id) {
                 await db.from('network_targets').update(payload).eq('id', Number(id));

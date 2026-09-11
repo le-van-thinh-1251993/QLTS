@@ -606,17 +606,86 @@
                     searchInp.focus();
                 }
             }
-            // Escape -> Close dropdowns and modal
+            // Escape -> Close dropdowns and active modal
             if (e.key === 'Escape') {
                 const dd = document.getElementById('notification-dropdown');
-                if (dd) dd.classList.add('hidden');
-                const modal = document.getElementById('globalSearchModal');
-                if (modal) {
-                    modal.classList.add('hidden');
-                    modal.classList.remove('flex');
+                if (dd && !dd.classList.contains('hidden')) {
+                    dd.classList.add('hidden');
+                    return;
+                }
+                const openModals = getUniversalOpenModals();
+                if (openModals.length > 0) {
+                    e.preventDefault();
+                    closeUniversalModal(openModals[openModals.length - 1]);
                 }
             }
         });
+
+        // Universal safe backdrop click handler (mousedown + mouseup matching on backdrop)
+        let universalBackdropMouseDownTarget = null;
+        document.addEventListener('mousedown', (e) => {
+            universalBackdropMouseDownTarget = e.target;
+        });
+        document.addEventListener('mouseup', (e) => {
+            if (!universalBackdropMouseDownTarget) return;
+            const target = universalBackdropMouseDownTarget;
+            universalBackdropMouseDownTarget = null;
+            if (target === e.target) {
+                const openModals = getUniversalOpenModals();
+                const clickedModal = openModals.find(m => m === target);
+                if (clickedModal) {
+                    if (['confirmationModal', 'confirmModal', 'dirtyCheckConfirmModal'].includes(clickedModal.id)) {
+                        return; // Confirmation modals require explicit action
+                    }
+                    closeUniversalModal(clickedModal);
+                }
+            }
+        });
+    }
+
+    function getUniversalOpenModals() {
+        const candidates = Array.from(document.querySelectorAll(
+            '.fixed.inset-0:not(.hidden), [role="dialog"]:not(.hidden), [id$="Modal"]:not(.hidden), [id^="modal"]:not(.hidden)'
+        )).filter(el => {
+            if (el.id === 'sidebar-backdrop' || el.id === 'notification-dropdown') return false;
+            try {
+                const style = window.getComputedStyle(el);
+                return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+            } catch (err) {
+                return false;
+            }
+        });
+        candidates.sort((a, b) => {
+            const za = parseInt(window.getComputedStyle(a).zIndex, 10) || 0;
+            const zb = parseInt(window.getComputedStyle(b).zIndex, 10) || 0;
+            if (za !== zb) return za - zb;
+            return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+        });
+        return candidates;
+    }
+
+    function closeUniversalModal(modal) {
+        if (!modal) return;
+        if (window.QLTSPageContracts && typeof window.QLTSPageContracts.closeModal === 'function' && modal.id.startsWith('contract')) {
+            window.QLTSPageContracts.closeModal(modal.id);
+            return;
+        }
+        if (typeof window.safeCloseModal === 'function' && modal.id) {
+            window.safeCloseModal(modal.id);
+        } else {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            modal.setAttribute('aria-hidden', 'true');
+            try { modal.style.pointerEvents = 'none'; } catch (e) {}
+        }
+        const closeBtn = modal.querySelector('.close-modal, .btn-close-modal, #closeEditModal, .btn-cancel');
+        if (closeBtn && !modal.classList.contains('hidden')) {
+            closeBtn.click();
+        }
+        const remaining = getUniversalOpenModals();
+        if (remaining.length === 0) {
+            document.body.classList.remove('overflow-hidden');
+        }
     }
 
     // Export header controller

@@ -336,9 +336,25 @@ window.QLTSPageSettings.init = async function () {
         }
         const costVal = parseFloat(document.getElementById('modal_assetCost').value) || 0;
         const salvageVal = parseFloat(document.getElementById('modal_assetSalvage').value) || 0;
+        if (costVal < 0) {
+            e.preventDefault();
+            return showInfoModal('Giá trị mua tài sản không được âm.', 'Dữ liệu không hợp lệ');
+        }
+        if (salvageVal < 0) {
+            e.preventDefault();
+            return showInfoModal('Giá trị thu hồi tài sản không được âm.', 'Dữ liệu không hợp lệ');
+        }
         if (salvageVal > costVal) {
             e.preventDefault();
             return showInfoModal('Giá trị thu hồi không được lớn hơn giá trị mua.', 'Dữ liệu không hợp lệ');
+        }
+        const lifeInput = document.getElementById('modal_assetLife')?.value;
+        if (lifeInput !== '' && lifeInput !== null && lifeInput !== undefined) {
+            const lifeVal = parseInt(lifeInput, 10);
+            if (isNaN(lifeVal) || lifeVal <= 0) {
+                e.preventDefault();
+                return showInfoModal('Thời gian khấu hao (tháng) phải là số nguyên dương lớn hơn 0.', 'Dữ liệu không hợp lệ');
+            }
         }
         // [RÀNG BUỘC] Thiết bị đang "Hỏng"/"Sửa chữa"/"Đã thanh lý" thì không được cấp phát cho ai.
         // Admin phải chuyển trạng thái về Trong kho/Đang dùng trước khi gán người dùng.
@@ -348,9 +364,17 @@ window.QLTSPageSettings.init = async function () {
             e.preventDefault();
             return showInfoModal('Thiết bị đang ở trạng thái "Sửa chữa"/"Hỏng"/"Đã thanh lý" nên không thể cấp phát cho người dùng. Vui lòng bỏ chọn người dùng hoặc cập nhật lại trạng thái trước khi lưu.', 'Không thể cấp phát');
         }
-        if (assetStatusVal === 'Disposed' && !document.getElementById('modal_assetDisposedDate').value) {
-            e.preventDefault();
-            return showInfoModal('Vui lòng nhập ngày thanh lý.', 'Thiếu thông tin');
+        if (assetStatusVal === 'Disposed') {
+            const disposedDateVal = document.getElementById('modal_assetDisposedDate')?.value;
+            const purchaseDateVal = document.getElementById('modal_assetPurchaseDate')?.value;
+            if (!disposedDateVal) {
+                e.preventDefault();
+                return showInfoModal('Vui lòng nhập ngày thanh lý.', 'Thiếu thông tin');
+            }
+            if (purchaseDateVal && disposedDateVal < purchaseDateVal) {
+                e.preventDefault();
+                return showInfoModal(`Ngày thanh lý (${typeof formatDateDisplay === 'function' ? formatDateDisplay(disposedDateVal) : disposedDateVal}) không được nhỏ hơn ngày mua/nhập kho (${typeof formatDateDisplay === 'function' ? formatDateDisplay(purchaseDateVal) : purchaseDateVal}).`, 'Ngày không hợp lệ');
+            }
         }
         return handleFormSubmit(e, 'assets', () => {
         const isNew = !document.getElementById('modal_assetId').value;
@@ -438,6 +462,15 @@ window.QLTSPageSettings.init = async function () {
     document.getElementById('userForm')?.addEventListener('submit', (e) => {
         const userIdVal = document.getElementById('userId').value;
         const emailVal = document.getElementById('email').value.trim();
+        if (emailVal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+            e.preventDefault();
+            return showInfoModal('Địa chỉ email nhân viên không đúng định dạng.', 'Email không hợp lệ');
+        }
+        const phoneVal = (document.getElementById('phone')?.value || '').trim();
+        if (phoneVal && !/^[0-9+() -]{7,15}$/.test(phoneVal)) {
+            e.preventDefault();
+            return showInfoModal('Số điện thoại không hợp lệ (chỉ chứa 7-15 chữ số).', 'Số điện thoại không hợp lệ');
+        }
         const duplicateEmail = users.some(u => (u.email || '').toLowerCase() === emailVal.toLowerCase() && String(u.id) !== userIdVal);
         if (duplicateEmail) {
             e.preventDefault();
@@ -466,6 +499,16 @@ window.QLTSPageSettings.init = async function () {
         if (!nameVal) {
             e.preventDefault();
             return showInfoModal('Vui lòng nhập tên nhà cung cấp.', 'Thiếu thông tin');
+        }
+        const supEmail = (document.getElementById('supplierEmail')?.value || '').trim();
+        if (supEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supEmail)) {
+            e.preventDefault();
+            return showInfoModal('Địa chỉ email nhà cung cấp không hợp lệ.', 'Email không hợp lệ');
+        }
+        const supPhone = (document.getElementById('supplierPhone')?.value || '').trim();
+        if (supPhone && !/^[0-9+() -]{7,15}$/.test(supPhone)) {
+            e.preventDefault();
+            return showInfoModal('Số điện thoại nhà cung cấp không hợp lệ.', 'Số điện thoại không hợp lệ');
         }
         return handleFormSubmit(e, 'suppliers', () => ({
             id: document.getElementById('supplierId').value,
@@ -625,6 +668,11 @@ window.QLTSPageSettings.init = async function () {
         const asset = (assets || []).find(a => String(a.id) === String(assetId));
         if (!asset) return showInfoModal('Không tìm thấy thiết bị cần thu hồi.', 'Lỗi');
 
+        if (asset.assigned_date && returnDate < asset.assigned_date) {
+            const dateDisp = typeof formatDateDisplay === 'function' ? formatDateDisplay : (d => d);
+            return showInfoModal(`Ngày thu hồi (${dateDisp(returnDate)}) không được nhỏ hơn ngày cấp phát (${dateDisp(asset.assigned_date)}).`, 'Ngày không hợp lệ');
+        }
+
         const prevUser = (users || []).find(u => String(u.id) === String(asset.user_id));
         const prevUserName = prevUser?.name || asset.user || 'Người dùng';
 
@@ -670,6 +718,10 @@ window.QLTSPageSettings.init = async function () {
         const fromUserName = fromUser?.name || asset.user || 'Người dùng cũ';
         const toUser = (users || []).find(u => String(u.id) === String(toUserId));
         if (!toUser) return showInfoModal('Không tìm thấy nhân sự tiếp nhận.', 'Lỗi');
+
+        if (asset.user_id && String(toUser.id) === String(asset.user_id)) {
+            return showInfoModal(`Nhân sự tiếp nhận (${toUser.name}) trùng với người đang giữ thiết bị. Vui lòng chọn nhân sự khác.`, 'Người nhận không hợp lệ');
+        }
 
         const todayStr = typeof getTodayDateStr === 'function' ? getTodayDateStr() : new Date().toISOString().split('T')[0];
         const updatePayload = {
@@ -789,6 +841,9 @@ window.QLTSPageSettings.init = async function () {
         const notes = document.getElementById('supply_notes')?.value.trim() || '';
 
         if (!name) return showInfoModal('Vui lòng nhập tên mặt hàng vật tư.', 'Thiếu thông tin');
+        if (initialQty < 0) return showInfoModal('Số lượng tồn ban đầu không được âm.', 'Dữ liệu không hợp lệ');
+        if (minQty < 0) return showInfoModal('Định mức tồn tối thiểu không được âm.', 'Dữ liệu không hợp lệ');
+        if (unitPrice < 0) return showInfoModal('Đơn giá không được âm.', 'Dữ liệu không hợp lệ');
 
         const isEdit = Boolean(id);
         const autoCode = code || ('VT-' + String(Math.floor(1000 + Math.random() * 9000)));
@@ -874,6 +929,7 @@ window.QLTSPageSettings.init = async function () {
 
         if (!supplyId) return showInfoModal('Vui lòng chọn mặt hàng nhập kho.', 'Thiếu thông tin');
         if (qty <= 0) return showInfoModal('Số lượng nhập phải lớn hơn 0.', 'Số lượng không hợp lệ');
+        if (unitPrice < 0) return showInfoModal('Đơn giá nhập không được âm.', 'Đơn giá không hợp lệ');
 
         const supply = (window.supplies || []).find(s => String(s.id) === String(supplyId));
         if (!supply) return showInfoModal('Không tìm thấy thông tin mặt hàng.', 'Lỗi');
