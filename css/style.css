@@ -5,6 +5,18 @@ html, body {
     overflow-x: hidden;
 }
 
+/* Contract dialogs must stay centered even when Tailwind utilities are unavailable or overridden. */
+.contract-modal:not(.hidden) {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.contract-modal > div {
+    flex: 0 1 672px;
+    width: min(672px, 100%);
+}
+
 body {
     background-color: #f1f5f9; /* slate-100 */
 }
@@ -904,4 +916,55 @@ select:focus {
     color: #1e293b;
     border-color: #cbd5e1;
 }
+
+/* ================================================================== */
+/* INTERACTIVE NETWORK TOPOLOGY CANVAS                               */
+/* ================================================================== */
+.topology-node {
+    cursor: grab;
+    transition: filter 0.2s ease, transform 0.1s ease;
+}
+
+.topology-node:hover {
+    filter: brightness(1.15) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.4));
+}
+
+.topology-node.dragging {
+    cursor: grabbing !important;
+    filter: brightness(1.25) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.6)) !important;
+}
+
+.topology-link {
+    transition: stroke-width 0.2s ease, opacity 0.2s ease;
+}
+
+.topology-link:hover {
+    stroke-width: 4 !important;
+    opacity: 1 !important;
+}
+
+/* Hiệu ứng luồng gói tin chuyển động trên đường truyền (Packet Flow Animation) */
+.topology-flow {
+    stroke-dasharray: 8 6;
+    animation: topologyPacketFlow 1.2s linear infinite;
+}
+
+@keyframes topologyPacketFlow {
+    from {
+        stroke-dashoffset: 28;
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.topology-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+}
+
 

@@ -30,7 +30,8 @@
                 { href: 'assignments.html', icon: 'fa-solid fa-hand-holding-hand', label: 'Cấp phát tài sản' },
                 { href: 'inventory.html', icon: 'fa-solid fa-boxes-packing', label: 'Kho vật tư & Linh kiện' },
                 { href: 'maintenance.html', icon: 'fa-solid fa-wrench', label: 'Lịch bảo trì' },
-                { href: 'stock-checks.html', icon: 'fa-solid fa-clipboard-check', label: 'Đợt kiểm kê' }
+                { href: 'stock-checks.html', icon: 'fa-solid fa-clipboard-check', label: 'Đợt kiểm kê' },
+                { href: 'contracts.html', icon: 'fa-solid fa-file-contract', label: 'Hợp đồng & SLA' }
             ]
         },
         {

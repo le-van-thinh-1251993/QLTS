@@ -25,6 +25,7 @@ const LocalDB = {
         NETWORK_LINES: 'qlts_network_lines',
         NETWORK_DIAGRAMS: 'qlts_network_diagrams',
         NETWORK_CHECK_LOGS: 'qlts_network_check_logs',
+        CONTRACTS: 'qlts_contracts',
         ALERT_SETTINGS: 'qlts_alert_settings',
         WORKBOOK_DATA: 'qlts_workbook_data',
         SEATING_DATA: 'seating_data_v2',
@@ -6534,6 +6535,121 @@ REAL_DATA: {
         }
     },
 
+    // =========================================================
+    // CONTRACTS SEED DATA
+    // =========================================================
+    seedContractsIfNeeded() {
+        if (typeof localStorage === 'undefined') return;
+        try {
+            const raw = localStorage.getItem(this.KEYS.CONTRACTS);
+            if (raw && raw !== '[]' && raw !== 'null') return;
+
+            const now = new Date().toISOString();
+            // Tạo ngày hết hạn thực tế: 1 hợp đồng sắp hết (45 ngày), 1 đã hết, 2 còn dài
+            const d = (offsetDays) => {
+                const dt = new Date();
+                dt.setDate(dt.getDate() + offsetDays);
+                return dt.toISOString().slice(0, 10);
+            };
+
+            const contracts = [
+                {
+                    id: 1, code: 'HD-001',
+                    name: 'Hợp đồng đường truyền Internet Viettel FTTH 300Mbps',
+                    contract_type: 'internet',
+                    provider: 'Viettel Telecom',
+                    provider_contact: '18008098 (Hotline kỹ thuật)',
+                    provider_email: 'cskh@viettel.com.vn',
+                    contract_number: 'VTT-FTTH-2025-0456',
+                    sign_date: '2025-01-15',
+                    start_date: '2025-02-01',
+                    end_date: d(45),
+                    payment_cycle: 'monthly',
+                    cost: 1500000,
+                    cost_period: 'monthly',
+                    related_asset_ids: [],
+                    alert_days: [30, 60, 90],
+                    auto_renew: true,
+                    status: 'active',
+                    notes: 'Đường truyền chính, IP tĩnh 113.190.45.120, bandwidth cam kết 300Mbps/1Gbps. Liên hệ anh Tuấn kỹ thuật: 0912.xxx.xxx',
+                    attachments: [],
+                    created_at: now, updated_at: now
+                },
+                {
+                    id: 2, code: 'HD-002',
+                    name: 'Hợp đồng bảo trì máy in HP LaserJet định kỳ',
+                    contract_type: 'maintenance',
+                    provider: 'Công ty TNHH Dịch vụ IT ProCare',
+                    provider_contact: 'Nguyễn Văn Hùng - 0903.456.789',
+                    provider_email: 'support@procare.vn',
+                    contract_number: 'PC-MT-2025-012',
+                    sign_date: '2025-03-01',
+                    start_date: '2025-03-15',
+                    end_date: d(280),
+                    payment_cycle: 'yearly',
+                    cost: 12000000,
+                    cost_period: 'yearly',
+                    related_asset_ids: [],
+                    alert_days: [30, 60, 90],
+                    auto_renew: false,
+                    status: 'active',
+                    notes: 'Bảo trì 4 lần/năm cho 6 máy in HP LaserJet. Bao gồm thay mực, drum, roller. Không bao gồm linh kiện mainboard.',
+                    attachments: [],
+                    created_at: now, updated_at: now
+                },
+                {
+                    id: 3, code: 'HD-003',
+                    name: 'Bản quyền Microsoft 365 Business Basic (50 users)',
+                    contract_type: 'license',
+                    provider: 'Microsoft Vietnam / Đại lý FPT Smart Cloud',
+                    provider_contact: 'Hotline: 1900.636.399',
+                    provider_email: 'license@fptcloud.com',
+                    contract_number: 'MS365-BIZ-2025-089',
+                    sign_date: '2025-06-01',
+                    start_date: '2025-06-01',
+                    end_date: d(-15),
+                    payment_cycle: 'yearly',
+                    cost: 75000000,
+                    cost_period: 'yearly',
+                    related_asset_ids: [],
+                    alert_days: [30, 60, 90],
+                    auto_renew: true,
+                    status: 'active',
+                    notes: 'Gói Business Basic: Email Exchange Online, Teams, OneDrive 1TB/user, SharePoint. 50 tài khoản.',
+                    attachments: [],
+                    created_at: now, updated_at: now
+                },
+                {
+                    id: 4, code: 'HD-004',
+                    name: 'Dell ProSupport Plus - Bảo hành mở rộng Server PowerEdge',
+                    contract_type: 'warranty',
+                    provider: 'Dell Technologies Vietnam',
+                    provider_contact: '1800.599.927 (Dell ProSupport)',
+                    provider_email: 'prosupport_vn@dell.com',
+                    contract_number: 'DELL-PSP-2024-VN-0078',
+                    sign_date: '2024-08-15',
+                    start_date: '2024-09-01',
+                    end_date: d(540),
+                    payment_cycle: 'one_time',
+                    cost: 45000000,
+                    cost_period: 'total',
+                    related_asset_ids: [],
+                    alert_days: [30, 60, 90],
+                    auto_renew: false,
+                    status: 'active',
+                    notes: 'Gói ProSupport Plus 3 năm: Next Business Day On-site, 24/7 phone support, Predictive Failure Analysis. Service Tag: ABC1234.',
+                    attachments: [],
+                    created_at: now, updated_at: now
+                }
+            ];
+
+            localStorage.setItem(this.KEYS.CONTRACTS, JSON.stringify(contracts));
+            console.log('LocalDB: Seeded 4 sample contracts');
+        } catch (e) {
+            console.error('LocalDB: Error seeding contracts:', e);
+        }
+    },
+
     migrateToRealDataIfNeeded() {
         if (typeof localStorage === 'undefined') return;
         const realDataFlag = 'qlts_real_data_v2';
@@ -6590,6 +6706,7 @@ REAL_DATA: {
         }
         this.seedSuppliesIfNeeded();
         this.seedNetworkDataIfNeeded();
+        this.seedContractsIfNeeded();
     },
 
     async importWorkbookDataIfNeeded() {

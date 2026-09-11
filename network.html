@@ -459,100 +459,115 @@
                                 </span>
                             </div>
 
-                            <!-- Interactive visual diagram -->
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center space-y-6">
-                                <div class="w-full flex items-center justify-between text-xs text-slate-400 border-b border-slate-100 dark:border-slate-700 pb-3">
-                                    <span><i class="fa-solid fa-hand-pointer text-indigo-500 mr-1"></i> Click vào từng thiết bị để xem chi tiết thông số, IP, cổng kết nối & tài sản liên kết</span>
-                                    <span class="font-mono">Topology v2.0 Dual-WAN</span>
-                                </div>
+                            <!-- Interactive visual diagram (SVG Canvas Engine) -->
+                            <div class="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <!-- Canvas Toolbar -->
+                                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-100 dark:border-slate-700 text-xs">
+                                    <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                                        <i class="fa-solid fa-arrows-up-down-left-right text-indigo-500"></i>
+                                        <span class="hidden sm:inline">Kéo thả node để sắp xếp vị trí • Bấm node xem chi tiết • Cuộn chuột để phóng to/thu nhỏ</span>
+                                        <span class="sm:hidden">Kéo node • Bấm xem chi tiết</span>
+                                    </div>
 
-                                <!-- Level 1: Internet WAN -->
-                                <div class="flex flex-wrap items-center justify-center gap-6">
-                                    <div onclick="QLTSPageNetwork.openNodeDetail('wan1')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all px-4 py-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-center shadow-sm">
-                                        <div class="text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid fa-tower-broadcast"></i>
-                                            <span>WAN 1: Viettel FTTH (Chính)</span>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5 border border-slate-200 dark:border-slate-600">
+                                            <button id="btnTopologyZoomIn" type="button" title="Phóng to (+)" class="w-7 h-7 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors">
+                                                <i class="fa-solid fa-magnifying-glass-plus text-xs"></i>
+                                            </button>
+                                            <button id="btnTopologyZoomOut" type="button" title="Thu nhỏ (-)" class="w-7 h-7 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors">
+                                                <i class="fa-solid fa-magnifying-glass-minus text-xs"></i>
+                                            </button>
+                                            <button id="btnTopologyReset" type="button" title="Về ban đầu (100%)" class="px-2 h-7 flex items-center justify-center rounded hover:bg-white dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-mono text-[11px] transition-colors">
+                                                <span id="topologyZoomLabel">100%</span>
+                                            </button>
                                         </div>
-                                        <div class="text-[11px] text-slate-500 mt-0.5">113.190.45.120 • 300 Mbps/1 Gbps</div>
-                                    </div>
-                                    <div onclick="QLTSPageNetwork.openNodeDetail('wan2')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all px-4 py-2.5 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-xl text-center shadow-sm">
-                                        <div class="text-orange-600 dark:text-orange-400 font-bold text-xs flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid fa-tower-broadcast"></i>
-                                            <span>WAN 2: FPT Backup (Dự phòng)</span>
-                                        </div>
-                                        <div class="text-[11px] text-slate-500 mt-0.5">1.55.88.92 • 250 Mbps</div>
-                                    </div>
-                                </div>
 
-                                <div class="text-slate-300 dark:text-slate-600 text-lg"><i class="fa-solid fa-arrow-down"></i></div>
+                                        <button id="btnTopologyAutoLayout" type="button" title="Tự động bố trí cây phân cấp chuẩn" class="px-2.5 h-7 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 font-medium transition-colors">
+                                            <i class="fa-solid fa-diagram-next text-[11px]"></i>
+                                            <span class="hidden md:inline">Sắp xếp tự động</span>
+                                        </button>
 
-                                <!-- Level 2: Gateway Router -->
-                                <div onclick="QLTSPageNetwork.openNodeDetail('router')" class="cursor-pointer hover:scale-105 hover:shadow-lg transition-all px-6 py-3.5 bg-indigo-50 dark:bg-indigo-950/40 border-2 border-indigo-500/50 rounded-xl text-center shadow-md relative group">
-                                    <div class="absolute -top-2.5 right-4 px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-bold rounded-full shadow-sm">
-                                        Gateway Chính
-                                    </div>
-                                    <div class="text-indigo-700 dark:text-indigo-300 font-extrabold text-sm flex items-center justify-center gap-2">
-                                        <i class="fa-solid fa-server"></i>
-                                        <span>Router DrayTek Vigor 2927 (Dual-WAN Load Balance)</span>
-                                    </div>
-                                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">IP Gateway: 192.168.1.1 • DHCP Server • NAT Firewall • VPN Gateway</div>
-                                    <div class="text-[11px] text-indigo-500 dark:text-indigo-400 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                                        <i class="fa-solid fa-circle-info"></i> Bấm để xem cổng, VLAN & tài sản liên kết
+                                        <button id="btnTopologyToggleLabels" type="button" title="Ẩn/Hiện nhãn kết nối" class="px-2.5 h-7 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center gap-1 transition-colors">
+                                            <i class="fa-solid fa-tags text-[11px]"></i>
+                                            <span class="hidden md:inline">Nhãn đường nối</span>
+                                        </button>
+
+                                        <button id="btnTopologyFullscreen" type="button" title="Toàn màn hình sơ đồ" class="w-7 h-7 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg border border-slate-200 dark:border-slate-600 flex items-center justify-center transition-colors">
+                                            <i class="fa-solid fa-expand text-xs"></i>
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div class="text-slate-300 dark:text-slate-600 text-lg"><i class="fa-solid fa-arrow-down"></i></div>
+                                <!-- SVG Canvas Container -->
+                                <div id="topologyCanvasWrapper" class="relative w-full h-[600px] bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-inner select-none cursor-grab active:cursor-grabbing">
+                                    <!-- Background Grid Pattern via SVG -->
+                                    <svg id="topologySvg" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                                        <defs>
+                                            <!-- Grid pattern -->
+                                            <pattern id="topologyGrid" width="36" height="36" patternUnits="userSpaceOnUse">
+                                                <circle cx="2" cy="2" r="1" fill="rgba(255,255,255,0.06)" />
+                                            </pattern>
+                                            <!-- Arrow marker for WAN flow -->
+                                            <marker id="arrowWan" viewBox="0 0 10 10" refX="28" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#f43f5e" />
+                                            </marker>
+                                            <marker id="arrowLan" viewBox="0 0 10 10" refX="28" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
+                                            </marker>
+                                            <!-- Glow filters -->
+                                            <filter id="glowOnline" x="-30%" y="-30%" width="160%" height="160%">
+                                                <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#10b981" flood-opacity="0.8"/>
+                                            </filter>
+                                            <filter id="glowNode" x="-10%" y="-10%" width="120%" height="120%">
+                                                <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5"/>
+                                            </filter>
+                                        </defs>
 
-                                <!-- Level 3: Core Switch -->
-                                <div onclick="QLTSPageNetwork.openNodeDetail('switch')" class="cursor-pointer hover:scale-105 hover:shadow-lg transition-all px-6 py-3.5 bg-sky-50 dark:bg-sky-950/40 border-2 border-sky-500/50 rounded-xl text-center shadow-md relative group">
-                                    <div class="absolute -top-2.5 right-4 px-2 py-0.5 bg-sky-600 text-white text-[10px] font-bold rounded-full shadow-sm">
-                                        Core Distribution
-                                    </div>
-                                    <div class="text-sky-700 dark:text-sky-300 font-extrabold text-sm flex items-center justify-center gap-2">
-                                        <i class="fa-solid fa-network-wired"></i>
-                                        <span>Core Switch Ruijie RG-NBS3100-24GT4SFP (Gigabit PoE)</span>
-                                    </div>
-                                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">IP: 192.168.1.2 • Trunking VLAN 10 (LAN), VLAN 20 (Guest), VLAN 30 (Camera)</div>
-                                    <div class="text-[11px] text-sky-500 dark:text-sky-400 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                                        <i class="fa-solid fa-circle-info"></i> Bấm để xem bảng cổng PoE & Switch tầng
-                                    </div>
-                                </div>
+                                        <!-- Background grid rect -->
+                                        <rect width="100%" height="100%" fill="#0f172a" />
+                                        <rect width="100%" height="100%" fill="url(#topologyGrid)" />
 
-                                <div class="text-slate-300 dark:text-slate-600 text-lg"><i class="fa-solid fa-arrow-down"></i></div>
+                                        <!-- Scalable & Pannable Group -->
+                                        <g id="topologyTransformGroup">
+                                            <!-- Links Layer (cables/connections) -->
+                                            <g id="topologyLinksLayer"></g>
+                                            <!-- Link Labels Layer -->
+                                            <g id="topologyLinkLabelsLayer"></g>
+                                            <!-- Nodes Layer -->
+                                            <g id="topologyNodesLayer"></g>
+                                        </g>
+                                    </svg>
 
-                                <!-- Level 4: Edge Distribution Nodes -->
-                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                                    <div onclick="QLTSPageNetwork.openNodeDetail('wifi-ap')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
-                                        <div class="text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid fa-wifi"></i>
-                                            <span>Ruijie Wi-Fi 6 APs</span>
+                                    <!-- Legend Badge (Bottom Right) -->
+                                    <div class="absolute bottom-3 right-3 bg-slate-800/90 backdrop-blur-sm border border-slate-700/80 rounded-lg p-2.5 shadow-lg text-[11px] text-slate-300 pointer-events-none space-y-1 z-10">
+                                        <div class="font-bold text-white text-[11px] mb-1 flex items-center gap-1.5">
+                                            <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                                            <span>Chú giải Sơ đồ</span>
                                         </div>
-                                        <div class="text-[11px] text-slate-500 mt-1">Tầng 1, 2, 3, 4 • VLAN 10 & 20</div>
-                                        <div class="text-[10px] text-blue-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem 4 SSID & AP</div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                                            <span>Online (Trực tuyến)</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                            <span>Offline (Mất kết nối)</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-4 h-0.5 bg-rose-500 inline-block"></span>
+                                            <span>Đường WAN Internet</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-4 h-0.5 bg-sky-400 inline-block"></span>
+                                            <span>Trunk Core Gigabit</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-4 h-0.5 bg-emerald-400 inline-block border-t border-dashed border-emerald-400"></span>
+                                            <span>PoE Cấp nguồn AP/Cam</span>
+                                        </div>
                                     </div>
-                                    <div onclick="QLTSPageNetwork.openNodeDetail('nas')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
-                                        <div class="text-purple-600 dark:text-purple-400 font-bold text-xs flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid fa-hard-drive"></i>
-                                            <span>NAS Synology DS920+</span>
-                                        </div>
-                                        <div class="text-[11px] text-slate-500 mt-1">IP: 192.168.1.250 (File Media)</div>
-                                        <div class="text-[10px] text-purple-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem RAID & NAT rule</div>
-                                    </div>
-                                    <div onclick="QLTSPageNetwork.openNodeDetail('camera')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
-                                        <div class="text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid fa-video"></i>
-                                            <span>NVR Camera Hikvision</span>
-                                        </div>
-                                        <div class="text-[11px] text-slate-500 mt-1">IP: 192.168.1.200 (16 Cam IP)</div>
-                                        <div class="text-[10px] text-emerald-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem Port 8000 & stream</div>
-                                    </div>
-                                    <div onclick="QLTSPageNetwork.openNodeDetail('workstations')" class="cursor-pointer hover:scale-105 hover:shadow-md transition-all p-3.5 bg-slate-50 dark:bg-slate-700/40 rounded-xl border border-slate-200 dark:border-slate-600 text-center group">
-                                        <div class="text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center gap-1.5">
-                                            <i class="fa-solid fa-desktop"></i>
-                                            <span>196 Thiết bị Workstation</span>
-                                        </div>
-                                        <div class="text-[11px] text-slate-500 mt-1">PC, Laptop, Máy in văn phòng</div>
-                                        <div class="text-[10px] text-amber-500 font-medium mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Xem phân bổ phòng ban</div>
+
+                                    <!-- Floating Tooltip -->
+                                    <div id="topologyTooltip" class="hidden absolute pointer-events-none bg-slate-900/95 backdrop-blur-md border border-slate-600 rounded-lg p-3 shadow-2xl z-20 text-xs text-white max-w-xs transition-all duration-75">
                                     </div>
                                 </div>
                             </div>
@@ -602,7 +617,7 @@
 
     <!-- Modal: Thêm / Sửa Mạng Wi-Fi -->
     <div id="modalWifi" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full max-h-[calc(100vh-2rem)] overflow-hidden border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-150 flex flex-col">
             <div class="px-6 py-4 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <h3 id="modalWifiTitle" class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
                     <i class="fa-solid fa-wifi text-indigo-500"></i>
@@ -859,7 +874,7 @@
                 </h3>
                 <button class="btn-close-modal text-slate-400 hover:text-slate-600 dark:hover:text-white"><i class="fa-solid fa-times"></i></button>
             </div>
-            <form id="formPing" class="p-6 space-y-4">
+            <form id="formPing" class="p-6 space-y-4 overflow-y-auto">
                 <input type="hidden" id="pingId">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="sm:col-span-2">
@@ -895,15 +910,7 @@
                             <span><i class="fa-solid fa-link text-emerald-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
                             <span class="text-[11px] text-slate-400 font-normal">Tự động điền tên, vị trí & IP</span>
                         </label>
-                        <select id="pingAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
-                            <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
-                        </select>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                            <span><i class="fa-solid fa-link text-emerald-500 mr-1"></i> Thiết bị trong Kho tài sản (Liên kết)</span>
-                            <span class="text-[11px] text-slate-400 font-normal">Tự động điền tên, vị trí & IP</span>
-                        </label>
+                        <input id="pingAssetSearch" type="search" placeholder="Tìm theo mã, tên, loại, vị trí..." class="w-full mb-2 px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
                         <select id="pingAssetId" class="asset-link-select w-full px-3 py-2 border rounded-lg text-xs dark:bg-slate-700 dark:border-slate-600 dark:text-white">
                             <option value="">-- Chọn thiết bị trong kho tài sản (không bắt buộc) --</option>
                         </select>

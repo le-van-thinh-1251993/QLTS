@@ -380,6 +380,7 @@
                 case 'tab-topology':
                     this.renderLinesAndTopology();
                     this.renderDiagramTable();
+                    this.renderTopologyCanvas();
                     break;
             }
         },
@@ -942,6 +943,7 @@
 
             this.renderPingTable();
             this.renderKPIs();
+            this.updateTopologyStatus();
 
             const timeEl = document.getElementById('lastPingTime');
             if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('vi-VN');
@@ -1039,6 +1041,7 @@
 
             this.renderPingTable();
             this.renderKPIs();
+            this.updateTopologyStatus();
 
             const timeEl = document.getElementById('lastPingTime');
             if (timeEl) timeEl.textContent = new Date().toLocaleTimeString('vi-VN');
@@ -1430,6 +1433,7 @@
                 title.innerHTML = '<i class="fa-solid fa-heart-pulse text-emerald-500"></i><span>Thêm Thiết bị Giám sát Ping</span>';
             }
 
+            document.getElementById('pingType')?.dispatchEvent(new Event('change'));
             modal.classList.remove('hidden');
         },
 
@@ -1442,6 +1446,7 @@
                 port: Number(document.getElementById('pingPort').value) || 80,
                 location: document.getElementById('pingLocation').value.trim(),
                 notes: document.getElementById('pingNotes').value.trim(),
+                asset_id: Number(document.getElementById('pingAssetId')?.value) || null,
                 status: 'Online',
                 latency_ms: 2,
                 last_checked: new Date().toISOString()
@@ -1461,6 +1466,7 @@
             document.getElementById('modalPing').classList.add('hidden');
             await this.loadData();
             this.renderAll();
+            if (document.getElementById('topologySvg')) this.renderTopologyCanvas();
         },
 
         deleteItem(table, id, name) {
@@ -1690,6 +1696,36 @@
             return this.cache.assets.find(a => Number(a.id) === Number(assetId)) || null;
         },
 
+        getNodeTarget(nodeKey) {
+            const typeMap = { router: 'Router', switch: 'Switch', nas: 'Server', camera: 'Camera' };
+            const targetType = typeMap[nodeKey];
+            if (!targetType) return null;
+            return this.cache.targets.find(target => target.target_type === targetType) || null;
+        },
+
+        getCompatibleNodeAsset(target, nodeKey) {
+            const asset = this.getAssetInfo(target?.asset_id);
+            if (!asset) return null;
+            const text = `${asset.name || ''} ${asset.category || ''}`.toLowerCase();
+            const keywords = {
+                router: ['router', 'draytek', 'gateway'],
+                switch: ['switch', 'ruijie'],
+                nas: ['nas', 'synology', 'server'],
+                camera: ['camera', 'nvr', 'hikvision']
+            }[nodeKey] || [];
+            return keywords.some(keyword => text.includes(keyword)) ? asset : null;
+        },
+
+        getAssetKeywordsForTargetType(targetType) {
+            return {
+                Router: ['router', 'draytek', 'gateway'],
+                Switch: ['switch', 'ruijie'],
+                Server: ['nas', 'synology', 'server'],
+                Camera: ['camera', 'nvr', 'hikvision'],
+                Printer: ['printer', 'máy in', 'canon', 'hp', 'laserjet']
+            }[targetType] || [];
+        },
+
         renderAssetBadge(assetId) {
             const asset = this.getAssetInfo(assetId);
             if (!asset) return '<span class="text-slate-300 dark:text-slate-600 text-[11px]">—</span>';
@@ -1765,6 +1801,40 @@
             const pingSelect = document.getElementById('pingAssetId');
             if (pingSelect && !pingSelect.dataset.listener) {
                 pingSelect.dataset.listener = 'true';
+                const refreshPingAssets = () => {
+                    const current = pingSelect.value;
+                    const query = (document.getElementById('pingAssetSearch')?.value || '').toLowerCase().trim();
+                    const matchingAssets = this.cache.assets.filter(asset => {
+                        const text = `${asset.name || ''} ${asset.category || ''}`.toLowerCase();
+                        const searchable = `${asset.code || ''} ${text} ${asset.location || ''} ${asset.status || ''}`.toLowerCase();
+                        return !query || searchable.includes(query);
+                    }).sort((first, second) => {
+                        const targetType = document.getElementById('pingType')?.value;
+                        const keywords = this.getAssetKeywordsForTargetType(targetType);
+                        const score = asset => keywords.some(keyword => `${asset.name || ''} ${asset.category || ''}`.toLowerCase().includes(keyword)) ? 0 : 1;
+                        return score(first) - score(second);
+                    });
+                    pingSelect.innerHTML = '<option value="">-- Chọn thiết bị trong kho tài sản --</option>' + matchingAssets.map(asset => {
+                        const code = asset.code || ('TS-' + asset.id);
+                        const loc = asset.location || asset.department || 'Kho';
+                        return `<option value="${asset.id}">[${this.escapeHtml(code)}] ${this.escapeHtml(asset.name)} - ${this.escapeHtml(loc)}</option>`;
+                    }).join('');
+                    if (matchingAssets.some(asset => String(asset.id) === String(current))) {
+                        pingSelect.value = current;
+                    }
+                };
+                pingSelect.refreshOptions = refreshPingAssets;
+                const pingTypeSelect = document.getElementById('pingType');
+                if (pingTypeSelect && !pingTypeSelect.dataset.assetListener) {
+                    pingTypeSelect.dataset.assetListener = 'true';
+                    pingTypeSelect.addEventListener('change', refreshPingAssets);
+                }
+                refreshPingAssets();
+                const pingAssetSearch = document.getElementById('pingAssetSearch');
+                if (pingAssetSearch && !pingAssetSearch.dataset.listener) {
+                    pingAssetSearch.dataset.listener = 'true';
+                    pingAssetSearch.addEventListener('input', refreshPingAssets);
+                }
                 pingSelect.addEventListener('change', () => {
                     const a = this.getAssetInfo(pingSelect.value);
                     if (a) {
@@ -1919,6 +1989,7 @@
             await this.loadData();
             this.renderLinesAndTopology();
             this.renderKPIs();
+            if (document.getElementById('topologySvg')) this.renderTopologyCanvas();
         },
 
         // ==========================================
@@ -1989,7 +2060,7 @@
                 }
                 case 'router': {
                     const target = this.cache.targets.find(t => t.target_type === 'Router') || {};
-                    const asset = this.getAssetInfo(target.asset_id || 1);
+                    const asset = this.getCompatibleNodeAsset(target, 'router');
                     titleEl.textContent = "Router DrayTek Vigor 2927 (Core Gateway)";
                     subEl.textContent = "IP Gateway: 192.168.1.1 • Dual-WAN Load Balance & NAT Firewall";
                     iconEl.innerHTML = '<i class="fa-solid fa-server text-indigo-500"></i>';
@@ -2022,7 +2093,7 @@
                 }
                 case 'switch': {
                     const target = this.cache.targets.find(t => t.target_type === 'Switch') || {};
-                    const asset = this.getAssetInfo(target.asset_id || 2);
+                    const asset = this.getCompatibleNodeAsset(target, 'switch');
                     titleEl.textContent = "Core Switch Ruijie RG-NBS3100-24GT4SFP";
                     subEl.textContent = "IP Quản lý: 192.168.1.2 • 24 Port Gigabit PoE (370W) + 4 SFP Uplink";
                     iconEl.innerHTML = '<i class="fa-solid fa-network-wired text-sky-500"></i>';
@@ -2055,7 +2126,7 @@
                 }
                 case 'nas': {
                     const target = this.cache.targets.find(t => t.name && t.name.includes('NAS')) || {};
-                    const asset = this.getAssetInfo(target.asset_id || 3);
+                    const asset = this.getCompatibleNodeAsset(target, 'nas');
                     titleEl.textContent = "Máy chủ NAS Synology DS920+";
                     subEl.textContent = "IP: 192.168.1.250 • Dung lượng 40TB RAID 5 • File Media Server";
                     iconEl.innerHTML = '<i class="fa-solid fa-hard-drive text-purple-500"></i>';
@@ -2088,7 +2159,7 @@
                 }
                 case 'camera': {
                     const target = this.cache.targets.find(t => t.name && t.name.includes('Camera')) || {};
-                    const asset = this.getAssetInfo(target.asset_id || 4);
+                    const asset = this.getCompatibleNodeAsset(target, 'camera');
                     titleEl.textContent = "Đầu ghi Camera NVR Hikvision 32 Kênh";
                     subEl.textContent = "IP: 192.168.1.200 • Port 8000 (Stream), Port 80 (Web) • VLAN 30";
                     iconEl.innerHTML = '<i class="fa-solid fa-video text-emerald-500"></i>';
@@ -2160,6 +2231,14 @@
                     `;
                     break;
                 }
+            }
+
+            const editTarget = this.getNodeTarget(nodeKey);
+            const editAction = nodeKey === 'wan1' || nodeKey === 'wan2'
+                ? `QLTSPageNetwork.openEditLineModal(${nodeKey === 'wan1' ? (this.cache.lines.find(line => (line.line_role || '').includes('Primary')) || this.cache.lines[0])?.id || 0 : (this.cache.lines.find(line => (line.line_role || '').includes('Backup')) || this.cache.lines[1])?.id || 0})`
+                : editTarget ? `QLTSPageNetwork.openEditPingModal(${editTarget.id})` : '';
+            if (editAction) {
+                bodyEl.insertAdjacentHTML('beforeend', `<div class="pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-end"><button type="button" onclick="${editAction}; document.getElementById('modalNodeDetail')?.classList.add('hidden')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold"><i class="fa-solid fa-pen-to-square mr-1"></i>Chỉnh sửa thông tin & liên kết</button></div>`);
             }
 
             if (typeof window.openModal === 'function') {
@@ -2341,6 +2420,496 @@
             a.click();
             document.body.removeChild(a);
             this.showToast(`Đang tải xuống "${a.download}"...`, 'info');
+        },
+
+        // ==========================================
+        // SƠ ĐỒ MẠNG TƯƠNG TÁC (INTERACTIVE TOPOLOGY ENGINE)
+        // ==========================================
+        topologyState: {
+            scale: 1.0,
+            panX: 0,
+            panY: 0,
+            isPanning: false,
+            isDraggingNode: false,
+            draggedNodeId: null,
+            startX: 0,
+            startY: 0,
+            nodeStartX: 0,
+            nodeStartY: 0,
+            hasMoved: false,
+            showLabels: true,
+            eventsBound: false,
+            nodes: [
+                { id: 'wan1', name: 'WAN 1: Viettel FTTH', role: 'Đường truyền Chính', type: 'wan', ip: '113.190.45.120', speed: '300 Mbps', port: 'WAN 1 (Gigabit)', icon: 'tower-broadcast', color: '#f43f5e', defaultX: 220, defaultY: 40, x: 220, y: 40, targetIp: '113.190.45.120' },
+                { id: 'wan2', name: 'WAN 2: FPT Backup', role: 'Đường truyền Dự phòng', type: 'wan', ip: '1.55.88.92', speed: '250 Mbps', port: 'WAN 2 (Gigabit)', icon: 'tower-broadcast', color: '#ea580c', defaultX: 600, defaultY: 40, x: 600, y: 40, targetIp: '1.55.88.92' },
+                { id: 'router', name: 'DrayTek Vigor 2927', role: 'Gateway / Dual-WAN', type: 'router', ip: '192.168.1.1', speed: 'Load Balance & NAT', port: 'Gateway Router', icon: 'server', color: '#6366f1', defaultX: 410, defaultY: 160, x: 410, y: 160, targetIp: '192.168.1.1' },
+                { id: 'switch', name: 'Ruijie RG-NBS3100', role: 'Core Switch 24-Port', type: 'switch', ip: '192.168.1.2', speed: 'Gigabit PoE+ L2/L3', port: 'Core Distribution', icon: 'network-wired', color: '#0284c7', defaultX: 410, defaultY: 290, x: 410, y: 290, targetIp: '192.168.1.2' },
+                { id: 'wifi-ap', name: 'Ruijie Wi-Fi 6 APs', role: 'Phủ sóng Tầng 1-4', type: 'ap', ip: 'VLAN 10 / 20', speed: '4 SSID Chuẩn AX', port: 'PoE Ports 1-4', icon: 'wifi', color: '#2563eb', defaultX: 100, defaultY: 440, x: 100, y: 440, targetIp: '192.168.1.50' },
+                { id: 'nas', name: 'NAS Synology DS920+', role: 'File Server & Backup', type: 'server', ip: '192.168.1.250', speed: 'RAID 5 • 16TB', port: 'Bond 1 (2Gbps)', icon: 'hard-drive', color: '#9333ea', defaultX: 310, defaultY: 440, x: 310, y: 440, targetIp: '192.168.1.250' },
+                { id: 'camera', name: 'NVR Hikvision Cam', role: '16 Camera IP', type: 'camera', ip: '192.168.1.200', speed: '16CH 4K Stream', port: 'VLAN 30 (PoE 5-12)', icon: 'video', color: '#059669', defaultX: 520, defaultY: 440, x: 520, y: 440, targetIp: '192.168.1.200' },
+                { id: 'workstations', name: '196 Workstations', role: 'PC, Laptop, Máy in', type: 'client', ip: 'DHCP Pool 192.168.1.x', speed: 'LAN 1Gbps', port: 'Access Ports 13-24', icon: 'desktop', color: '#d97706', defaultX: 730, defaultY: 440, x: 730, y: 440, targetIp: null }
+            ],
+            links: [
+                { from: 'wan1', to: 'router', type: 'wan', label: 'Port WAN 1 (300M)', color: '#f43f5e', animated: true },
+                { from: 'wan2', to: 'router', type: 'wan', label: 'Port WAN 2 (Failover)', color: '#ea580c', animated: false },
+                { from: 'router', to: 'switch', type: 'trunk', label: 'Trunk Gigabit 1Gbps', color: '#38bdf8', animated: true },
+                { from: 'switch', to: 'wifi-ap', type: 'poe', label: 'PoE+ Ports 1-4', color: '#60a5fa', animated: false },
+                { from: 'switch', to: 'nas', type: 'lan', label: 'LACP 2Gbps', color: '#c084fc', animated: false },
+                { from: 'switch', to: 'camera', type: 'poe', label: 'VLAN 30 (PoE)', color: '#34d399', animated: false },
+                { from: 'switch', to: 'workstations', type: 'lan', label: 'Access Ports (1Gbps)', color: '#fbbf24', animated: false }
+            ]
+        },
+
+        loadTopologyPositions() {
+            try {
+                const saved = localStorage.getItem('qlts_topology_positions');
+                if (!saved) return;
+                const positions = JSON.parse(saved);
+                this.topologyState.nodes.forEach(node => {
+                    if (positions[node.id]) {
+                        node.x = positions[node.id].x;
+                        node.y = positions[node.id].y;
+                    }
+                });
+            } catch (e) {
+                console.warn('Lỗi đọc tọa độ sơ đồ mạng:', e);
+            }
+        },
+
+        saveTopologyPositions() {
+            try {
+                const positions = {};
+                this.topologyState.nodes.forEach(node => {
+                    positions[node.id] = { x: Math.round(node.x), y: Math.round(node.y) };
+                });
+                localStorage.setItem('qlts_topology_positions', JSON.stringify(positions));
+            } catch (e) {
+                console.warn('Lỗi lưu tọa độ sơ đồ mạng:', e);
+            }
+        },
+
+        getNodeStatus(node) {
+            if (node.id === 'workstations') {
+                return { status: 'Online', latency: '1ms', text: '196 thiết bị hoạt động' };
+            }
+            const targets = this.cache.targets || [];
+            let target = null;
+            if (node.targetIp) {
+                target = targets.find(t => t.address === node.targetIp || (t.address && t.address.includes(node.targetIp)));
+            }
+            if (!target && node.name) {
+                target = targets.find(t => (t.name || '').toLowerCase().includes((node.name || '').toLowerCase().split(' ')[0]));
+            }
+            if (target) {
+                return {
+                    status: target.status || 'Unknown',
+                    latency: target.latency_ms ? `${target.latency_ms}ms` : '<10ms',
+                    text: `${target.status || 'Chưa kiểm tra'}${target.latency_ms ? ` (${target.latency_ms}ms)` : ''}`
+                };
+            }
+            if (node.type === 'wan') {
+                const isPrimary = node.id === 'wan1';
+                const line = this.cache.lines.find(l => isPrimary ? l.line_role?.includes('Primary') : l.line_role?.includes('Backup')) || (isPrimary ? this.cache.lines[0] : this.cache.lines[1]);
+                if (!line) return { status: 'Unknown', latency: '', text: 'Chưa kiểm tra' };
+                const st = line.status === 'Inactive' ? 'Offline' : line.status === 'Active' ? 'Online' : 'Unknown';
+                return { status: st, latency: '', text: `${st === 'Unknown' ? 'Chưa kiểm tra' : st} (Internet)` };
+            }
+            return { status: 'Unknown', latency: '', text: 'Chưa kiểm tra' };
+        },
+
+        renderTopologyLinks() {
+            const linksLayer = document.getElementById('topologyLinksLayer');
+            const labelsLayer = document.getElementById('topologyLinkLabelsLayer');
+            if (!linksLayer || !labelsLayer) return;
+
+            const nodeMap = new Map();
+            this.topologyState.nodes.forEach(n => nodeMap.set(n.id, n));
+
+            let linksSvg = '';
+            let labelsSvg = '';
+
+            const NW = 175;
+            const NH = 68;
+
+            this.topologyState.links.forEach(link => {
+                const nodeA = nodeMap.get(link.from);
+                const nodeB = nodeMap.get(link.to);
+                if (!nodeA || !nodeB) return;
+
+                let x1, y1, x2, y2;
+                if (nodeA.y + NH < nodeB.y) {
+                    x1 = nodeA.x + NW / 2;
+                    y1 = nodeA.y + NH;
+                    x2 = nodeB.x + NW / 2;
+                    y2 = nodeB.y;
+                } else if (nodeB.y + NH < nodeA.y) {
+                    x1 = nodeA.x + NW / 2;
+                    y1 = nodeA.y;
+                    x2 = nodeB.x + NW / 2;
+                    y2 = nodeB.y + NH;
+                } else {
+                    x1 = nodeA.x < nodeB.x ? nodeA.x + NW : nodeA.x;
+                    y1 = nodeA.y + NH / 2;
+                    x2 = nodeA.x < nodeB.x ? nodeB.x : nodeB.x + NW;
+                    y2 = nodeB.y + NH / 2;
+                }
+
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const cy1 = y1 + dy * 0.5;
+                const cy2 = y1 + dy * 0.5;
+                const d = `M ${x1} ${y1} C ${x1} ${cy1}, ${x2} ${cy2}, ${x2} ${y2}`;
+
+                const flowClass = link.animated ? 'topology-flow' : '';
+                const strokeDash = link.type === 'poe' ? 'stroke-dasharray="5 4"' : '';
+
+                linksSvg += `
+                    <path d="${d}" 
+                          fill="none" 
+                          stroke="${link.color}" 
+                          stroke-width="2.5" 
+                          stroke-opacity="0.85" 
+                          ${strokeDash}
+                          class="topology-link ${flowClass}" 
+                          data-from="${link.from}" 
+                          data-to="${link.to}" />
+                `;
+
+                if (link.label) {
+                    const mx = (x1 + x2) / 2;
+                    const my = (y1 + y2) / 2;
+                    const labelW = Math.max(64, link.label.length * 6.5 + 16);
+                    labelsSvg += `
+                        <g class="topology-link-label" data-from="${link.from}" data-to="${link.to}">
+                            <rect x="${mx - labelW / 2}" y="${my - 9}" width="${labelW}" height="18" rx="4" fill="#0f172a" stroke="${link.color}" stroke-width="0.8" stroke-opacity="0.8"/>
+                            <text x="${mx}" y="${my + 3.5}" text-anchor="middle" fill="#cbd5e1" font-size="8.5" font-weight="600" font-family="sans-serif">${link.label}</text>
+                        </g>
+                    `;
+                }
+            });
+
+            linksLayer.innerHTML = linksSvg;
+            labelsLayer.innerHTML = labelsSvg;
+            labelsLayer.style.display = this.topologyState.showLabels ? 'block' : 'none';
+        },
+
+        renderTopologyNodes() {
+            const nodesLayer = document.getElementById('topologyNodesLayer');
+            if (!nodesLayer) return;
+
+            const NW = 175;
+            const NH = 68;
+
+            nodesLayer.innerHTML = this.topologyState.nodes.map(node => {
+                const st = this.getNodeStatus(node);
+                const isOnline = st.status === 'Online';
+                const isUnknown = st.status === 'Unknown';
+                const stColor = isOnline ? '#10b981' : isUnknown ? '#94a3b8' : '#f43f5e';
+                const pulseCircle = isOnline
+                    ? `<circle cx="157" cy="14" r="7" fill="#10b981" opacity="0.35" class="pulse-online"/>`
+                    : '';
+
+                return `
+                    <g class="topology-node" data-id="${node.id}" transform="translate(${node.x}, ${node.y})">
+                        <!-- Node Background Box -->
+                        <rect x="0" y="0" width="${NW}" height="${NH}" rx="10" 
+                              fill="#1e293b" 
+                              stroke="${node.color}" 
+                              stroke-width="1.8" 
+                              stroke-opacity="0.9" 
+                              filter="url(#glowNode)"/>
+                        
+                        <!-- Icon Circle -->
+                        <circle cx="28" cy="34" r="18" fill="${node.color}25" stroke="${node.color}" stroke-width="1" stroke-opacity="0.4"/>
+                        <foreignObject width="26" height="26" x="15" y="21">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="color: ${node.color}; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 14px;">
+                                <i class="fa-solid fa-${node.icon}"></i>
+                            </div>
+                        </foreignObject>
+
+                        <!-- Node Texts -->
+                        <text x="54" y="25" fill="#f8fafc" font-size="10.5" font-weight="bold" font-family="sans-serif">${this.escapeHtml(node.name)}</text>
+                        <text x="54" y="41" fill="#94a3b8" font-size="9" font-family="monospace">${this.escapeHtml(node.ip)}</text>
+                        <text x="54" y="55" fill="${node.color}" font-size="8.5" font-weight="600" font-family="sans-serif">${this.escapeHtml(node.port)}</text>
+
+                        <!-- Status Badge -->
+                        ${pulseCircle}
+                        <circle cx="157" cy="14" r="4" fill="${stColor}" ${isOnline ? 'filter="url(#glowOnline)"' : ''}/>
+                    </g>
+                `;
+            }).join('');
+        },
+
+        initTopologyEvents() {
+            if (this.topologyState.eventsBound) return;
+            this.topologyState.eventsBound = true;
+
+            const svg = document.getElementById('topologySvg');
+            const wrapper = document.getElementById('topologyCanvasWrapper');
+            const transformGroup = document.getElementById('topologyTransformGroup');
+            if (!svg || !wrapper || !transformGroup) return;
+
+            const self = this;
+
+            const applyTransform = () => {
+                transformGroup.setAttribute('transform', `translate(${self.topologyState.panX}, ${self.topologyState.panY}) scale(${self.topologyState.scale})`);
+                const zoomLabel = document.getElementById('topologyZoomLabel');
+                if (zoomLabel) zoomLabel.textContent = `${Math.round(self.topologyState.scale * 100)}%`;
+            };
+            this.topologyApplyTransform = applyTransform;
+
+            document.getElementById('btnTopologyZoomIn')?.addEventListener('click', () => {
+                self.topologyState.scale = Math.min(2.5, +(self.topologyState.scale + 0.15).toFixed(2));
+                applyTransform();
+            });
+
+            document.getElementById('btnTopologyZoomOut')?.addEventListener('click', () => {
+                self.topologyState.scale = Math.max(0.5, +(self.topologyState.scale - 0.15).toFixed(2));
+                applyTransform();
+            });
+
+            document.getElementById('btnTopologyReset')?.addEventListener('click', () => {
+                self.topologyState.scale = 1.0;
+                self.topologyState.panX = 0;
+                self.topologyState.panY = 0;
+                applyTransform();
+            });
+
+            document.getElementById('btnTopologyAutoLayout')?.addEventListener('click', () => {
+                self.resetTopologyLayout();
+            });
+
+            document.getElementById('btnTopologyToggleLabels')?.addEventListener('click', () => {
+                self.topologyState.showLabels = !self.topologyState.showLabels;
+                const labelsLayer = document.getElementById('topologyLinkLabelsLayer');
+                if (labelsLayer) labelsLayer.style.display = self.topologyState.showLabels ? 'block' : 'none';
+                self.showToast(self.topologyState.showLabels ? 'Đã bật nhãn đường nối' : 'Đã ẩn nhãn đường nối', 'info');
+            });
+
+            document.getElementById('btnTopologyFullscreen')?.addEventListener('click', () => {
+                wrapper.classList.toggle('topology-fullscreen');
+                const icon = document.querySelector('#btnTopologyFullscreen i');
+                if (wrapper.classList.contains('topology-fullscreen')) {
+                    if (icon) icon.className = 'fa-solid fa-compress text-xs';
+                } else {
+                    if (icon) icon.className = 'fa-solid fa-expand text-xs';
+                }
+            });
+
+            svg.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 0.1 : -0.1;
+                const newScale = Math.min(2.5, Math.max(0.5, +(self.topologyState.scale + delta).toFixed(2)));
+                self.topologyState.scale = newScale;
+                applyTransform();
+            }, { passive: false });
+
+            svg.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+
+                const nodeEl = e.target.closest('.topology-node');
+                if (nodeEl) {
+                    const nodeId = nodeEl.getAttribute('data-id');
+                    const nodeObj = self.topologyState.nodes.find(n => n.id === nodeId);
+                    if (nodeObj) {
+                        self.topologyState.isDraggingNode = true;
+                        self.topologyState.draggedNodeId = nodeId;
+                        self.topologyState.startX = e.clientX;
+                        self.topologyState.startY = e.clientY;
+                        self.topologyState.nodeStartX = nodeObj.x;
+                        self.topologyState.nodeStartY = nodeObj.y;
+                        self.topologyState.hasMoved = false;
+                        nodeEl.classList.add('dragging');
+                        self.hideTopologyTooltip();
+                        return;
+                    }
+                }
+
+                self.topologyState.isPanning = true;
+                self.topologyState.startX = e.clientX;
+                self.topologyState.startY = e.clientY;
+                self.topologyState.hasMoved = false;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (self.topologyState.isDraggingNode) {
+                    const dx = (e.clientX - self.topologyState.startX) / self.topologyState.scale;
+                    const dy = (e.clientY - self.topologyState.startY) / self.topologyState.scale;
+                    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                        self.topologyState.hasMoved = true;
+                    }
+
+                    const node = self.topologyState.nodes.find(n => n.id === self.topologyState.draggedNodeId);
+                    if (node) {
+                        node.x = Math.max(5, Math.min(1800, self.topologyState.nodeStartX + dx));
+                        node.y = Math.max(5, Math.min(1400, self.topologyState.nodeStartY + dy));
+                        const nodeEl = document.querySelector(`.topology-node[data-id="${node.id}"]`);
+                        if (nodeEl) {
+                            nodeEl.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+                        }
+                        self.renderTopologyLinks();
+                    }
+                } else if (self.topologyState.isPanning) {
+                    const dx = e.clientX - self.topologyState.startX;
+                    const dy = e.clientY - self.topologyState.startY;
+                    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                        self.topologyState.hasMoved = true;
+                    }
+                    self.topologyState.panX += dx;
+                    self.topologyState.panY += dy;
+                    self.topologyState.startX = e.clientX;
+                    self.topologyState.startY = e.clientY;
+                    applyTransform();
+                }
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (self.topologyState.isDraggingNode) {
+                    const nodeEl = document.querySelector(`.topology-node[data-id="${self.topologyState.draggedNodeId}"]`);
+                    if (nodeEl) nodeEl.classList.remove('dragging');
+                    self.topologyState.isDraggingNode = false;
+                    self.topologyState.draggedNodeId = null;
+                    self.saveTopologyPositions();
+                }
+                self.topologyState.isPanning = false;
+            });
+
+            svg.addEventListener('click', (e) => {
+                if (self.topologyState.hasMoved) return;
+                const nodeEl = e.target.closest('.topology-node');
+                if (nodeEl) {
+                    const nodeId = nodeEl.getAttribute('data-id');
+                    if (nodeId) {
+                        self.openNodeDetail(nodeId);
+                    }
+                }
+            });
+
+            svg.addEventListener('mouseover', (e) => {
+                if (self.topologyState.isDraggingNode || self.topologyState.isPanning) return;
+                const nodeEl = e.target.closest('.topology-node');
+                if (nodeEl) {
+                    const nodeId = nodeEl.getAttribute('data-id');
+                    const node = self.topologyState.nodes.find(n => n.id === nodeId);
+                    if (node) {
+                        self.showTopologyTooltip(e, node);
+                    }
+                }
+            });
+
+            svg.addEventListener('mouseout', (e) => {
+                const nodeEl = e.target.closest('.topology-node');
+                if (nodeEl) {
+                    self.hideTopologyTooltip();
+                }
+            });
+        },
+
+        showTopologyTooltip(e, node) {
+            const tooltip = document.getElementById('topologyTooltip');
+            const wrapper = document.getElementById('topologyCanvasWrapper');
+            if (!tooltip || !wrapper) return;
+
+            const rect = wrapper.getBoundingClientRect();
+            const x = e.clientX - rect.left + 15;
+            const y = e.clientY - rect.top + 15;
+
+            const st = this.getNodeStatus(node);
+            const isOnline = st.status === 'Online';
+            const badgeClass = isOnline
+                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50'
+                : isUnknown ? 'bg-slate-800/80 text-slate-300 border border-slate-600/50' : 'bg-rose-950/80 text-rose-300 border border-rose-700/50';
+
+            tooltip.innerHTML = `
+                <div class="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
+                    <span class="w-6 h-6 rounded bg-slate-800 text-indigo-400 flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-${node.icon}"></i>
+                    </span>
+                    <div>
+                        <div class="font-bold text-white text-xs">${this.escapeHtml(node.name)}</div>
+                        <div class="text-[10px] text-slate-400">${this.escapeHtml(node.role)}</div>
+                    </div>
+                </div>
+                <div class="space-y-1 text-[11px] text-slate-300">
+                    <div class="flex justify-between gap-3">
+                        <span class="text-slate-400">Địa chỉ IP:</span>
+                        <span class="font-mono text-indigo-300 font-bold">${this.escapeHtml(node.ip)}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <span class="text-slate-400">Cổng / Kết nối:</span>
+                        <span>${this.escapeHtml(node.port)}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <span class="text-slate-400">Băng thông:</span>
+                        <span>${this.escapeHtml(node.speed)}</span>
+                    </div>
+                    <div class="flex justify-between items-center gap-3 pt-1 border-t border-slate-700/60 mt-1.5">
+                        <span class="text-slate-400">Trạng thái:</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">
+                            <span class="w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400' : isUnknown ? 'bg-slate-400' : 'bg-rose-400'} inline-block mr-1"></span>
+                            ${st.text}
+                        </span>
+                    </div>
+                </div>
+                <div class="text-[10px] text-indigo-400 mt-2 text-center font-medium">Bấm chuột để xem thông số chi tiết</div>
+            `;
+
+            tooltip.style.left = `${Math.min(x, rect.width - 240)}px`;
+            tooltip.style.top = `${Math.min(y, rect.height - 180)}px`;
+            tooltip.classList.remove('hidden');
+        },
+
+        hideTopologyTooltip() {
+            const tooltip = document.getElementById('topologyTooltip');
+            if (tooltip) tooltip.classList.add('hidden');
+        },
+
+        resetTopologyLayout() {
+            this.topologyState.nodes.forEach(node => {
+                node.x = node.defaultX;
+                node.y = node.defaultY;
+            });
+            try {
+                localStorage.removeItem('qlts_topology_positions');
+            } catch (e) {}
+            this.topologyState.scale = 1.0;
+            this.topologyState.panX = 0;
+            this.topologyState.panY = 0;
+            if (this.topologyApplyTransform) this.topologyApplyTransform();
+            this.renderTopologyNodes();
+            this.renderTopologyLinks();
+            this.showToast('Đã sắp xếp lại sơ đồ theo cấu trúc phân cấp chuẩn', 'success');
+        },
+
+        updateTopologyStatus() {
+            if (document.getElementById('topologySvg')) {
+                this.renderTopologyNodes();
+            }
+        },
+
+        renderTopologyCanvas() {
+            const svg = document.getElementById('topologySvg');
+            if (!svg) return;
+
+            const primaryLine = this.cache.lines.find(line => (line.line_role || '').toLowerCase().includes('primary')) || this.cache.lines[0];
+            const backupLine = this.cache.lines.find(line => (line.line_role || '').toLowerCase().includes('backup')) || this.cache.lines[1];
+            const wanData = [primaryLine, backupLine];
+            ['wan1', 'wan2'].forEach((nodeId, index) => {
+                const line = wanData[index];
+                const node = this.topologyState.nodes.find(item => item.id === nodeId);
+                if (!node || !line) return;
+                node.name = line.name || node.name;
+                node.ip = (line.wan_ip || '').split(' ')[0] || node.ip;
+                node.port = line.router_port || node.port;
+                node.speed = line.bandwidth || line.package_name || node.speed;
+                node.targetIp = node.ip;
+            });
+
+            this.loadTopologyPositions();
+            this.renderTopologyLinks();
+            this.renderTopologyNodes();
+            this.initTopologyEvents();
+            if (this.topologyApplyTransform) this.topologyApplyTransform();
         },
 
         escapeHtml(str) {

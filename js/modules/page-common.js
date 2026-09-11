@@ -324,6 +324,76 @@ if (typeof document !== 'undefined') {
             }
         }
     });
+
+    // Global ESC key handler to close any active/open modal across the entire application
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+
+        // Collect all potential modal overlay elements
+        const candidates = Array.from(document.querySelectorAll(
+            '[id$="Modal"], [id$="modal"], .contract-modal, [role="dialog"], .fixed.inset-0'
+        ));
+
+        const openModals = Array.from(new Set(candidates)).filter(el => {
+            if (!el || el.id === 'sidebar-backdrop') return false;
+            if (el.classList.contains('hidden')) return false;
+            if (el.getAttribute('aria-hidden') === 'true') return false;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            const isOverlay = style.position === 'fixed' || style.position === 'absolute';
+            const hasZ = parseInt(style.zIndex, 10) >= 30 || el.classList.contains('inset-0');
+            return isOverlay && hasZ;
+        });
+
+        if (openModals.length > 0) {
+            e.preventDefault();
+            // Sort by z-index ascending, so the top-most modal is last
+            openModals.sort((a, b) => {
+                const za = parseInt(window.getComputedStyle(a).zIndex, 10) || 0;
+                const zb = parseInt(window.getComputedStyle(b).zIndex, 10) || 0;
+                if (za !== zb) return za - zb;
+                return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+            });
+
+            const topModal = openModals[openModals.length - 1];
+
+            // 1. If page has dedicated closeModal (e.g. contracts)
+            if (window.QLTSPageContracts && typeof window.QLTSPageContracts.closeModal === 'function' &&
+                (topModal.id === 'contractFormModal' || topModal.id === 'contractDetailModal')) {
+                window.QLTSPageContracts.closeModal(topModal.id);
+            } else if (typeof window.safeCloseModal === 'function') {
+                window.safeCloseModal(topModal.id);
+            } else {
+                topModal.classList.add('hidden');
+                topModal.classList.remove('flex');
+                topModal.setAttribute('aria-hidden', 'true');
+                try { topModal.style.pointerEvents = 'none'; } catch (err) {}
+            }
+
+            if (topModal.id === 'confirmationModal' || topModal.id === 'confirmModal') {
+                window.confirmCallback = null;
+            }
+
+            // Restore body scroll if no modals remain
+            setTimeout(() => {
+                const remaining = Array.from(document.querySelectorAll('.fixed.inset-0:not(.hidden), [id$="Modal"]:not(.hidden)')).filter(m => m.id !== 'sidebar-backdrop' && window.getComputedStyle(m).display !== 'none');
+                if (remaining.length === 0) {
+                    document.body.classList.remove('overflow-hidden');
+                }
+            }, 50);
+            return;
+        }
+
+        // Close open dropdowns if no modal is open
+        const notificationDropdown = document.getElementById('notification-dropdown');
+        if (notificationDropdown && !notificationDropdown.classList.contains('hidden')) {
+            notificationDropdown.classList.add('hidden');
+        }
+        const userDropdown = document.getElementById('user-dropdown');
+        if (userDropdown && !userDropdown.classList.contains('hidden')) {
+            userDropdown.classList.add('hidden');
+        }
+    });
 }
 
 function handleSupabaseError(error, context) {

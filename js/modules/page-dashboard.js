@@ -13,7 +13,8 @@ window.QLTSPageDashboard.init = async function () {
         assetsInUse: [],
         assetsInStock: [],
         depreciationAssets: [],
-        nextMaintenanceTasks: []
+        nextMaintenanceTasks: [],
+        expiringContracts: []
     };
 
     // Helper: Định dạng ngày hiển thị dd/mm/yyyy
@@ -72,6 +73,8 @@ window.QLTSPageDashboard.init = async function () {
                 thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Thời gian</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Hành động</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Tài sản liên quan</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Người thực hiện</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Chi tiết</th></tr>';
             } else if (type === 'supply') {
                 thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Mặt hàng & Mã</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Phân loại</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-center">Đơn vị</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-center">Tồn kho / Tối thiểu</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-right">Tình trạng</th></tr>';
+            } else if (type === 'contract') {
+                thead.innerHTML = '<tr><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Hợp đồng & Mã</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Loại / Nhà cung cấp</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200">Ngày hết hạn</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-right">Chi phí</th><th class="p-3 text-sm font-semibold text-slate-600 dark:text-gray-200 text-right">Tình trạng</th></tr>';
             }
         }
 
@@ -268,6 +271,43 @@ window.QLTSPageDashboard.init = async function () {
                         </td>
                         <td class="p-3 text-right">${stBadge}</td>
                     </tr>`;
+                } else if (type === 'contract') {
+                    const daysLeft = item.daysLeft !== undefined ? item.daysLeft : Math.ceil((new Date(item.end_date) - new Date()) / (1000 * 60 * 60 * 24));
+                    const isExpired = daysLeft < 0;
+                    const isUrgent = daysLeft >= 0 && daysLeft <= 30;
+                    const stBadge = isExpired
+                        ? `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">Đã hết hạn (${Math.abs(daysLeft)} ngày)</span>`
+                        : (isUrgent
+                            ? `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">Sắp hết hạn (${daysLeft} ngày)</span>`
+                            : `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Còn ${daysLeft} ngày</span>`);
+                    const code = item.code ? `<div class="text-xs text-slate-400 font-mono">${item.code}</div>` : '';
+                    const costStr = item.cost ? currencyVN(item.cost) : '—';
+                    const typeMap = {
+                        internet: 'Đường truyền',
+                        maintenance: 'Bảo trì',
+                        license: 'Bản quyền',
+                        warranty: 'Bảo hành',
+                        service: 'Dịch vụ Cloud',
+                        other: 'Khác'
+                    };
+                    const typeLabel = typeMap[item.contract_type] || item.contract_type || 'Hợp đồng';
+                    const safeName = String(item.name || 'Hợp đồng').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    return `<tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-3 font-medium text-slate-800 dark:text-slate-100">
+                            <a href="contracts.html" class="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1.5">
+                                <span>${safeName}</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            </a>
+                            ${code}
+                        </td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300">
+                            <div class="font-medium">${item.provider || '—'}</div>
+                            <div class="text-xs text-slate-400">${typeLabel}</div>
+                        </td>
+                        <td class="p-3 text-sm text-slate-600 dark:text-slate-300">${formatVN(item.end_date)}</td>
+                        <td class="p-3 text-sm text-right font-medium text-slate-700 dark:text-slate-200">${costStr}</td>
+                        <td class="p-3 text-right">${stBadge}</td>
+                    </tr>`;
                 }
                 return '';
             }).join('');
@@ -320,6 +360,11 @@ window.QLTSPageDashboard.init = async function () {
             title: `Danh sách Vật tư & Linh kiện sắp hết / thiếu hụt (${currentDashboardData.lowStockSupplies?.length || 0})`,
             items: currentDashboardData.lowStockSupplies || [],
             type: 'supply'
+        }));
+        bind('cardExpiringContracts', () => ({
+            title: `Danh sách Hợp đồng sắp hết hạn / Đã hết hạn (${currentDashboardData.expiringContracts.length})`,
+            items: currentDashboardData.expiringContracts,
+            type: 'contract'
         }));
         bind('cardAlertCount', () => ({
             title: `Tổng hợp cảnh báo hạn dùng & Bảo trì (${currentDashboardData.alertsList.length})`,
@@ -517,11 +562,50 @@ window.QLTSPageDashboard.init = async function () {
             });
         }
 
+        // Đọc dữ liệu Hợp đồng CNTT để tính cảnh báo sắp hết hạn
+        let contractsList = [];
+        try {
+            const contractsKey = (typeof LocalDB !== 'undefined' && LocalDB.KEYS && LocalDB.KEYS.CONTRACTS) ? LocalDB.KEYS.CONTRACTS : 'qlts_contracts';
+            const rawC = localStorage.getItem(contractsKey);
+            contractsList = rawC ? JSON.parse(rawC) : [];
+        } catch (e) {
+            contractsList = [];
+        }
+
+        const expiringContracts = [];
+        const nowContracts = new Date();
+        nowContracts.setHours(0, 0, 0, 0);
+
+        contractsList.forEach(c => {
+            if (!c.end_date || c.status === 'cancelled') return;
+            const endD = new Date(c.end_date);
+            endD.setHours(0, 0, 0, 0);
+            const startD = c.start_date ? new Date(c.start_date) : null;
+            if (startD) startD.setHours(0, 0, 0, 0);
+            if (startD && startD > nowContracts) return;
+            const daysLeft = Math.ceil((endD - nowContracts) / (1000 * 60 * 60 * 24));
+            // Sắp hết hạn trong vòng 90 ngày hoặc đã hết hạn
+            if (daysLeft <= 90) {
+                expiringContracts.push({ ...c, daysLeft });
+                const isExpired = daysLeft < 0;
+                alertsList.push({
+                    category: 'Hợp đồng & SLA',
+                    title: (c.name || 'Hợp đồng') + (c.code ? ` [${c.code}]` : ''),
+                    dueDate: formatVN(c.end_date),
+                    daysLeft: daysLeft,
+                    level: isExpired ? `Hết hạn ${Math.abs(daysLeft)} ngày` : (daysLeft === 0 ? 'Hết hạn hôm nay' : `Còn ${daysLeft} ngày`),
+                    levelClass: isExpired ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : (daysLeft <= 30 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'),
+                    href: 'contracts.html'
+                });
+            }
+        });
+
         // Cập nhật bộ nhớ dữ liệu phục vụ click drill-down
         currentDashboardData.repairAssets = assets.filter(a => ['Repair', 'Broken'].includes(a.status));
         currentDashboardData.backlogMaintenance = backlogTasks;
         currentDashboardData.openStockChecks = stockChecks.filter(c => (c.status || '').toLowerCase() !== 'hoàn thành');
         currentDashboardData.lowStockSupplies = lowStockSupplies;
+        currentDashboardData.expiringContracts = expiringContracts;
         currentDashboardData.alertsList = alertsList;
         currentDashboardData.totalAssets = assets;
         currentDashboardData.assetsInUse = assets.filter(a => a.status === 'Active');
@@ -535,6 +619,9 @@ window.QLTSPageDashboard.init = async function () {
 
         const lowStockSuppliesEl = document.getElementById('lowStockSuppliesCount');
         if (lowStockSuppliesEl) lowStockSuppliesEl.textContent = lowStockSupplies.length;
+
+        const expiringContractsEl = document.getElementById('expiringContractsCount');
+        if (expiringContractsEl) expiringContractsEl.textContent = expiringContracts.length;
 
         const nextMaintenanceEl = document.getElementById('nextMaintenance');
         if (nextMaintenanceEl) nextMaintenanceEl.textContent = nextDue ? nextDue.toLocaleDateString('vi-VN') : 'Không lịch';
