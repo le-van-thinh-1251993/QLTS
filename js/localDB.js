@@ -6573,6 +6573,7 @@ REAL_DATA: {
                     auto_renew: true,
                     status: 'active',
                     notes: 'Đường truyền chính, IP tĩnh 113.190.45.120, bandwidth cam kết 300Mbps/1Gbps. Liên hệ anh Tuấn kỹ thuật: 0912.xxx.xxx',
+                    link: 'https://drive.google.com/file/d/sample-hd001/view',
                     attachments: [],
                     created_at: now, updated_at: now
                 },
@@ -6617,6 +6618,7 @@ REAL_DATA: {
                     auto_renew: true,
                     status: 'active',
                     notes: 'Gói Business Basic: Email Exchange Online, Teams, OneDrive 1TB/user, SharePoint. 50 tài khoản.',
+                    link: 'https://admin.microsoft.com',
                     attachments: [],
                     created_at: now, updated_at: now
                 },

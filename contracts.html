@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https://i.pravatar.cc https://ui-avatars.com; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdn.sheetjs.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https://i.pravatar.cc https://ui-avatars.com https:; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'self' blob: data: https:; object-src 'self' blob: data:; connect-src 'self' https://cdn.jsdelivr.net https://*.supabase.co;">
     <title>Hợp đồng & SLA - Quản lý Tài sản CNTT</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -20,6 +20,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="js/vendor/jszip.min.js"></script>
+    <script src="js/vendor/docx-preview.min.js"></script>
+    <script src="js/vendor/mammoth.browser.min.js"></script>
+    <script src="js/vendor/pdf.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="font-sans text-slate-800 bg-slate-100 dark:bg-slate-900 dark:text-slate-100 min-h-screen">
@@ -123,6 +127,43 @@
                     </div>
                 </div>
 
+                <!-- 12-Month Filter Bar -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 mb-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm">
+                                <i class="fa-solid fa-calendar-days"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>Lịch Hợp đồng 12 Tháng</span>
+                                    <span id="monthFilterStatusText" class="normal-case font-medium text-slate-500 dark:text-slate-400 text-[11px]">(Đang xem: Tất cả các tháng)</span>
+                                </h4>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Bấm vào tháng bất kỳ để xem nhanh các hợp đồng hết hạn trong tháng đó</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1 text-xs">
+                                <span class="text-slate-500 dark:text-slate-400 font-medium">Năm:</span>
+                                <select id="contractFilterYear" onchange="QLTSPageContracts.changeFilterYear(this.value)" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200 font-bold focus:ring-2 focus:ring-indigo-500">
+                                    <option value="2025">2025</option>
+                                    <option value="2026" selected>2026</option>
+                                    <option value="2027">2027</option>
+                                    <option value="2028">2028</option>
+                                </select>
+                            </div>
+                            <button id="btnMonthFilterAll" type="button" onclick="QLTSPageContracts.selectMonth(null)" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 flex items-center gap-1">
+                                <i class="fa-solid fa-layer-group text-[10px]"></i>
+                                <span>Tất cả tháng</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- 12 buttons grid -->
+                    <div id="monthButtonsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
+                        <!-- Populated dynamically by QLTSPageContracts.renderMonthFilterBar() -->
+                    </div>
+                </div>
+
                 <!-- Toolbar -->
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm mb-6">
                     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-b border-slate-100 dark:border-slate-700">
@@ -153,9 +194,13 @@
                             <button id="btnClearContractFilters" type="button" class="px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg flex items-center gap-1.5 transition-colors" title="Đặt lại bộ lọc"><i class="fa-solid fa-filter-circle-xmark"></i><span>Xóa lọc</span></button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button id="btnManageCategories" type="button" onclick="QLTSPageContracts.openCategoryModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Quản lý danh mục hợp đồng">
+                            <button id="btnManageSuppliers" type="button" onclick="QLTSPageContracts.openSupplierModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Quản lý danh mục Nhà cung cấp">
+                                <i class="fa-solid fa-truck-field text-blue-500"></i>
+                                <span>Quản lý NCC</span>
+                            </button>
+                            <button id="btnManageCategories" type="button" onclick="QLTSPageContracts.openCategoryModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Quản lý danh mục loại hợp đồng">
                                 <i class="fa-solid fa-folder-tree text-indigo-500"></i>
-                                <span>Quản lý danh mục</span>
+                                <span>Quản lý Loại HĐ</span>
                             </button>
                             <button id="btnExportContracts" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all" title="Xuất Excel">
                                 <i class="fa-solid fa-file-excel"></i>
@@ -233,7 +278,10 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nhà cung cấp <span class="text-rose-500">*</span></label>
-                        <input type="text" id="contractProvider" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500" placeholder="Tên nhà cung cấp" required>
+                        <div class="relative">
+                            <input type="text" id="contractProvider" list="contractSupplierDatalist" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2.5 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500" placeholder="Chọn hoặc nhập tên nhà cung cấp..." required>
+                            <datalist id="contractSupplierDatalist"></datalist>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Số hợp đồng gốc</label>
@@ -293,10 +341,23 @@
                         <span>Tự động gia hạn</span>
                     </label>
                 </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tệp đính kèm</label>
-                    <input type="file" id="contractAttachment" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt">
-                    <p id="contractAttachmentList" class="text-[11px] text-slate-400 mt-1"></p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                            <i class="fa-solid fa-link text-indigo-500"></i>
+                            <span>Link hợp đồng (URL / Drive / Cloud)</span>
+                        </label>
+                        <input type="url" id="contractLink" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500" placeholder="https://drive.google.com/... hoặc link hợp đồng">
+                        <p class="text-[10px] text-slate-400 mt-1">Dán link Google Drive, OneDrive, file scan hoặc URL hợp đồng</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                            <i class="fa-solid fa-paperclip text-indigo-500"></i>
+                            <span>Tệp đính kèm (File tải lên)</span>
+                        </label>
+                        <input type="file" id="contractAttachment" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-700 dark:text-slate-200" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt">
+                        <p id="contractAttachmentList" class="text-[11px] text-slate-400 mt-1"></p>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Ghi chú</label>
@@ -325,6 +386,52 @@
             </div>
             <div id="contractDetailContent" class="p-5 space-y-4 overflow-y-auto min-h-0 min-w-0 flex-1">
                 <!-- Dynamic detail content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Xem trực tiếp hợp đồng / tệp đính kèm -->
+    <!-- Modal: Xem trực tiếp hợp đồng / tệp đính kèm -->
+    <div id="contractPreviewModal" class="contract-modal hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[95] p-2 sm:p-3 flex items-center justify-center transition-all">
+        <div id="contractPreviewDialog" class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-[1240px] xl:max-w-[1380px] h-[94vh] mx-auto border border-slate-200 dark:border-slate-700 flex flex-col min-h-0 overflow-hidden transition-all duration-200">
+            <!-- Header -->
+            <div class="px-5 py-3 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 shrink-0">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-base shrink-0 font-bold shadow-sm">
+                        <i class="fa-solid fa-file-contract"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h3 id="contractPreviewTitle" class="text-sm font-bold text-slate-800 dark:text-white truncate">Xem trực tiếp Hợp đồng</h3>
+                            <span id="contractPreviewCodeBadge" class="font-mono text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-bold"></span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 overflow-x-auto" id="contractPreviewSourceBar">
+                            <!-- Document switcher if multiple items -->
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <button id="btnContractPreviewFullscreen" type="button" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors" title="Phóng to toàn màn hình">
+                        <i class="fa-solid fa-expand text-[11px]"></i>
+                        <span class="hidden md:inline">Toàn màn hình</span>
+                    </button>
+                    <a id="btnContractPreviewExternal" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors" title="Mở trong tab mới">
+                        <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i>
+                        <span class="hidden sm:inline">Mở tab mới</span>
+                    </a>
+                    <button id="btnContractPreviewDownload" type="button" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all" title="Tải tệp về máy">
+                        <i class="fa-solid fa-download text-[11px]"></i>
+                        <span class="hidden sm:inline">Tải về</span>
+                    </button>
+                    <button type="button" class="close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ml-0.5" onclick="QLTSPageContracts.closeModal('contractPreviewModal')" title="Đóng (ESC)">
+                        <i class="fa-solid fa-times text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content Body (Direct Viewer) -->
+            <div id="contractPreviewBody" class="flex-1 min-h-0 bg-slate-100 dark:bg-slate-900/60 p-0 flex items-center justify-center overflow-hidden">
+                <!-- Dynamic embedded content (PDF, Image, Google Drive iframe, Office card, etc.) -->
             </div>
         </div>
     </div>
@@ -453,6 +560,97 @@
         </div>
     </div>
 
+    <!-- Modal: Quản lý Danh mục Nhà cung cấp (NCC) -->
+    <div id="supplierModal" class="contract-modal hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[85] p-4 backdrop-blur-sm overflow-y-auto flex items-center justify-center">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[calc(100vh-2rem)] mx-auto my-auto border dark:border-slate-700 flex flex-col min-h-0">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-truck-field"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-800 dark:text-white">Quản lý Danh mục Nhà cung cấp</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Danh mục nhà cung cấp dùng chung cho Hợp đồng, Thiết bị & Bản quyền</p>
+                    </div>
+                </div>
+                <button type="button" class="close-modal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" onclick="QLTSPageContracts.closeModal('supplierModal')">
+                    <i class="fa-solid fa-times text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-5 space-y-4 overflow-y-auto min-h-0 flex-1">
+                <!-- Form Add / Edit Supplier -->
+                <form id="supplierForm" class="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3">
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700">
+                        <span id="supplierFormTitle" class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-plus"></i> Thêm nhà cung cấp mới
+                        </span>
+                        <button type="button" id="btnCancelSupplierEdit" class="hidden text-[11px] text-rose-500 hover:underline">Hủy sửa</button>
+                    </div>
+                    <input type="hidden" id="supplierId" value="">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tên nhà cung cấp <span class="text-rose-500">*</span></label>
+                            <input type="text" id="supplierName" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500" placeholder="VD: Tập đoàn Công nghiệp - Viễn thông Quân đội (Viettel)" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Người liên hệ / Đầu mối</label>
+                            <input type="text" id="supplierContact" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500" placeholder="Họ và tên người liên hệ...">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Số điện thoại</label>
+                            <input type="text" id="supplierPhone" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500" placeholder="0988xxxxxx / 024xxxxxxx">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                            <input type="email" id="supplierEmail" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500" placeholder="contact@supplier.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Địa chỉ</label>
+                            <input type="text" id="supplierAddress" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500" placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố...">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Ghi chú</label>
+                            <input type="text" id="supplierNotes" class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500" placeholder="Sản phẩm/dịch vụ cung cấp chính, mã số thuế, lưu ý...">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-1">
+                        <button type="submit" id="btnSaveSupplier" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span id="btnSaveSupplierText">Lưu nhà cung cấp</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Search & Counter in Supplier Modal -->
+                <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="modalSupplierSearch" placeholder="Tìm tên NCC, người liên hệ, SĐT, email..." class="w-full text-xs border border-slate-300 dark:border-slate-600 rounded-lg pl-8 pr-3 py-2 bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <span id="supplierCountBadge" class="text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0"></span>
+                </div>
+
+                <!-- Supplier List -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                    <div id="supplierListContainer" class="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
+                        <!-- Dynamic rendered suppliers -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-between p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+                <span class="text-[11px] text-slate-500 dark:text-slate-400"><i class="fa-solid fa-circle-info text-blue-500 mr-1"></i>Bấm nút "Xem HĐ" để lọc ngay các hợp đồng ký với nhà cung cấp đó.</span>
+                <button type="button" class="close-modal px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-xs font-semibold transition-colors" onclick="QLTSPageContracts.closeModal('supplierModal')">Đóng</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Confirm Modal -->
     <div id="confirmationModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-[99] flex justify-center items-center backdrop-blur-sm p-4">
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 text-center border dark:border-slate-700 mx-auto my-auto">
@@ -498,7 +696,7 @@
     <script src="js/modules/page-data.js?v=20260909-5"></script>
     <script src="js/modules/page-ui.js?v=20260825-1"></script>
     <script src="js/modules/page-dashboard.js?v=20260909-5"></script>
-    <script src="js/modules/page-contracts.js?v=20260910-2"></script>
+    <script src="js/modules/page-contracts.js?v=20260911-5"></script>
     <script src="js/modules/page-license.js?v=20260909-5"></script>
     <script src="js/modules/page-settings.js?v=20260909-5"></script>
     <script src="js/script.js?v=20260825-1"></script>
