@@ -26,6 +26,7 @@ const LocalDB = {
         NETWORK_DIAGRAMS: 'qlts_network_diagrams',
         NETWORK_CHECK_LOGS: 'qlts_network_check_logs',
         CONTRACTS: 'qlts_contracts',
+        CONTRACT_CATEGORIES: 'qlts_contract_categories',
         ALERT_SETTINGS: 'qlts_alert_settings',
         WORKBOOK_DATA: 'qlts_workbook_data',
         SEATING_DATA: 'seating_data_v2',
